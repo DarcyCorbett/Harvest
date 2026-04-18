@@ -1,0 +1,420 @@
+// ============================================================
+// Meal Wizard — Firestore Service
+// Centralized module for ALL Firestore operations.
+// No other file should import from 'firebase/firestore' directly.
+// ============================================================
+
+import { db } from '@/config/firebase';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  Timestamp,
+  writeBatch,
+  serverTimestamp,
+} from 'firebase/firestore';
+import * as Crypto from 'expo-crypto';
+import type {
+  Household,
+  HouseholdSettings,
+  UserProfile,
+  Recipe,
+  MealPlanEntry,
+  ShoppingItem,
+  CookbookEntry,
+} from './types';
+
+// ─── Helpers ───────────────────────────────────────────────
+
+/** Generate a short uppercase invite code */
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+  let code = '';
+  const bytes = Crypto.getRandomBytes(6);
+  for (let i = 0; i < 6; i++) {
+    code += chars[bytes[i] % chars.length];
+  }
+  return code;
+}
+
+// ─── Household Operations ──────────────────────────────────
+
+/**
+ * Create a new household for the first user.
+ * Returns the householdId and inviteCode.
+ */
+export async function createHousehold(userId: string): Promise<{ householdId: string; inviteCode: string }> {
+  const inviteCode = generateInviteCode();
+  const householdRef = doc(collection(db, 'households'));
+  const household: Household = {
+    members: [userId],
+    inviteCode,
+  };
+  await setDoc(householdRef, household);
+  return { householdId: householdRef.id, inviteCode };
+}
+
+/**
+ * Join an existing household using an invite code.
+ * Returns the householdId or null if code is invalid.
+ */
+export async function joinHousehold(userId: string, inviteCode: string): Promise<string | null> {
+  const q = query(
+    collection(db, 'households'),
+    where('inviteCode', '==', inviteCode.toUpperCase())
+  );
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) return null;
+
+  const householdDoc = snapshot.docs[0];
+  const data = householdDoc.data() as Household;
+
+  if (data.members.includes(userId)) {
+    // Already a member
+    return householdDoc.id;
+  }
+
+  // Add user to household
+  await updateDoc(householdDoc.ref, {
+    members: [...data.members, userId],
+  });
+
+  return householdDoc.id;
+}
+
+/** Fetch household data */
+export async function getHousehold(householdId: string): Promise<Household | null> {
+  const snap = await getDoc(doc(db, 'households', householdId));
+  return snap.exists() ? (snap.data() as Household) : null;
+}
+
+// ─── User Profile Operations ──────────────────────────────
+
+/** Save user profile */
+export async function saveUserProfile(userId: string, profile: UserProfile): Promise<void> {
+  await setDoc(doc(db, 'users', userId), profile);
+}
+
+/** Get user profile */
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const snap = await getDoc(doc(db, 'users', userId));
+  return snap.exists() ? (snap.data() as UserProfile) : null;
+}
+
+// ─── Recipe Operations ─────────────────────────────────────
+
+/** Save a scraped recipe to the root recipes collection */
+export async function saveRecipe(recipe: Recipe): Promise<string> {
+  const recipeData = {
+    ...recipe,
+    scrapedAt: Timestamp.fromDate(recipe.scrapedAt || new Date()),
+  };
+  if (recipe.id) {
+    await setDoc(doc(db, 'recipes', recipe.id), recipeData);
+    return recipe.id;
+  }
+  const docRef = await addDoc(collection(db, 'recipes'), recipeData);
+  return docRef.id;
+}
+
+/** Get a recipe by ID */
+export async function getRecipe(recipeId: string): Promise<Recipe | null> {
+  const snap = await getDoc(doc(db, 'recipes', recipeId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    ...data,
+    id: snap.id,
+    scrapedAt: data.scrapedAt?.toDate?.() || new Date(),
+  } as Recipe;
+}
+
+/** Check if a recipe with this source URL already exists (cache check) */
+export async function getCachedRecipeByUrl(url: string): Promise<Recipe | null> {
+  const q = query(collection(db, 'recipes'), where('sourceUrl', '==', url));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const docSnap = snapshot.docs[0];
+  const data = docSnap.data();
+  return {
+    ...data,
+    id: docSnap.id,
+    scrapedAt: data.scrapedAt?.toDate?.() || new Date(),
+  } as Recipe;
+}
+
+// ─── Household Settings ────────────────────────────────────
+
+const DEFAULT_SETTINGS: HouseholdSettings = { sourceWeights: {}, ingredientWeights: {} };
+
+// Firestore does not allow dots in field names. Encode/decode site keys for storage.
+function encodeSiteKey(site: string): string { return site.replace(/\./g, '_'); }
+function decodeSiteKey(key: string): string { return key.replace(/_/g, '.'); }
+
+/** Load generation settings for a household (empty defaults if not yet saved). */
+export async function getHouseholdSettings(householdId: string): Promise<HouseholdSettings> {
+  const snap = await getDoc(doc(db, 'households', householdId, 'settings', 'preferences'));
+  if (!snap.exists()) return { ...DEFAULT_SETTINGS };
+  const raw = snap.data() as { sourceWeights?: Record<string, number>; ingredientWeights?: Record<string, number> };
+  const sourceWeights: Record<string, number> = {};
+  Object.entries(raw.sourceWeights ?? {}).forEach(([k, v]) => {
+    sourceWeights[decodeSiteKey(k)] = v;
+  });
+  return { sourceWeights, ingredientWeights: raw.ingredientWeights ?? {} };
+}
+
+/** Persist generation settings for a household. */
+export async function saveHouseholdSettings(
+  householdId: string,
+  settings: HouseholdSettings
+): Promise<void> {
+  const encodedSourceWeights: Record<string, number> = {};
+  Object.entries(settings.sourceWeights).forEach(([k, v]) => {
+    encodedSourceWeights[encodeSiteKey(k)] = v;
+  });
+  await setDoc(doc(db, 'households', householdId, 'settings', 'preferences'), {
+    sourceWeights: encodedSourceWeights,
+    ingredientWeights: settings.ingredientWeights,
+  });
+}
+
+/** Update the course tags on a cached recipe. */
+export async function updateRecipeCourse(recipeId: string, course: string[]): Promise<void> {
+  await updateDoc(doc(db, 'recipes', recipeId), { course });
+}
+
+// ─── Recipe Cache Operations ────────────────────────────────
+
+/** Delete a single cached recipe by ID */
+export async function deleteRecipe(recipeId: string): Promise<void> {
+  await deleteDoc(doc(db, 'recipes', recipeId));
+}
+
+/**
+ * Delete ALL documents in the root recipes collection.
+ * Use to force a full re-scrape after a parsing code update.
+ * Batches deletes in groups of 400 to stay within Firestore write limits.
+ * Returns the number of documents deleted.
+ */
+export async function clearAllCachedRecipes(): Promise<number> {
+  const snapshot = await getDocs(collection(db, 'recipes'));
+  const BATCH_SIZE = 400;
+  let count = 0;
+  for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    snapshot.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    count += Math.min(BATCH_SIZE, snapshot.docs.length - i);
+  }
+  return count;
+}
+
+// ─── Meal Plan Operations ──────────────────────────────────
+
+/** Add a meal plan entry */
+export async function addMealPlanEntry(householdId: string, entry: MealPlanEntry): Promise<void> {
+  const docId = `${entry.date}_${entry.mealType}`;
+  await setDoc(
+    doc(db, 'households', householdId, 'mealPlan', docId),
+    {
+      recipeId: entry.recipeId,
+      date: entry.date,
+      mealType: entry.mealType,
+    }
+  );
+}
+
+/** Delete a meal plan entry */
+export async function deleteMealPlanEntry(householdId: string, entryId: string): Promise<void> {
+  await deleteDoc(doc(db, 'households', householdId, 'mealPlan', entryId));
+}
+
+/** Subscribe to meal plan in real time */
+export function subscribeMealPlan(
+  householdId: string,
+  callback: (entries: MealPlanEntry[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'households', householdId, 'mealPlan'),
+    orderBy('date', 'asc')
+  );
+  return onSnapshot(q, (snapshot) => {
+    const entries: MealPlanEntry[] = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as MealPlanEntry[];
+    callback(entries);
+  });
+}
+
+/** Get meal plan entries for a date range */
+export async function getMealPlan(
+  householdId: string,
+  startDate: string,
+  endDate: string
+): Promise<MealPlanEntry[]> {
+  const q = query(
+    collection(db, 'households', householdId, 'mealPlan'),
+    where('date', '>=', startDate),
+    where('date', '<=', endDate),
+    orderBy('date', 'asc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+  })) as MealPlanEntry[];
+}
+
+// ─── Shopping List Operations ──────────────────────────────
+
+/** Add an item to the shopping list */
+export async function addShoppingItem(householdId: string, item: Omit<ShoppingItem, 'id'>): Promise<string> {
+  const docRef = await addDoc(
+    collection(db, 'households', householdId, 'shoppingList'),
+    item
+  );
+  return docRef.id;
+}
+
+/** Add multiple shopping items (batch) */
+export async function addShoppingItems(householdId: string, items: Omit<ShoppingItem, 'id'>[]): Promise<void> {
+  const batch = writeBatch(db);
+  items.forEach((item) => {
+    const ref = doc(collection(db, 'households', householdId, 'shoppingList'));
+    // Firestore rejects `undefined` field values — strip them before writing.
+    const data = Object.fromEntries(
+      Object.entries(item).filter(([, v]) => v !== undefined)
+    );
+    batch.set(ref, data);
+  });
+  await batch.commit();
+}
+
+/** Toggle an item's checked state */
+export async function toggleShoppingItem(
+  householdId: string,
+  itemId: string,
+  checked: boolean
+): Promise<void> {
+  await updateDoc(
+    doc(db, 'households', householdId, 'shoppingList', itemId),
+    { checked }
+  );
+}
+
+/** Subscribe to shopping list in real time */
+export function subscribeShoppingList(
+  householdId: string,
+  callback: (items: ShoppingItem[]) => void
+): () => void {
+  const q = collection(db, 'households', householdId, 'shoppingList');
+  return onSnapshot(q, (snapshot) => {
+    const items: ShoppingItem[] = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as ShoppingItem[];
+    callback(items);
+  });
+}
+
+/** Delete a single shopping list item */
+export async function deleteShoppingItem(householdId: string, itemId: string): Promise<void> {
+  await deleteDoc(doc(db, 'households', householdId, 'shoppingList', itemId));
+}
+
+/** Clear all purchased (checked) items */
+export async function clearPurchasedItems(householdId: string): Promise<void> {
+  const q = query(
+    collection(db, 'households', householdId, 'shoppingList'),
+    where('checked', '==', true)
+  );
+  const snapshot = await getDocs(q);
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}
+
+/** Add a manual item to the shopping list */
+export async function addManualItem(
+  householdId: string,
+  name: string,
+  quantity: number = 1,
+  unit: string = '',
+  category: ShoppingItem['category'] = 'Other'
+): Promise<string> {
+  return addShoppingItem(householdId, {
+    name,
+    quantity,
+    unit,
+    category,
+    checked: false,
+    manual: true,
+  });
+}
+
+// ─── Cookbook Operations ────────────────────────────────────
+
+/** Add a recipe to the household cookbook */
+export async function addToCookbook(householdId: string, recipeId: string): Promise<void> {
+  await setDoc(
+    doc(db, 'households', householdId, 'cookbook', recipeId),
+    {
+      recipeId,
+      starred: false,
+      addedAt: serverTimestamp(),
+    }
+  );
+}
+
+/** Toggle a recipe's starred status in the cookbook */
+export async function toggleStarred(
+  householdId: string,
+  recipeId: string,
+  starred: boolean
+): Promise<void> {
+  await updateDoc(
+    doc(db, 'households', householdId, 'cookbook', recipeId),
+    { starred }
+  );
+}
+
+/** Subscribe to cookbook in real time */
+export function subscribeCookbook(
+  householdId: string,
+  callback: (entries: CookbookEntry[]) => void
+): () => void {
+  const q = collection(db, 'households', householdId, 'cookbook');
+  return onSnapshot(q, (snapshot) => {
+    const entries: CookbookEntry[] = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      addedAt: d.data().addedAt?.toDate?.() || new Date(),
+    })) as CookbookEntry[];
+    callback(entries);
+  });
+}
+
+/** Get all starred recipes from the cookbook */
+export async function getStarredRecipes(householdId: string): Promise<CookbookEntry[]> {
+  const q = query(
+    collection(db, 'households', householdId, 'cookbook'),
+    where('starred', '==', true)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+    addedAt: d.data().addedAt?.toDate?.() || new Date(),
+  })) as CookbookEntry[];
+}

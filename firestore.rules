@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── User Profiles ───────────────────────────────────
+    // Users can read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ─── Households ──────────────────────────────────────
+    // Allow authenticated users to create households
+    // Allow members to read their household
+    match /households/{householdId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.members;
+      allow update: if request.auth != null
+        && (request.auth.uid in resource.data.members
+            || request.auth.uid in request.resource.data.members);
+
+      // Household subcollections — only members can access
+      match /mealPlan/{document=**} {
+        allow read, write: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+      match /shoppingList/{document=**} {
+        allow read, write: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+      match /cookbook/{document=**} {
+        allow read, write: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+      match /settings/{document=**} {
+        allow read, write: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+    }
+
+    // Allow querying households by inviteCode during registration
+    // (read-only for authenticated users to find their household)
+    match /households/{householdId} {
+      allow list: if request.auth != null;
+    }
+
+    // ─── Recipes (Global Cache) ──────────────────────────
+    // Any authenticated user can read/write recipes
+    match /recipes/{recipeId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
