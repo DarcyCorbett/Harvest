@@ -4,8 +4,9 @@
 // join a different household, and sign out.
 // ============================================================
 
-import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState, useCallback } from 'react';
@@ -19,13 +20,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { user, inviteCode, householdId, switchHousehold, logout } = useAuth();
+  const { colors, mode, setMode } = useTheme();
+  const { user, inviteCode, switchHousehold, logout } = useAuth();
 
   const [joinCode, setJoinCode] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -161,6 +160,42 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Preferences */}
+      <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>PREFERENCES</Text>
+      <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
+        <Text style={[s.codeHint, { color: colors.textTertiary, marginBottom: Spacing.md }]}>
+          Choose how the app looks. "System" follows your device setting.
+        </Text>
+        <View style={s.themeRow}>
+          {(['system', 'light', 'dark'] as const).map((opt) => {
+            const active = mode === opt;
+            return (
+              <TouchableOpacity
+                key={opt}
+                style={[
+                  s.themeChip,
+                  {
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: active ? colors.primaryLight : 'transparent',
+                  },
+                ]}
+                onPress={() => setMode(opt)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    s.themeChipText,
+                    { color: active ? colors.primary : colors.textSecondary },
+                  ]}
+                >
+                  {opt[0].toUpperCase() + opt.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       {/* Sign out */}
       <View style={s.spacer} />
       <TouchableOpacity
@@ -272,6 +307,22 @@ const s = StyleSheet.create({
   joinBtnText: { color: '#fff', fontSize: FontSizes.sm, fontFamily: Fonts.bold },
 
   spacer: { flex: 1 },
+
+  themeRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  themeChip: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    alignItems: 'center',
+  },
+  themeChipText: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+  },
 
   signOutBtn: {
     flexDirection: 'row',
