@@ -164,7 +164,7 @@ export default function ProfileScreen() {
       <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>PREFERENCES</Text>
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <Text style={[s.codeHint, { color: colors.textTertiary, marginBottom: Spacing.md }]}>
-          Choose how the app looks. "System" follows your device setting.
+          Choose how the app looks. &ldquo;System&rdquo; follows your device setting.
         </Text>
         <View style={s.themeRow}>
           {(['system', 'light', 'dark'] as const).map((opt) => {
