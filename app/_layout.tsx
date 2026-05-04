@@ -1,12 +1,11 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme, ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { Colors } from '@/constants/theme';
+import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -19,24 +18,18 @@ import {
 
 SplashScreen.preventAutoHideAsync();
 
-/** Inner layout that handles auth-based routing */
 function RootNavigator() {
   const { user, loading, householdId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { colors } = useTheme();
 
   useEffect(() => {
     if (loading) return;
-
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
-
     if (!user && !inAuthGroup) {
-      // Not logged in → go to login
       router.replace('/login');
     } else if (user && householdId && inAuthGroup) {
-      // Logged in with household → go to tabs
       router.replace('/(tabs)');
     }
   }, [user, loading, householdId, segments]);
@@ -61,10 +54,7 @@ function RootNavigator() {
   );
 }
 
-/** Root layout — wraps everything in AuthProvider */
 export default function RootLayout() {
-  const colorScheme = useColorScheme() ?? 'light';
-
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
     Outfit_500Medium,
@@ -83,7 +73,7 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider>
       <AuthProvider>
         <RootNavigator />
       </AuthProvider>
