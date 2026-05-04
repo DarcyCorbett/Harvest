@@ -24,11 +24,13 @@ import { Colors, FontSizes, Fonts, Spacing, Radius, Shadows } from '@/constants/
 import { useAuth } from '@/contexts/AuthContext';
 import {
   subscribeMealPlan,
+  subscribeCookbook,
+  toggleStarred,
   deleteMealPlanEntry,
   getRecipe,
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
-import type { MealPlanEntry, Recipe, MealType } from '@/services/types';
+import type { CookbookEntry, MealPlanEntry, Recipe, MealType } from '@/services/types';
 
 // ─── Layout constants ─────────────────────────────────────────
 
@@ -123,6 +125,7 @@ export default function CalendarScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
+  const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
   const [previewEntry, setPreviewEntry] = useState<{
     id: string;
     adults?: number;
@@ -141,6 +144,11 @@ export default function CalendarScreen() {
       setLoading(false);
     });
     return unsub;
+  }, [householdId]);
+
+  useEffect(() => {
+    if (!householdId) return;
+    return subscribeCookbook(householdId, setCookbook);
   }, [householdId]);
 
   // ── Lazy recipe loading ──
@@ -538,6 +546,13 @@ export default function CalendarScreen() {
         visible={!!previewRecipe}
         onClose={() => { setPreviewRecipe(null); setPreviewEntry(null); }}
         mealPlanEntry={previewEntry ?? undefined}
+        starred={previewRecipe ? (cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
+        onStarToggle={() => {
+          if (!householdId || !previewRecipe?.id) return;
+          const current = cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false;
+          toggleStarred(householdId, previewRecipe.id, !current)
+            .catch((err) => console.warn('[index] star toggle failed:', err));
+        }}
         onCourseUpdate={(id, course) => {
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev);
           setRecipes((prev) => prev[id] ? { ...prev, [id]: { ...prev[id], course } } : prev);

@@ -16,11 +16,13 @@ import {
   clearPurchasedItems,
   deleteShoppingItem,
   getRecipe,
+  subscribeCookbook,
   subscribeShoppingList,
   toggleShoppingItem,
+  toggleStarred,
   updateShoppingItemQuantity,
 } from '@/services/firestoreService';
-import type { Recipe, ShoppingCategory, ShoppingItem } from '@/services/types';
+import type { CookbookEntry, Recipe, ShoppingCategory, ShoppingItem } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -120,6 +122,7 @@ export default function ShoppingScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
+  const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
@@ -128,6 +131,11 @@ export default function ShoppingScreen() {
   useEffect(() => {
     if (!householdId) return;
     return subscribeShoppingList(householdId, setItems);
+  }, [householdId]);
+
+  useEffect(() => {
+    if (!householdId) return;
+    return subscribeCookbook(householdId, setCookbook);
   }, [householdId]);
 
   // ── Sections: unchecked by category (2-column pairs), then Purchased ──
@@ -399,6 +407,13 @@ export default function ShoppingScreen() {
         visible={!!previewRecipe}
         onClose={() => { setPreviewRecipe(null); setPreviewServings(undefined); }}
         defaultServings={previewServings}
+        starred={previewRecipe ? (cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
+        onStarToggle={() => {
+          if (!householdId || !previewRecipe?.id) return;
+          const current = cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false;
+          toggleStarred(householdId, previewRecipe.id, !current)
+            .catch((err) => console.warn('[shopping] star toggle failed:', err));
+        }}
         onCourseUpdate={(id, course) =>
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev)
         }

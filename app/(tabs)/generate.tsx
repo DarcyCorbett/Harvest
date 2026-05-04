@@ -10,7 +10,7 @@ import SettingsModal from '@/components/SettingsModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe } from '@/services/firestoreService';
+import { addToCookbook, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
 import {
   addDays,
   confirmMealPlan,
@@ -23,7 +23,7 @@ import {
   type GenerateConfig,
   type GeneratedMeal,
 } from '@/services/generatorService';
-import type { CuisineStyle, HouseholdSettings, MealType, Recipe } from '@/services/types';
+import type { CookbookEntry, CuisineStyle, HouseholdSettings, MealType, Recipe } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -147,6 +147,12 @@ export default function GenerateScreen() {
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
+  const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
+
+  useEffect(() => {
+    if (!householdId) return;
+    return subscribeCookbook(householdId, setCookbook);
+  }, [householdId]);
 
   // Snapshot of the selections used at the last successful Generate / Regenerate.
   // Regenerate and Auto-fix use this snapshot when the user has not actively
@@ -446,6 +452,21 @@ export default function GenerateScreen() {
           visible={!!previewRecipe}
           onClose={() => { setPreviewRecipe(null); setPreviewServings(undefined); }}
           defaultServings={previewServings}
+          starred={previewRecipe ? (cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
+          onStarToggle={async () => {
+            if (!householdId || !previewRecipe?.id) return;
+            const entry = cookbook.find((e) => e.recipeId === previewRecipe.id);
+            try {
+              if (!entry) {
+                await addToCookbook(householdId, previewRecipe.id);
+                await toggleStarred(householdId, previewRecipe.id, true);
+              } else {
+                await toggleStarred(householdId, previewRecipe.id, !entry.starred);
+              }
+            } catch (err) {
+              console.warn('[generate] star toggle failed:', err);
+            }
+          }}
           onCourseUpdate={(id, course) => {
             setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev);
             setGeneratedMeals((prev) =>

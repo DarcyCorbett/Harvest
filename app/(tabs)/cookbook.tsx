@@ -264,6 +264,12 @@ export default function CookbookScreen() {
         visible={!!previewRecipe}
         onClose={() => setPreviewRecipe(null)}
         defaultServings={previewRecipe?.originalServings}
+        starred={previewRecipe ? (entries.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
+        onStarToggle={() => {
+          if (!previewRecipe) return;
+          const entry = entries.find((e) => e.recipeId === previewRecipe.id);
+          if (entry) handleStarToggle(entry);
+        }}
       />
     </SafeAreaView>
   );
