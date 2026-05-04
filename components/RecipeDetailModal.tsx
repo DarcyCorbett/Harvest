@@ -5,8 +5,10 @@
 // ============================================================
 
 import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { updateRecipeCourse, updateRecipeTags } from '@/services/firestoreService';
+import { updateMealPlanServings, updateRecipeCourse, updateRecipeTags } from '@/services/firestoreService';
+import { applyServingScale, calculateRequiredServings } from '@/services/recipeScraperService';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,12 +44,63 @@ interface Props {
   onCourseUpdate?: (recipeId: string, newCourse: string[]) => void;
   /** Called after a tag update is persisted so the parent can refresh its recipe copy. */
   onTagsUpdate?: (recipeId: string, newTags: string[]) => void;
+
+  /** When set, the modal shows a Save Changes CTA and persists adults/children/servings here. */
+  mealPlanEntry?: {
+    id: string;
+    adults?: number;
+    children?: number;
+    servings?: number;
+  };
+
+  /** Default servings to seed the stepper when no mealPlanEntry context. */
+  defaultServings?: number;
+
+  /** When set, the modal shows a star toggle in the header. */
+  starred?: boolean;
+  onStarToggle?: () => void;
 }
 
-export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUpdate, onTagsUpdate }: Props) {
+export default function RecipeDetailModal({
+  recipe,
+  visible,
+  onClose,
+  onCourseUpdate,
+  onTagsUpdate,
+  mealPlanEntry,
+  defaultServings,
+  starred,
+  onStarToggle,
+}: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { householdId } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // ── Servings stepper state ──
+  const defaultAdults =
+    mealPlanEntry?.adults ?? mealPlanEntry?.servings ?? defaultServings ?? recipe?.originalServings ?? 2;
+  const defaultChildren = mealPlanEntry?.children ?? 0;
+
+  const [adults, setAdults] = useState(defaultAdults);
+  const [children, setChildren] = useState(defaultChildren);
+  const [savingServings, setSavingServings] = useState(false);
+
+  useEffect(() => {
+    setAdults(defaultAdults);
+    setChildren(defaultChildren);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe?.id, mealPlanEntry?.id]);
+
+  const currentServings = calculateRequiredServings(adults, children);
+  const defaultServingsCalc = calculateRequiredServings(defaultAdults, defaultChildren);
+  const dirtyServings = adults !== defaultAdults || children !== defaultChildren;
+
+  const scaledRecipe = recipe
+    ? applyServingScale(recipe, currentServings)
+    : null;
+
+  const clamp = (n: number) => Math.max(0, Math.min(12, n));
 
   // ── Animation values ──────────────────────────────────────
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -334,10 +387,92 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
             <MetaChip icon="timer-outline" label="Total" value={recipe.totalTime ?? 'N/A'} styles={styles} colors={colors} />
           </View>
 
+          {/* Servings stepper */}
+          <View style={styles.stepperWrap}>
+            <View style={styles.stepperRow}>
+              <View style={styles.stepperCell}>
+                <Text style={[styles.stepperLabel, { color: colors.textSecondary }]}>Adults</Text>
+                <View style={styles.stepperControls}>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, { borderColor: colors.border }]}
+                    onPress={() => setAdults((a) => clamp(a - 1))}
+                  >
+                    <Text style={[styles.stepperBtnText, { color: colors.text }]}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.stepperCount, { color: colors.text }]}>{adults}</Text>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, { borderColor: colors.border }]}
+                    onPress={() => setAdults((a) => clamp(a + 1))}
+                  >
+                    <Text style={[styles.stepperBtnText, { color: colors.text }]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.stepperCell}>
+                <Text style={[styles.stepperLabel, { color: colors.textSecondary }]}>Children</Text>
+                <View style={styles.stepperControls}>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, { borderColor: colors.border }]}
+                    onPress={() => setChildren((c) => clamp(c - 1))}
+                  >
+                    <Text style={[styles.stepperBtnText, { color: colors.text }]}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.stepperCount, { color: colors.text }]}>{children}</Text>
+                  <TouchableOpacity
+                    style={[styles.stepperBtn, { borderColor: colors.border }]}
+                    onPress={() => setChildren((c) => clamp(c + 1))}
+                  >
+                    <Text style={[styles.stepperBtnText, { color: colors.text }]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.stepperReadoutRow}>
+              <Text style={[styles.stepperReadout, { color: colors.textSecondary }]}>
+                Servings: {currentServings}
+                {dirtyServings ? `  (was ${defaultServingsCalc})` : ''}
+              </Text>
+
+              {dirtyServings && mealPlanEntry?.id && (
+                <TouchableOpacity
+                  style={[
+                    styles.saveBtn,
+                    { backgroundColor: colors.primary },
+                    (savingServings || currentServings === 0) && { opacity: 0.5 },
+                  ]}
+                  disabled={savingServings || currentServings === 0}
+                  onPress={async () => {
+                    if (!householdId) return;
+                    setSavingServings(true);
+                    try {
+                      await updateMealPlanServings(
+                        householdId,
+                        mealPlanEntry.id,
+                        adults,
+                        children,
+                        currentServings
+                      );
+                    } catch (err) {
+                      console.warn('[RecipeDetailModal] save servings failed:', err);
+                    } finally {
+                      setSavingServings(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.saveBtnText}>
+                    {savingServings ? 'Saving…' : 'Save Changes'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
           {/* Ingredients */}
           <SectionLabel title="Ingredients" styles={styles} />
-          {recipe.ingredientGroups && recipe.ingredientGroups.length > 0 ? (
-            recipe.ingredientGroups.map((group, gIdx) => (
+          {scaledRecipe?.ingredientGroups && scaledRecipe.ingredientGroups.length > 0 ? (
+            scaledRecipe.ingredientGroups.map((group, gIdx) => (
               <View key={gIdx}>
                 {group.name ? (
                   <Text style={styles.groupHeader}>{group.name}</Text>
@@ -346,7 +481,7 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
               </View>
             ))
           ) : (
-            <IngredientCard ingredients={recipe.ingredients} styles={styles} />
+            <IngredientCard ingredients={scaledRecipe?.ingredients ?? []} styles={styles} />
           )}
 
           {/* Instructions */}
@@ -709,5 +844,66 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: 22,
   },
 
-
+  // Servings stepper
+  stepperWrap: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+  },
+  stepperCell: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  stepperLabel: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  stepperControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperBtnText: {
+    fontSize: FontSizes.lg,
+    fontFamily: Fonts.bold,
+  },
+  stepperCount: {
+    fontSize: FontSizes.lg,
+    fontFamily: Fonts.semibold,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  stepperReadoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.md,
+  },
+  stepperReadout: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+  },
+  saveBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.pill,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+  },
 });

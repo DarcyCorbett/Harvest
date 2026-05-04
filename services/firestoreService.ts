@@ -275,6 +275,20 @@ export async function addMealPlanEntry(householdId: string, entry: MealPlanEntry
   );
 }
 
+/** Update servings (and adults/children) on an existing meal plan entry. */
+export async function updateMealPlanServings(
+  householdId: string,
+  entryId: string,
+  adults: number,
+  children: number,
+  servings: number
+): Promise<void> {
+  await updateDoc(
+    doc(db, 'households', householdId, 'mealPlan', entryId),
+    { adults, children, servings }
+  );
+}
+
 /** Delete a meal plan entry */
 export async function deleteMealPlanEntry(householdId: string, entryId: string): Promise<void> {
   await deleteDoc(doc(db, 'households', householdId, 'mealPlan', entryId));
