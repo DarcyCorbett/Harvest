@@ -529,7 +529,8 @@ export async function regenerateMeals(
 export async function confirmMealPlan(
   meals: GeneratedMeal[],
   householdId: string,
-  shoppingListMode: 'add' | 'replace' = 'add'
+  shoppingListMode: 'add' | 'replace' = 'add',
+  household?: { adults: number; children: number }
 ): Promise<void> {
   for (const meal of meals) {
     await addMealPlanEntry(householdId, {
@@ -537,6 +538,8 @@ export async function confirmMealPlan(
       date: meal.date,
       mealType: meal.mealType,
       servings: meal.servings,
+      adults: household?.adults,
+      children: household?.children,
     });
     await addToCookbook(householdId, meal.recipeId);
   }

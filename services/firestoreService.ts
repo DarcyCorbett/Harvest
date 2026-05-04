@@ -269,6 +269,8 @@ export async function addMealPlanEntry(householdId: string, entry: MealPlanEntry
       date: entry.date,
       mealType: entry.mealType,
       ...(entry.servings != null ? { servings: entry.servings } : {}),
+      ...(entry.adults != null ? { adults: entry.adults } : {}),
+      ...(entry.children != null ? { children: entry.children } : {}),
     }
   );
 }

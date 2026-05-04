@@ -70,6 +70,8 @@ export interface MealPlanEntry {
   date: string;           // ISO date string: "2025-07-14"
   mealType: MealType;
   servings?: number;      // household-adjusted serving count used when this meal was confirmed
+  adults?: number;        // adults at confirm time
+  children?: number;      // children at confirm time
 }
 
 /** A single shopping list item */

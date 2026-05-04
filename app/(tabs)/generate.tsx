@@ -359,7 +359,7 @@ export default function GenerateScreen() {
       setLoadingProgress({ current: 0, total: 0 });
       setPhase('saving');
       try {
-        await confirmMealPlan(generatedMeals, householdId, mode);
+        await confirmMealPlan(generatedMeals, householdId, mode, { adults, children });
         setPhase('configure');
         setGeneratedMeals([]);
         setCheckedIndices(new Set());
