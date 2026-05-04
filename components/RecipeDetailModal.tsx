@@ -273,6 +273,19 @@ export default function RecipeDetailModal({
                 </TouchableOpacity>
               )}
             </View>
+            {starred !== undefined && (
+              <TouchableOpacity
+                onPress={onStarToggle}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginRight: Spacing.xs, paddingTop: 4 }}
+              >
+                <Ionicons
+                  name={starred ? 'star' : 'star-outline'}
+                  size={22}
+                  color={starred ? colors.warning : colors.textTertiary}
+                />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={closeSheet}
               style={styles.closeBtn}
