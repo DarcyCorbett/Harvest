@@ -481,24 +481,17 @@ function CompactShoppingItem({
           )}
         </View>
 
-        {/* Item name & manual badge */}
-        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text
-            style={[
-              s.itemName,
-              { color: item.checked ? colors.textTertiary : colors.text, flex: 1, marginRight: Spacing.xs },
-              item.checked && s.strikethrough,
-            ]}
-            numberOfLines={2}
-          >
-            {item.name}
-          </Text>
-          {item.manual && (
-            <View style={[s.manualBadge, { backgroundColor: colors.accentLight }]}>
-              <Text style={[s.manualText, { color: colors.accent }]}>manual</Text>
-            </View>
-          )}
-        </View>
+        {/* Item name */}
+        <Text
+          style={[
+            s.itemName,
+            { color: item.checked ? colors.textTertiary : colors.text, flex: 1 },
+            item.checked && s.strikethrough,
+          ]}
+          numberOfLines={2}
+        >
+          {item.name}
+        </Text>
       </View>
 
       {/* Quantity */}
@@ -525,6 +518,21 @@ function CompactShoppingItem({
             </TouchableOpacity>
           ))}
         </View>
+      )}
+
+      {/* Manual marker — non-flowing corner dot */}
+      {item.manual && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: colors.accent,
+          }}
+        />
       )}
     </TouchableOpacity>
   );
@@ -1034,13 +1042,6 @@ const s = StyleSheet.create({
   itemName: { fontSize: FontSizes.lg, fontFamily: Fonts.semibold, lineHeight: 22 },
   itemQty: { fontSize: FontSizes.xs, marginTop: 1 },
   strikethrough: { textDecorationLine: 'line-through' },
-  manualBadge: {
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 1,
-    borderRadius: Radius.pill,
-  },
-  manualText: { fontSize: 9, fontFamily: Fonts.semibold },
-
   // Recipe source chips
   sourceChips: {
     flexDirection: 'row',
