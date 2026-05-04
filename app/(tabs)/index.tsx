@@ -9,7 +9,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   ScrollView,
   FlatList,
   Image,
@@ -18,6 +17,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';

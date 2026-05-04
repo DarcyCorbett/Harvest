@@ -9,10 +9,10 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  useColorScheme,
   ScrollView,
   Modal,
 } from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';

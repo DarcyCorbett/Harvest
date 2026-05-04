@@ -10,7 +10,6 @@ import {
   View,
   Text,
   StyleSheet,
-  useColorScheme,
   FlatList,
   TouchableOpacity,
   TextInput,
@@ -18,6 +17,7 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';

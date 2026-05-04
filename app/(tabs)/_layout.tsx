@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { useColorScheme, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, FontWeights } from '@/constants/theme';
 
