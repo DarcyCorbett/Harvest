@@ -4,7 +4,8 @@
 // weights, seed selection, and kid friendly filters.
 // ============================================================
 
-import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   clearAllCachedRecipes,
   getHouseholdSettings,
@@ -13,7 +14,7 @@ import {
 import { KID_FRIENDLY_DEFAULTS, SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
 import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -27,8 +28,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const colors = Colors.light;
 
 interface SettingsModalProps {
   visible: boolean;
@@ -55,6 +54,8 @@ export default function SettingsModal({
   householdId,
   onSaved,
 }: SettingsModalProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sourceWeights, setSourceWeights] = useState<Record<string, number>>({});
@@ -428,7 +429,7 @@ export default function SettingsModal({
 
 // ─── Styles ──────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -442,7 +443,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: colors.border,
   },
   closeBtn: {
     width: 44,
@@ -499,7 +500,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
     marginVertical: Spacing.xl,
   },
 
@@ -528,7 +529,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: colors.borderLight,
   },
   sourceLeft: {
     flexDirection: 'row',
@@ -558,7 +559,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: Radius.sm,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   weightChipActive: {
@@ -566,8 +567,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   weightChipDisabled: {
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.border,
+    backgroundColor: colors.borderLight,
   },
   weightChipText: {
     fontSize: FontSizes.xs,
@@ -589,7 +590,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: Radius.pill,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   ingredientChipActive: {
@@ -623,8 +624,8 @@ const styles = StyleSheet.create({
 
   // Kid Friendly — allowed (struck-through look via muted style)
   allowedChip: {
-    borderColor: '#D1D5DB',
-    backgroundColor: '#F9FAFB',
+    borderColor: colors.border,
+    backgroundColor: colors.borderLight,
     opacity: 0.5,
   },
   allowedChipText: {
@@ -649,7 +650,7 @@ const styles = StyleSheet.create({
   addTermInput: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,

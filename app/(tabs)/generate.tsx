@@ -9,6 +9,7 @@ import RecipeDetailModal from '@/components/RecipeDetailModal';
 import SettingsModal from '@/components/SettingsModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { countUnpurchasedShoppingItems, getHouseholdSettings } from '@/services/firestoreService';
 import {
   addDays,
@@ -40,28 +41,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Force Light Mode colors for this design overhaul
-const colors = Colors.light;
-
 // 2-column cuisine card: fills the horizontal padding with one gap in the middle
 const { width: SCREEN_W } = Dimensions.get('window');
 const CUISINE_CARD_W = (SCREEN_W - Spacing.xl * 2 - Spacing.md * 2) / 3;
 
 // ─── Constants ────────────────────────────────────────────────
 
+// Decorative pastel badges (intentionally light-only; they're soft tints used
+// behind emojis and look fine over either theme background).
+const BADGE = Colors.light;
+
 const MAT_OPTIONS = [
-  { id: 'Chicken', emoji: '🍗', bg: colors.caloriesBadge },
-  { id: 'Meat', emoji: '🥩', bg: colors.proteinBadge },
-  { id: 'Fish', emoji: '🐟', bg: colors.carbsBadge },
-  { id: 'Egg', emoji: '🥚', bg: colors.fatBadge },
-  { id: 'Broccoli', emoji: '🥦', bg: colors.proteinBadge },
-  { id: 'Tomato', emoji: '🍅', bg: colors.caloriesBadge },
-  { id: 'Pasta', emoji: '🍝', bg: colors.caloriesBadge },
-  { id: 'Rice', emoji: '🍚', bg: colors.carbsBadge },
-  { id: 'Potato', emoji: '🥔', bg: colors.fatBadge },
-  { id: 'Carrot', emoji: '🥕', bg: colors.caloriesBadge },
-  { id: 'Cheese', emoji: '🧀', bg: colors.caloriesBadge },
-  { id: 'Lettuce', emoji: '🥬', bg: colors.proteinBadge },
+  { id: 'Chicken', emoji: '🍗', bg: BADGE.caloriesBadge },
+  { id: 'Meat', emoji: '🥩', bg: BADGE.proteinBadge },
+  { id: 'Fish', emoji: '🐟', bg: BADGE.carbsBadge },
+  { id: 'Egg', emoji: '🥚', bg: BADGE.fatBadge },
+  { id: 'Broccoli', emoji: '🥦', bg: BADGE.proteinBadge },
+  { id: 'Tomato', emoji: '🍅', bg: BADGE.caloriesBadge },
+  { id: 'Pasta', emoji: '🍝', bg: BADGE.caloriesBadge },
+  { id: 'Rice', emoji: '🍚', bg: BADGE.carbsBadge },
+  { id: 'Potato', emoji: '🥔', bg: BADGE.fatBadge },
+  { id: 'Carrot', emoji: '🥕', bg: BADGE.caloriesBadge },
+  { id: 'Cheese', emoji: '🧀', bg: BADGE.caloriesBadge },
+  { id: 'Lettuce', emoji: '🥬', bg: BADGE.proteinBadge },
 ];
 
 const DAYS_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
@@ -75,18 +77,18 @@ const EFFORT_OPTIONS: { value: EffortValue; label: string; emoji: string }[] = [
 ];
 
 const MODIFIER_OPTIONS: { style: CuisineStyle; emoji: string; bg: string }[] = [
-  { style: 'Healthy', emoji: '🥑', bg: colors.proteinBadge },
-  { style: 'Vegetarian', emoji: '🥗', bg: colors.proteinBadge },
-  { style: 'Kid Friendly', emoji: '👧', bg: colors.fatBadge },
+  { style: 'Healthy', emoji: '🥑', bg: BADGE.proteinBadge },
+  { style: 'Vegetarian', emoji: '🥗', bg: BADGE.proteinBadge },
+  { style: 'Kid Friendly', emoji: '👧', bg: BADGE.fatBadge },
 ];
 
 const CUISINE_OPTION_LIST: { style: CuisineStyle; emoji: string; bg: string }[] = [
-  { style: 'Asian', emoji: '🍜', bg: colors.carbsBadge },
-  { style: 'Mexican', emoji: '🌮', bg: colors.caloriesBadge },
-  { style: 'Mediterranean', emoji: '🫒', bg: colors.proteinBadge },
-  { style: 'Italian', emoji: '🍝', bg: colors.caloriesBadge },
-  { style: 'Indian', emoji: '🍛', bg: colors.fatBadge },
-  { style: 'Salad', emoji: '🥬', bg: colors.carbsBadge },
+  { style: 'Asian', emoji: '🍜', bg: BADGE.carbsBadge },
+  { style: 'Mexican', emoji: '🌮', bg: BADGE.caloriesBadge },
+  { style: 'Mediterranean', emoji: '🫒', bg: BADGE.proteinBadge },
+  { style: 'Italian', emoji: '🍝', bg: BADGE.caloriesBadge },
+  { style: 'Indian', emoji: '🍛', bg: BADGE.fatBadge },
+  { style: 'Salad', emoji: '🥬', bg: BADGE.carbsBadge },
 ];
 
 const MEAL_TYPE_OPTIONS: { type: MealType; label: string; icon: string }[] = [
@@ -109,6 +111,7 @@ type Phase = 'configure' | 'generating' | 'results' | 'saving';
 
 export default function GenerateScreen() {
   const { householdId } = useAuth();
+  const { colors } = useTheme();
 
   // ── Settings state ──
   const [settings, setSettings] = useState<HouseholdSettings>({ sourceWeights: {}, ingredientWeights: {} });
@@ -471,7 +474,7 @@ export default function GenerateScreen() {
               return (
                 <TouchableOpacity
                   key={value}
-                  style={[styles.effortBtn, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  style={[styles.effortBtn, { backgroundColor: colors.surface }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                   onPress={() => handleEffortPress(value)}
                   activeOpacity={0.75}
                 >
@@ -809,7 +812,7 @@ const ResultsScreen = React.memo(function ResultsScreen({
                     return (
                       <TouchableOpacity
                         key={value}
-                        style={[styles.effortBtn, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                        style={[styles.effortBtn, { backgroundColor: colors.surface }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                         onPress={() => onEffortChange(effort === value && value !== 'No Restriction' ? 'No Restriction' : value)}
                         activeOpacity={0.75}
                       >
@@ -1159,7 +1162,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1.5,
     borderColor: '#D1D5DB',
-    backgroundColor: colors.surface,
   },
   effortEmoji: { fontSize: 14 },
   effortLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.semibold },

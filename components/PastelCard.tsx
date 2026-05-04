@@ -1,4 +1,5 @@
-import { Colors, Fonts, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { Fonts, FontSizes, Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import React from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -26,8 +27,7 @@ export default function PastelCard({
   selectedColorHex,
   cardWidth,
 }: Props) {
-  // Always light — PastelCard is only used in the forced-light Generate tab.
-  const colors = Colors.light;
+  const { colors } = useTheme();
 
   const cardW = cardWidth ?? DEFAULT_CARD_W;
 

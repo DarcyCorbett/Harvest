@@ -4,12 +4,13 @@
 // dismiss via drag handle, and tap-backdrop-to-close.
 // ============================================================
 
-import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 import { updateRecipeCourse, updateRecipeTags } from '@/services/firestoreService';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -30,8 +31,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
 
-// Always light — matches the forced light-mode design
-const colors = Colors.light;
+type ThemeColors = ReturnType<typeof useTheme>['colors'];
+type Styles = ReturnType<typeof makeStyles>;
 
 interface Props {
   recipe: Recipe | null;
@@ -45,6 +46,8 @@ interface Props {
 
 export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUpdate, onTagsUpdate }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   // ── Animation values ──────────────────────────────────────
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -318,36 +321,36 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
 
           {/* Macro strip */}
           <View style={styles.macroStrip}>
-            <MacroBadge value={String(recipe.nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} />
-            <MacroBadge value={`${recipe.nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} />
-            <MacroBadge value={`${recipe.nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} />
-            <MacroBadge value={`${recipe.nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} />
+            <MacroBadge value={String(recipe.nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} styles={styles} />
+            <MacroBadge value={`${recipe.nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} styles={styles} />
+            <MacroBadge value={`${recipe.nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} styles={styles} />
+            <MacroBadge value={`${recipe.nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} styles={styles} />
           </View>
 
           {/* Time chips */}
           <View style={styles.metaRow}>
-            <MetaChip icon="time-outline" label="Prep" value={recipe.prepTime} />
-            <MetaChip icon="flame-outline" label="Cook" value={recipe.cookTime} />
-            <MetaChip icon="timer-outline" label="Total" value={recipe.totalTime ?? 'N/A'} />
+            <MetaChip icon="time-outline" label="Prep" value={recipe.prepTime} styles={styles} colors={colors} />
+            <MetaChip icon="flame-outline" label="Cook" value={recipe.cookTime} styles={styles} colors={colors} />
+            <MetaChip icon="timer-outline" label="Total" value={recipe.totalTime ?? 'N/A'} styles={styles} colors={colors} />
           </View>
 
           {/* Ingredients */}
-          <SectionLabel title="Ingredients" />
+          <SectionLabel title="Ingredients" styles={styles} />
           {recipe.ingredientGroups && recipe.ingredientGroups.length > 0 ? (
             recipe.ingredientGroups.map((group, gIdx) => (
               <View key={gIdx}>
                 {group.name ? (
                   <Text style={styles.groupHeader}>{group.name}</Text>
                 ) : null}
-                <IngredientCard ingredients={group.ingredients} />
+                <IngredientCard ingredients={group.ingredients} styles={styles} />
               </View>
             ))
           ) : (
-            <IngredientCard ingredients={recipe.ingredients} />
+            <IngredientCard ingredients={recipe.ingredients} styles={styles} />
           )}
 
           {/* Instructions */}
-          <SectionLabel title="Instructions" />
+          <SectionLabel title="Instructions" styles={styles} />
           {recipe.instructions.map((step, idx) => (
             <View key={idx} style={styles.stepRow}>
               <View style={styles.stepBadge}>
@@ -372,7 +375,7 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
 
 // ─── Sub-components ───────────────────────────────────────────
 
-function IngredientCard({ ingredients }: { ingredients: Ingredient[] }) {
+function IngredientCard({ ingredients, styles }: { ingredients: Ingredient[]; styles: Styles }) {
   return (
     <View style={[styles.card, Shadows.sm, { marginBottom: Spacing.sm }]}>
       {ingredients.map((ing, idx) => (
@@ -401,7 +404,7 @@ function IngredientCard({ ingredients }: { ingredients: Ingredient[] }) {
   );
 }
 
-function MacroBadge({ value, label, bg, fg }: { value: string; label: string; bg: string; fg: string }) {
+function MacroBadge({ value, label, bg, fg, styles }: { value: string; label: string; bg: string; fg: string; styles: Styles }) {
   return (
     <View style={[styles.macroBadge, { backgroundColor: bg }]}>
       <Text style={[styles.macroValue, { color: fg }]}>{value}</Text>
@@ -410,7 +413,7 @@ function MacroBadge({ value, label, bg, fg }: { value: string; label: string; bg
   );
 }
 
-function MetaChip({ icon, label, value }: { icon: string; label: string; value: string }) {
+function MetaChip({ icon, label, value, styles, colors }: { icon: string; label: string; value: string; styles: Styles; colors: ThemeColors }) {
   return (
     <View style={styles.metaChip}>
       <Ionicons name={icon as any} size={14} color={colors.textSecondary} />
@@ -420,13 +423,13 @@ function MetaChip({ icon, label, value }: { icon: string; label: string; value: 
   );
 }
 
-function SectionLabel({ title }: { title: string }) {
+function SectionLabel({ title, styles }: { title: string; styles: Styles }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
 // ─── Styles ───────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Sheet
   sheet: {
     position: 'absolute',
