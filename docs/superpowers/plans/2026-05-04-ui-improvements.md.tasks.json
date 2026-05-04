@@ -4,77 +4,77 @@
     {
       "id": 0,
       "subject": "Task 1: ThemeContext + useTheme hook",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Create the context, provider, and hook that own theme mode and persist it across launches.\n\n**Files:**\n- Create: contexts/ThemeContext.tsx\n\n**Verify:** npx tsc --noEmit\n\n```json:metadata\n{\"files\": [\"contexts/ThemeContext.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"useTheme returns mode, effectiveScheme, colors, setMode\", \"first launch defaults to 'system' and follows OS\", \"setMode persists to AsyncStorage and updates immediately\", \"OS theme changes propagate while mode is system\"]}\n```"
     },
     {
       "id": 1,
       "subject": "Task 2: Wrap app with ThemeProvider, route hooks through it",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [0],
       "description": "**Goal:** Insert ThemeProvider at the root and re-route the legacy hooks/use-color-scheme*.ts and hooks/use-theme-color.ts to read from the new context.\n\n**Files:**\n- Modify: app/_layout.tsx, hooks/use-color-scheme.ts, hooks/use-color-scheme.web.ts, hooks/use-theme-color.ts\n\n**Verify:** npx tsc --noEmit && npx expo start (boots without error)\n\n```json:metadata\n{\"files\": [\"app/_layout.tsx\", \"hooks/use-color-scheme.ts\", \"hooks/use-color-scheme.web.ts\", \"hooks/use-theme-color.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"ThemeProvider wraps AuthProvider\", \"useColorScheme returns active effective scheme\", \"useThemeColor reads from active scheme\", \"app boots without runtime error\"]}\n```"
     },
     {
       "id": 2,
       "subject": "Task 3: Migrate remaining useColorScheme call sites",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Move 9 call sites from importing useColorScheme directly from react-native to importing from @/hooks/use-color-scheme.\n\n**Files:**\n- Modify: app/login.tsx, app/register.tsx, app/(tabs)/_layout.tsx, app/(tabs)/profile.tsx, app/(tabs)/index.tsx, app/(tabs)/cookbook.tsx, app/(tabs)/shopping.tsx, components/parallax-scroll-view.tsx, components/ui/collapsible.tsx\n\n**Verify:** npx tsc --noEmit && grep returns 0 lines\n\n```json:metadata\n{\"files\": [\"app/login.tsx\", \"app/register.tsx\", \"app/(tabs)/_layout.tsx\", \"app/(tabs)/profile.tsx\", \"app/(tabs)/index.tsx\", \"app/(tabs)/cookbook.tsx\", \"app/(tabs)/shopping.tsx\", \"components/parallax-scroll-view.tsx\", \"components/ui/collapsible.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"no file outside ThemeContext + 3 hooks imports useColorScheme from react-native\", \"every screen renders correctly\"]}\n```"
     },
     {
       "id": 3,
       "subject": "Task 4: Un-hardcode Colors.light references",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Replace module-scope Colors.light pins in 4 files with hook-based reads so they pick up the active scheme.\n\n**Files:**\n- Modify: components/SettingsModal.tsx, components/RecipeDetailModal.tsx, components/PastelCard.tsx, app/(tabs)/generate.tsx\n\n**Verify:** npx tsc --noEmit && manual dark-mode flip\n\n```json:metadata\n{\"files\": [\"components/SettingsModal.tsx\", \"components/RecipeDetailModal.tsx\", \"components/PastelCard.tsx\", \"app/(tabs)/generate.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"no module-scope const colors = Colors.light/dark\", \"each component pulls colors from useTheme()\", \"each screen renders correctly in both schemes\"]}\n```"
     },
     {
       "id": 4,
       "subject": "Task 5: Add Preferences toggle to Profile tab",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2, 3],
       "description": "**Goal:** Add a three-segment System/Light/Dark pill toggle in a new Preferences section on the Profile tab.\n\n**Files:**\n- Modify: app/(tabs)/profile.tsx\n\n**Verify:** Manual UI test — toggle each mode; persistence across restart; OS-follow when System.\n\n```json:metadata\n{\"files\": [\"app/(tabs)/profile.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"PREFERENCES section between household-join and sign-out\", \"active segment highlighted with primaryLight bg + primary text\", \"tap immediately changes theme\", \"selection persists across restart\"]}\n```"
     },
     {
       "id": 5,
       "subject": "Task 6: Extend MealPlanEntry schema and generator persistence",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Persist adults and children counts on every new MealPlanEntry going forward.\n\n**Files:**\n- Modify: services/types.ts, services/firestoreService.ts, services/generatorService.ts\n\n**Verify:** npx tsc --noEmit + inspect a freshly-written Firestore meal plan doc.\n\n```json:metadata\n{\"files\": [\"services/types.ts\", \"services/firestoreService.ts\", \"services/generatorService.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"MealPlanEntry has new optional adults? and children? fields\", \"addMealPlanEntry writes both fields when present\", \"generator confirm path passes adults/children from config\", \"existing entries without these fields still load\"]}\n```"
     },
     {
       "id": 6,
       "subject": "Task 7: RecipeDetailModal stepper, Save CTA, updateMealPlanServings",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [5, 3],
       "description": "**Goal:** Add side-by-side adults/children stepper inside the recipe modal, live re-scale ingredient quantities, surface Save Changes CTA that persists to the originating MealPlanEntry.\n\n**Files:**\n- Modify: services/firestoreService.ts (new updateMealPlanServings), components/RecipeDetailModal.tsx\n\n**Verify:** npx tsc --noEmit (full UI verification deferred to Task 8 after callers migrate).\n\n```json:metadata\n{\"files\": [\"services/firestoreService.ts\", \"components/RecipeDetailModal.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"updateMealPlanServings writes single doc update\", \"modal accepts mealPlanEntry and defaultServings props\", \"stepper initial values follow precedence rules\", \"adjusting either stepper rescales ingredients live\", \"Save Changes appears only when dirty AND mealPlanEntry.id is set\", \"steppers clamp 0..12\", \"no emojis in stepper labels\"]}\n```"
     },
     {
       "id": 7,
       "subject": "Task 8: Migrate RecipeDetailModal callers (servings)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Stop pre-scaling the recipe before passing it to the modal. Pass mealPlanEntry (when known) or defaultServings instead.\n\n**Files:**\n- Modify: app/(tabs)/index.tsx, app/(tabs)/shopping.tsx, app/(tabs)/generate.tsx, app/(tabs)/cookbook.tsx\n\n**Verify:** npx tsc --noEmit + 4-surface manual UI test.\n\n```json:metadata\n{\"files\": [\"app/(tabs)/index.tsx\", \"app/(tabs)/shopping.tsx\", \"app/(tabs)/generate.tsx\", \"app/(tabs)/cookbook.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"no caller invokes applyServingScale before passing recipe to modal\", \"meal-plan opens pass mealPlanEntry with id+adults+children+servings\", \"cookbook/generate-results pass defaultServings only\", \"Save CTA only appears on meal-plan-context opens\"]}\n```"
     },
     {
       "id": 8,
       "subject": "Task 9: Star button in RecipeDetailModal header",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [6],
       "description": "**Goal:** Render a star toggle in the modal's header when starred and onStarToggle props are provided.\n\n**Files:**\n- Modify: components/RecipeDetailModal.tsx\n\n**Verify:** npx tsc --noEmit\n\n```json:metadata\n{\"files\": [\"components/RecipeDetailModal.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"star button renders when starred !== undefined\", \"icon is 'star' colours.warning when starred=true\", \"icon is 'star-outline' colours.textTertiary when starred=false\", \"tap calls onStarToggle synchronously\"]}\n```"
     },
     {
       "id": 9,
       "subject": "Task 10: Wire star toggle in callers",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [8],
       "description": "**Goal:** Each surface that opens RecipeDetailModal provides starred + onStarToggle, with addToCookbook fallback for generate-results.\n\n**Files:**\n- Modify: app/(tabs)/cookbook.tsx, app/(tabs)/index.tsx, app/(tabs)/shopping.tsx, app/(tabs)/generate.tsx\n\n**Verify:** Manual UI test from each surface.\n\n```json:metadata\n{\"files\": [\"app/(tabs)/cookbook.tsx\", \"app/(tabs)/index.tsx\", \"app/(tabs)/shopping.tsx\", \"app/(tabs)/generate.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"star button visible on every modal surface\", \"toggle persists CookbookEntry.starred\", \"generate.tsx auto-adds to cookbook on first star\"]}\n```"
     },
     {
       "id": 10,
       "subject": "Task 11: Shopping list — manual badge to corner dot",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Replace the inline manual pill with a 6×6 px corner dot so long item names no longer wrap because of the badge.\n\n**Files:**\n- Modify: app/(tabs)/shopping.tsx\n\n**Verify:** Manual UI test with a long-named manual item.\n\n```json:metadata\n{\"files\": [\"app/(tabs)/shopping.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"no manual pill text on cards\", \"6x6 dot in colors.accent at top-right when item.manual=true\", \"item names use full row width\", \"long names no longer wrap due to pill\"]}\n```"
     }
   ],
-  "lastUpdated": "2026-05-04T00:00:00Z"
+  "lastUpdated": "2026-05-04T12:00:00Z"
 }
