@@ -13,6 +13,7 @@ import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -79,6 +80,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* Header */}
       <View style={s.header}>
         <Text style={[s.title, { color: colors.text }]}>Profile</Text>
@@ -206,12 +212,14 @@ export default function ProfileScreen() {
         <Ionicons name="log-out-outline" size={18} color={colors.error} />
         <Text style={[s.signOutText, { color: colors.error }]}>Sign out</Text>
       </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: Spacing.xl },
 
   header: {
     paddingHorizontal: Spacing.xl,

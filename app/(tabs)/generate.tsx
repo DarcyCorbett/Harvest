@@ -632,7 +632,7 @@ export default function GenerateScreen() {
                 key={type}
                 style={[
                   styles.checkRow,
-                  { borderColor: active ? colors.primary : '#D1D5DB' },
+                  { backgroundColor: colors.surface, borderColor: active ? colors.primary : colors.border },
                   active && { backgroundColor: colors.primaryLight },
                 ]}
                 onPress={() => toggleMealType(type)}
@@ -641,7 +641,7 @@ export default function GenerateScreen() {
                 <View
                   style={[
                     styles.checkbox,
-                    { borderColor: active ? colors.primary : '#D1D5DB' },
+                    { borderColor: active ? colors.primary : colors.border },
                     active && { backgroundColor: colors.primary },
                   ]}
                 >
@@ -1320,7 +1320,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1.5,
     marginBottom: Spacing.sm,
-    backgroundColor: '#FFFFFF',
   },
   checkbox: {
     width: 20,
