@@ -20,7 +20,6 @@ import {
   toggleShoppingItem,
   updateShoppingItemQuantity,
 } from '@/services/firestoreService';
-import { applyServingScale } from '@/services/recipeScraperService';
 import type { Recipe, ShoppingCategory, ShoppingItem } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -120,6 +119,7 @@ export default function ShoppingScreen() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
+  const [previewServings, setPreviewServings] = useState<number | undefined>();
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
@@ -181,7 +181,10 @@ export default function ShoppingScreen() {
   const handleRecipePress = useCallback(
     (recipeId: string, servings?: number) => {
       getRecipe(recipeId).then((r) => {
-        if (r) setPreviewRecipe(servings != null ? applyServingScale(r, servings) : r);
+        if (r) {
+          setPreviewRecipe(r);
+          setPreviewServings(servings);
+        }
       }).catch(() => { });
     },
     []
@@ -394,7 +397,8 @@ export default function ShoppingScreen() {
       <RecipeDetailModal
         recipe={previewRecipe}
         visible={!!previewRecipe}
-        onClose={() => setPreviewRecipe(null)}
+        onClose={() => { setPreviewRecipe(null); setPreviewServings(undefined); }}
+        defaultServings={previewServings}
         onCourseUpdate={(id, course) =>
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev)
         }

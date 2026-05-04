@@ -28,7 +28,6 @@ import {
   getRecipe,
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
-import { applyServingScale } from '@/services/recipeScraperService';
 import type { MealPlanEntry, Recipe, MealType } from '@/services/types';
 
 // ─── Layout constants ─────────────────────────────────────────
@@ -124,6 +123,12 @@ export default function CalendarScreen() {
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<{
+    id: string;
+    adults?: number;
+    children?: number;
+    servings?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const loadedIdsRef = useRef<Set<string>>(new Set());
   const carouselRef = useRef<FlatList<Date>>(null);
@@ -320,7 +325,16 @@ export default function CalendarScreen() {
               return (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => firstRecipe && firstEntry && setPreviewRecipe(applyServingScale(firstRecipe, firstEntry.servings ?? firstRecipe.originalServings))}
+                  onPress={() => {
+                    if (!firstRecipe || !firstEntry) return;
+                    setPreviewRecipe(firstRecipe);
+                    setPreviewEntry({
+                      id: firstEntry.id!,
+                      adults: firstEntry.adults,
+                      children: firstEntry.children,
+                      servings: firstEntry.servings,
+                    });
+                  }}
                   style={[
                     s.dayCard,
                     { backgroundColor: colors.surface, width: CARD_WIDTH, marginRight: CARD_GAP },
@@ -360,7 +374,16 @@ export default function CalendarScreen() {
                           <TouchableOpacity
                             key={entry.id}
                             style={[s.cardMealRow, { backgroundColor: colors.background }]}
-                            onPress={() => recipe && setPreviewRecipe(applyServingScale(recipe, entry.servings ?? recipe.originalServings))}
+                            onPress={() => {
+                              if (!recipe) return;
+                              setPreviewRecipe(recipe);
+                              setPreviewEntry({
+                                id: entry.id!,
+                                adults: entry.adults,
+                                children: entry.children,
+                                servings: entry.servings,
+                              });
+                            }}
                             onLongPress={() => handleDelete(entry)}
                             activeOpacity={0.7}
                           >
@@ -513,7 +536,8 @@ export default function CalendarScreen() {
       <RecipeDetailModal
         recipe={previewRecipe}
         visible={!!previewRecipe}
-        onClose={() => setPreviewRecipe(null)}
+        onClose={() => { setPreviewRecipe(null); setPreviewEntry(null); }}
+        mealPlanEntry={previewEntry ?? undefined}
         onCourseUpdate={(id, course) => {
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev);
           setRecipes((prev) => prev[id] ? { ...prev, [id]: { ...prev[id], course } } : prev);

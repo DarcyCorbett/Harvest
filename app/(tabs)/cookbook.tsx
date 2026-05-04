@@ -263,6 +263,7 @@ export default function CookbookScreen() {
         recipe={previewRecipe}
         visible={!!previewRecipe}
         onClose={() => setPreviewRecipe(null)}
+        defaultServings={previewRecipe?.originalServings}
       />
     </SafeAreaView>
   );

@@ -10,7 +10,7 @@ import SettingsModal from '@/components/SettingsModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { countUnpurchasedShoppingItems, getHouseholdSettings } from '@/services/firestoreService';
+import { countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe } from '@/services/firestoreService';
 import {
   addDays,
   confirmMealPlan,
@@ -146,6 +146,7 @@ export default function GenerateScreen() {
   const [generatedMeals, setGeneratedMeals] = useState<GeneratedMeal[]>([]);
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
+  const [previewServings, setPreviewServings] = useState<number | undefined>();
 
   // Snapshot of the selections used at the last successful Generate / Regenerate.
   // Regenerate and Auto-fix use this snapshot when the user has not actively
@@ -409,7 +410,24 @@ export default function GenerateScreen() {
           meals={generatedMeals}
           checkedIndices={checkedIndices}
           onToggleCheck={toggleChecked}
-          onPreview={(r) => setPreviewRecipe(r)}
+          onPreview={(r) => {
+            // Recipes attached to GeneratedMeals are pre-scaled by the scraper. Fetch
+            // the unscaled copy from Firestore so the modal's stepper can scale correctly.
+            const meal = generatedMeals.find((m) => m.recipe.id === r.id);
+            const targetServings = meal?.servings;
+            if (r.id) {
+              getRecipe(r.id).then((fresh) => {
+                setPreviewRecipe(fresh ?? r);
+                setPreviewServings(targetServings);
+              }).catch(() => {
+                setPreviewRecipe(r);
+                setPreviewServings(targetServings);
+              });
+            } else {
+              setPreviewRecipe(r);
+              setPreviewServings(targetServings);
+            }
+          }}
           onRegenerate={handleRegenerate}
           onRegenerateMismatched={handleRegenerateMismatched}
           onAddToCalendar={handleAddToCalendar}
@@ -426,7 +444,8 @@ export default function GenerateScreen() {
         <RecipeDetailModal
           recipe={previewRecipe}
           visible={!!previewRecipe}
-          onClose={() => setPreviewRecipe(null)}
+          onClose={() => { setPreviewRecipe(null); setPreviewServings(undefined); }}
+          defaultServings={previewServings}
           onCourseUpdate={(id, course) => {
             setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev);
             setGeneratedMeals((prev) =>
