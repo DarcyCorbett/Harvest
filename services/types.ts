@@ -30,11 +30,13 @@ export interface Recipe {
   id?: string;
   title: string;
   sourceUrl: string;
+  imageUrl?: string;        // hero image URL extracted from JSON-LD / og:image
   prepTime: string;         // e.g. "15 min"
   cookTime: string;         // e.g. "30 min"
   totalTime?: string;       // e.g. "45 min" — from wprm-recipe-total_time-*
   originalServings: number;
   course?: string[];        // WPRM course taxonomy e.g. ["Main Course", "Dinner"]
+  tags?: string[];          // Gemini-assigned labels: CuisineStyle values + course names
   description?: string;     // Short blurb from wprm-recipe-summary
   cuisine?: string;         // e.g. "Italian", "Asian"
   difficulty?: string;      // e.g. "Easy", "Medium"
@@ -67,6 +69,7 @@ export interface MealPlanEntry {
   recipeId: string;
   date: string;           // ISO date string: "2025-07-14"
   mealType: MealType;
+  servings?: number;      // household-adjusted serving count used when this meal was confirmed
 }
 
 /** A single shopping list item */
@@ -79,7 +82,7 @@ export interface ShoppingItem {
   checked: boolean;
   manual: boolean;        // true if manually added by user
   /** Recipes this ingredient was sourced from (populated during aggregation) */
-  sources?: { id: string; title: string }[];
+  sources?: { id: string; title: string; servings?: number }[];
 }
 
 /** Shopping list aisle categories */
@@ -92,6 +95,9 @@ export type ShoppingCategory =
   | 'Pantry & Dry Goods'
   | 'Frozen'
   | 'Bread & Bakery'
+  | 'Drinks & Beverages'
+  | 'Personal Care'
+  | 'Household & Cleaning'
   | 'Other';
 
 /** Cookbook entry (household subcollection) */
@@ -108,12 +114,24 @@ export type CuisineStyle =
   | 'Moderate'
   | 'Vegetarian'
   | 'Kid Friendly'
+  | 'Healthy'
   | 'Asian'
   | 'Mexican'
   | 'Mediterranean'
-  | 'Healthy'
+  | 'Italian'
+  | 'Indian'
   | 'Salad'
   | 'Custom';
+
+/** Kid Friendly filter overrides (stored inside HouseholdSettings) */
+export interface KidFriendlySettings {
+  /** Extra ingredient name fragments to block (added to the default list). */
+  excludedIngredients?: string[];
+  /** Ingredient name fragments from the default block list to allow through. */
+  allowedExceptions?: string[];
+  /** Max number of ingredients a recipe may have. Default 20. */
+  maxIngredients?: number;
+}
 
 /** Per-household generation settings (stored in Firestore) */
 export interface HouseholdSettings {
@@ -121,6 +139,10 @@ export interface HouseholdSettings {
   sourceWeights: Record<string, number>;
   /** Ingredient name → weight multiplier. Default 1 if absent. */
   ingredientWeights: Record<string, number>;
+  /** Ingredient names selected for strict round-robin slot assignment. */
+  selectedSeeds?: string[];
+  /** Customisations to the Kid Friendly ingredient filter. */
+  kidFriendly?: KidFriendlySettings;
 }
 
 /** Generator input configuration */

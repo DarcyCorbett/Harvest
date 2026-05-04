@@ -9,9 +9,11 @@ import RecipeDetailModal from '@/components/RecipeDetailModal';
 import SettingsModal from '@/components/SettingsModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { countUnpurchasedShoppingItems, getHouseholdSettings } from '@/services/firestoreService';
 import {
   addDays,
   confirmMealPlan,
+  findMismatchedMeals,
   formatDateDisplay,
   formatDateISO,
   generateMealPlan,
@@ -20,15 +22,15 @@ import {
   type GenerateConfig,
   type GeneratedMeal,
 } from '@/services/generatorService';
-import { clearAllCachedRecipes, getHouseholdSettings } from '@/services/firestoreService';
 import type { CuisineStyle, HouseholdSettings, MealType, Recipe } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -64,16 +66,27 @@ const MAT_OPTIONS = [
 
 const DAYS_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
 
-const CUISINE_OPTIONS: { style: CuisineStyle; emoji: string; bg: string }[] = [
-  { style: 'Quick & Easy', emoji: '⚡', bg: colors.caloriesBadge },
-  { style: 'Moderate', emoji: '🍳', bg: colors.carbsBadge },
+type EffortValue = 'Quick & Easy' | 'Moderate' | 'No Restriction';
+
+const EFFORT_OPTIONS: { value: EffortValue; label: string; emoji: string }[] = [
+  { value: 'Quick & Easy', label: 'Quick & Easy', emoji: '⚡' },
+  { value: 'Moderate', label: 'Moderate', emoji: '🍳' },
+  { value: 'No Restriction', label: 'Any', emoji: '🕐' },
+];
+
+const MODIFIER_OPTIONS: { style: CuisineStyle; emoji: string; bg: string }[] = [
+  { style: 'Healthy', emoji: '🥑', bg: colors.proteinBadge },
   { style: 'Vegetarian', emoji: '🥗', bg: colors.proteinBadge },
   { style: 'Kid Friendly', emoji: '👧', bg: colors.fatBadge },
+];
+
+const CUISINE_OPTION_LIST: { style: CuisineStyle; emoji: string; bg: string }[] = [
   { style: 'Asian', emoji: '🍜', bg: colors.carbsBadge },
   { style: 'Mexican', emoji: '🌮', bg: colors.caloriesBadge },
   { style: 'Mediterranean', emoji: '🫒', bg: colors.proteinBadge },
-  { style: 'Healthy', emoji: '🥑', bg: colors.proteinBadge },
-  { style: 'Salad', emoji: '🥬', bg: colors.caloriesBadge },
+  { style: 'Italian', emoji: '🍝', bg: colors.caloriesBadge },
+  { style: 'Indian', emoji: '🍛', bg: colors.fatBadge },
+  { style: 'Salad', emoji: '🥬', bg: colors.carbsBadge },
 ];
 
 const MEAL_TYPE_OPTIONS: { type: MealType; label: string; icon: string }[] = [
@@ -103,7 +116,7 @@ export default function GenerateScreen() {
 
   useEffect(() => {
     if (!householdId) return;
-    getHouseholdSettings(householdId).then(setSettings).catch(() => {});
+    getHouseholdSettings(householdId).then(setSettings).catch(() => { });
   }, [householdId]);
 
   // ── Form state ──
@@ -112,7 +125,14 @@ export default function GenerateScreen() {
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(2);
   const [mealTypes, setMealTypes] = useState<MealType[]>(['dinner']);
-  const [cuisines, setCuisines] = useState<CuisineStyle[]>([]);
+  const [effort, setEffort] = useState<EffortValue>('Moderate');
+  const [modifiers, setModifiers] = useState<Set<CuisineStyle>>(new Set());
+  const [selectedCuisines, setSelectedCuisines] = useState<Set<CuisineStyle>>(new Set());
+  const cuisines = useMemo<CuisineStyle[]>(() => [
+    ...(effort !== 'No Restriction' ? [effort as CuisineStyle] : []),
+    ...modifiers,
+    ...selectedCuisines,
+  ], [effort, modifiers, selectedCuisines]);
   const [customInstructions, setCustomInstructions] = useState('');
   const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
 
@@ -124,16 +144,55 @@ export default function GenerateScreen() {
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
 
+  // Snapshot of the selections used at the last successful Generate / Regenerate.
+  // Regenerate and Auto-fix use this snapshot when the user has not actively
+  // toggled anything on the results screen, so an unintentional press of those
+  // buttons preserves the original intent rather than picking up shared state
+  // changes from a back-trip to Configure.
+  const [generateSnapshot, setGenerateSnapshot] = useState<{
+    cuisines: CuisineStyle[];
+    selectedMaterials: Set<string>;
+  } | null>(null);
+  const [resultsScreenDirty, setResultsScreenDirty] = useState(false);
+
   // ── Helpers ──
   const toggleMealType = (t: MealType) =>
     setMealTypes((prev) =>
       prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
     );
 
-  const toggleCuisine = (s: CuisineStyle) =>
-    setCuisines((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
+  const handleEffortPress = (v: EffortValue) =>
+    setEffort((prev) => (prev === v && v !== 'No Restriction' ? 'No Restriction' : v));
+
+  const toggleModifier = (s: CuisineStyle) =>
+    setModifiers((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+  const toggleCuisineSelection = (s: CuisineStyle) =>
+    setSelectedCuisines((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+  // Wrappers for the results-screen toggles — they delegate to the same
+  // setters but mark the results screen as dirtied, so Regenerate / Auto-fix
+  // know to use the current selections instead of the Generate-time snapshot.
+  const onResultsEffortChange = (v: EffortValue) => {
+    setResultsScreenDirty(true);
+    handleEffortPress(v);
+  };
+  const onResultsToggleModifier = (s: CuisineStyle) => {
+    setResultsScreenDirty(true);
+    toggleModifier(s);
+  };
+  const onResultsToggleCuisineSelection = (s: CuisineStyle) => {
+    setResultsScreenDirty(true);
+    toggleCuisineSelection(s);
+  };
+  const onResultsToggleMaterial = (id: string) => {
+    setResultsScreenDirty(true);
+    setSelectedMaterials((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const toggleChecked = (i: number) =>
     setCheckedIndices((prev) => {
@@ -148,8 +207,9 @@ export default function GenerateScreen() {
       return null;
     }
 
-    const matStr = Array.from(selectedMaterials).join(', ');
-    const combinedInstructions = [matStr, customInstructions.trim()].filter(Boolean).join('. ');
+    // Wire selected ingredient tiles to the forceSeed round-robin mechanism
+    const seeds = Array.from(selectedMaterials).map((m) => m.toLowerCase());
+    const configSettings = seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings;
     return {
       startDate,
       numberOfDays: days,
@@ -157,8 +217,8 @@ export default function GenerateScreen() {
       children,
       mealTypes,
       cuisineStyles: cuisines,
-      customInstructions: combinedInstructions || undefined,
-      settings,
+      customInstructions: customInstructions.trim() || undefined,
+      settings: configSettings,
     };
   };
 
@@ -179,6 +239,8 @@ export default function GenerateScreen() {
       });
       setGeneratedMeals(meals);
       setCheckedIndices(new Set(meals.map((_, i) => i)));
+      setGenerateSnapshot({ cuisines, selectedMaterials: new Set(selectedMaterials) });
+      setResultsScreenDirty(false);
       setPhase('results');
     } catch (err) {
       setPhase('configure');
@@ -187,13 +249,20 @@ export default function GenerateScreen() {
         err instanceof Error ? err.message : 'Something went wrong. Please try again.'
       );
     }
-  }, [householdId, days, startDate, adults, children, mealTypes, cuisines, customInstructions]);
+  }, [householdId, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials]);
 
   // ── Regenerate selected ──
   const handleRegenerate = useCallback(async () => {
     if (!householdId) return;
     const indices = Array.from(checkedIndices);
     if (indices.length === 0) return;
+
+    const activeCuisines = resultsScreenDirty ? cuisines : (generateSnapshot?.cuisines ?? cuisines);
+    const activeMaterials = resultsScreenDirty
+      ? selectedMaterials
+      : (generateSnapshot?.selectedMaterials ?? selectedMaterials);
+    const seeds = Array.from(activeMaterials).map((m) => m.toLowerCase());
+    const activeSettings = seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings;
 
     setPhase('generating');
     setLoadingMsg('Regenerating selected recipes…');
@@ -203,7 +272,13 @@ export default function GenerateScreen() {
       const updated = await regenerateMeals(
         generatedMeals,
         indices,
-        { cuisineStyles: cuisines, customInstructions: customInstructions.trim() || undefined, adults, children, settings },
+        {
+          cuisineStyles: activeCuisines,
+          customInstructions: customInstructions.trim() || undefined,
+          adults,
+          children,
+          settings: activeSettings,
+        },
         (msg, current, total) => {
           setLoadingMsg(msg);
           setLoadingProgress({ current, total });
@@ -211,28 +286,111 @@ export default function GenerateScreen() {
       );
       setGeneratedMeals(updated);
       setCheckedIndices(new Set());
+      setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
+      setResultsScreenDirty(false);
       setPhase('results');
     } catch (err) {
       setPhase('results');
       Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, checkedIndices, generatedMeals, cuisines, customInstructions, adults, children]);
+  }, [householdId, checkedIndices, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot]);
 
-  // ── Add to calendar ──
-  const handleAddToCalendar = useCallback(async () => {
+  // ── Regenerate mismatched ──
+  const handleRegenerateMismatched = useCallback(async () => {
     if (!householdId) return;
-    setPhase('saving');
+
+    const activeCuisines = resultsScreenDirty ? cuisines : (generateSnapshot?.cuisines ?? cuisines);
+    const activeMaterials = resultsScreenDirty
+      ? selectedMaterials
+      : (generateSnapshot?.selectedMaterials ?? selectedMaterials);
+
+    const mismatches = findMismatchedMeals(generatedMeals, activeCuisines);
+    const mismatchedIndices = mismatches.map((m) => m.index);
+
+    if (mismatchedIndices.length === 0) {
+      Alert.alert('No Mismatches', 'All recipes match the selected criteria.');
+      return;
+    }
+
+    mismatches.forEach((m) => {
+      console.log(`[AutoFix] Slot ${m.index} (${generatedMeals[m.index].mealType} — "${generatedMeals[m.index].recipe.title}"): ${m.reasons.join('; ')}`);
+    });
+
+    setPhase('generating');
+    setLoadingMsg(`Regenerating ${mismatchedIndices.length} mismatched recipe${mismatchedIndices.length !== 1 ? 's' : ''}…`);
+    setLoadingProgress({ current: 0, total: mismatchedIndices.length });
+
     try {
-      await confirmMealPlan(generatedMeals, householdId);
-      setPhase('configure');
-      setGeneratedMeals([]);
+      const seeds = Array.from(activeMaterials).map((m) => m.toLowerCase());
+      const updated = await regenerateMeals(
+        generatedMeals,
+        mismatchedIndices,
+        {
+          cuisineStyles: activeCuisines,
+          customInstructions: customInstructions.trim() || undefined,
+          adults,
+          children,
+          settings: seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings,
+        },
+        (msg, current, total) => {
+          setLoadingMsg(msg);
+          setLoadingProgress({ current, total });
+        }
+      );
+      setGeneratedMeals(updated);
       setCheckedIndices(new Set());
-      Alert.alert('Done!', 'Your meal plan has been added to the calendar and shopping list.');
+      setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
+      setResultsScreenDirty(false);
+      setPhase('results');
     } catch (err) {
       setPhase('results');
-      Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, generatedMeals]);
+  }, [householdId, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot]);
+
+  // ── Add to calendar ──
+  const performConfirm = useCallback(
+    async (mode: 'add' | 'replace') => {
+      if (!householdId) return;
+      setLoadingMsg('Adding to calendar…');
+      setLoadingProgress({ current: 0, total: 0 });
+      setPhase('saving');
+      try {
+        await confirmMealPlan(generatedMeals, householdId, mode);
+        setPhase('configure');
+        setGeneratedMeals([]);
+        setCheckedIndices(new Set());
+        Alert.alert('Done!', 'Your meal plan has been added to the calendar and shopping list.');
+      } catch (err) {
+        setPhase('results');
+        Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      }
+    },
+    [householdId, generatedMeals]
+  );
+
+  const handleAddToCalendar = useCallback(async () => {
+    if (!householdId) return;
+    let unpurchased = 0;
+    try {
+      unpurchased = await countUnpurchasedShoppingItems(householdId);
+    } catch (err) {
+      console.warn('[Generate] Failed to check existing shopping list:', err);
+    }
+    if (unpurchased > 0) {
+      Alert.alert(
+        'Existing shopping list',
+        `You have ${unpurchased} unpurchased item${unpurchased === 1 ? '' : 's'} on your shopping list. Add the new ingredients to the existing list, or replace it?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace', style: 'destructive', onPress: () => performConfirm('replace') },
+          { text: 'Add to list', onPress: () => performConfirm('add') },
+        ]
+      );
+      return;
+    }
+    performConfirm('add');
+  }, [householdId, performConfirm]);
 
   // ─── Render ───────────────────────────────────────────────
 
@@ -250,18 +408,17 @@ export default function GenerateScreen() {
           onToggleCheck={toggleChecked}
           onPreview={(r) => setPreviewRecipe(r)}
           onRegenerate={handleRegenerate}
+          onRegenerateMismatched={handleRegenerateMismatched}
           onAddToCalendar={handleAddToCalendar}
           onBack={() => setPhase('configure')}
-          cuisines={cuisines}
-          onToggleCuisine={toggleCuisine}
+          effort={effort}
+          onEffortChange={onResultsEffortChange}
+          modifiers={modifiers}
+          onToggleModifier={onResultsToggleModifier}
+          selectedCuisines={selectedCuisines}
+          onToggleCuisineSelection={onResultsToggleCuisineSelection}
           selectedMaterials={selectedMaterials}
-          onToggleMaterial={(id) =>
-            setSelectedMaterials((prev) => {
-              const next = new Set(prev);
-              next.has(id) ? next.delete(id) : next.add(id);
-              return next;
-            })
-          }
+          onToggleMaterial={onResultsToggleMaterial}
         />
         <RecipeDetailModal
           recipe={previewRecipe}
@@ -273,6 +430,12 @@ export default function GenerateScreen() {
               prev.map((m) => m.recipe.id === id ? { ...m, recipe: { ...m.recipe, course } } : m)
             );
           }}
+          onTagsUpdate={(id, tags) => {
+            setPreviewRecipe((prev) => prev?.id === id ? { ...prev, tags } : prev);
+            setGeneratedMeals((prev) =>
+              prev.map((m) => m.recipe.id === id ? { ...m, recipe: { ...m.recipe, tags } } : m)
+            );
+          }}
         />
       </>
     );
@@ -280,9 +443,9 @@ export default function GenerateScreen() {
 
   // ── Configure phase ───────────────────────────────────────
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -297,70 +460,60 @@ export default function GenerateScreen() {
           </TouchableOpacity>
           <Text style={[styles.topLabel, { color: colors.textSecondary }]}>Let's Start…</Text>
           <Text style={[styles.title, { color: colors.text }]}>What style of{'\n'}meal do you want?</Text>
-          <View style={[styles.pillSubText, { backgroundColor: '#E7E5E4' }]}>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Pick one or more styles
-            </Text>
-          </View>
         </View>
 
-        {/* ── Section: Recipe Style (2-column PastelCard grid — hero section) ── */}
+        {/* ── Section: Effort ── */}
         <View style={styles.materialsWrapper}>
+          <Text style={[styles.styleGroupLabel, { color: colors.textSecondary }]}>EFFORT</Text>
+          <View style={styles.effortRow}>
+            {EFFORT_OPTIONS.map(({ value, label, emoji }) => {
+              const active = effort === value;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.effortBtn, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={() => handleEffortPress(value)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.effortEmoji}>{emoji}</Text>
+                  <Text style={[styles.effortLabel, { color: active ? '#fff' : colors.text }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ── Section: Modifiers ── */}
+          <Text style={[styles.styleGroupLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>MODIFIERS</Text>
           <View style={styles.materialsGrid}>
-            {CUISINE_OPTIONS.map(({ style, emoji, bg }) => (
+            {MODIFIER_OPTIONS.map(({ style, emoji, bg }) => (
               <PastelCard
                 key={style}
                 title={style}
                 emoji={emoji}
                 selectedColorHex={bg}
-                selected={cuisines.includes(style)}
-                onPress={() => toggleCuisine(style)}
+                selected={modifiers.has(style)}
+                onPress={() => toggleModifier(style)}
+                cardWidth={CUISINE_CARD_W}
+              />
+            ))}
+          </View>
+
+          {/* ── Section: Cuisines ── */}
+          <Text style={[styles.styleGroupLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>CUISINES</Text>
+          <View style={styles.materialsGrid}>
+            {CUISINE_OPTION_LIST.map(({ style, emoji, bg }) => (
+              <PastelCard
+                key={style}
+                title={style}
+                emoji={emoji}
+                selectedColorHex={bg}
+                selected={selectedCuisines.has(style)}
+                onPress={() => toggleCuisineSelection(style)}
                 cardWidth={CUISINE_CARD_W}
               />
             ))}
           </View>
         </View>
-
-        {/* ── Generate button ── */}
-        <TouchableOpacity
-          style={[styles.generateBtn, { backgroundColor: colors.primary }]}
-          onPress={handleGenerate}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="sparkles-outline" size={20} color="#fff" />
-          <Text style={styles.generateBtnText}>Generate</Text>
-        </TouchableOpacity>
-
-        {/* ── Dev: Clear recipe cache ── */}
-        <TouchableOpacity
-          onPress={() => {
-            Alert.alert(
-              'Clear Recipe Cache',
-              'Delete all cached recipes so they are re-scraped on next generation. Continue?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Clear',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      const count = await clearAllCachedRecipes();
-                      Alert.alert('Cache Cleared', `${count} cached recipe${count !== 1 ? 's' : ''} deleted.`);
-                    } catch (err) {
-                      Alert.alert('Error', 'Failed to clear cache.');
-                    }
-                  },
-                },
-              ]
-            );
-          }}
-          activeOpacity={0.7}
-          style={{ alignSelf: 'center', marginTop: Spacing.sm }}
-        >
-          <Text style={{ fontSize: FontSizes.sm, color: colors.textSecondary, fontFamily: Fonts.regular }}>
-            Clear Recipe Cache
-          </Text>
-        </TouchableOpacity>
 
         <View style={styles.divider} />
 
@@ -507,13 +660,25 @@ export default function GenerateScreen() {
 
       </ScrollView>
 
+      {/* Floating Generate CTA */}
+      <View style={{ position: 'absolute', bottom: Spacing.xl, left: Spacing.xl, right: Spacing.xl }}>
+        <TouchableOpacity
+          style={[styles.generateBtn, { backgroundColor: colors.primary, marginTop: 0 }, Shadows.md]}
+          onPress={handleGenerate}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="sparkles-outline" size={20} color="#fff" />
+          <Text style={styles.generateBtnText}>Generate</Text>
+        </TouchableOpacity>
+      </View>
+
       {householdId && (
         <SettingsModal
           visible={settingsVisible}
           onClose={() => setSettingsVisible(false)}
           householdId={householdId}
           onSaved={() =>
-            getHouseholdSettings(householdId).then(setSettings).catch(() => {})
+            getHouseholdSettings(householdId).then(setSettings).catch(() => { })
           }
         />
       )}
@@ -533,7 +698,7 @@ function LoadingScreen({
   progress: { current: number; total: number };
 }) {
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <View style={styles.loadingCenter}>
         <View style={[styles.loadingCard, { backgroundColor: colors.surface }, Shadows.lg]}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -558,10 +723,15 @@ const ResultsScreen = React.memo(function ResultsScreen({
   onToggleCheck,
   onPreview,
   onRegenerate,
+  onRegenerateMismatched,
   onAddToCalendar,
   onBack,
-  cuisines,
-  onToggleCuisine,
+  effort,
+  onEffortChange,
+  modifiers,
+  onToggleModifier,
+  selectedCuisines,
+  onToggleCuisineSelection,
   selectedMaterials,
   onToggleMaterial,
 }: {
@@ -571,17 +741,23 @@ const ResultsScreen = React.memo(function ResultsScreen({
   onToggleCheck: (i: number) => void;
   onPreview: (r: Recipe) => void;
   onRegenerate: () => void;
+  onRegenerateMismatched: () => void;
   onAddToCalendar: () => void;
   onBack: () => void;
-  cuisines: CuisineStyle[];
-  onToggleCuisine: (s: CuisineStyle) => void;
+  effort: EffortValue;
+  onEffortChange: (v: EffortValue) => void;
+  modifiers: Set<CuisineStyle>;
+  onToggleModifier: (s: CuisineStyle) => void;
+  selectedCuisines: Set<CuisineStyle>;
+  onToggleCuisineSelection: (s: CuisineStyle) => void;
   selectedMaterials: Set<string>;
   onToggleMaterial: (id: string) => void;
 }) {
   const checkedCount = checkedIndices.size;
+  const [preferencesExpanded, setPreferencesExpanded] = useState(false);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Results header */}
       <View style={[styles.resultsHeader, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -594,7 +770,7 @@ const ResultsScreen = React.memo(function ResultsScreen({
       <FlatList
         data={meals}
         keyExtractor={(_, i) => String(i)}
-        contentContainerStyle={styles.resultsList}
+        contentContainerStyle={[styles.resultsList, { paddingBottom: Spacing.huge + 160 }]}
         renderItem={({ item, index }) => (
           <MealResultCard
             meal={item}
@@ -606,76 +782,150 @@ const ResultsScreen = React.memo(function ResultsScreen({
         )}
         ListFooterComponent={
           <View style={styles.resultsFooter}>
-            {/* ── Re-generation options ── */}
-            <View style={[styles.divider, { marginTop: Spacing.xs }]} />
-            <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>Recipe Style</Text>
-            <View style={styles.materialsGrid}>
-              {CUISINE_OPTIONS.map(({ style, emoji, bg }) => (
-                <PastelCard
-                  key={style}
-                  title={style}
-                  emoji={emoji}
-                  selectedColorHex={bg}
-                  selected={cuisines.includes(style)}
-                  onPress={() => onToggleCuisine(style)}
-                  cardWidth={CUISINE_CARD_W}
-                />
-              ))}
-            </View>
-
-            <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>
-              Ingredient Seeds
-            </Text>
-            <View style={[styles.materialsGrid, { marginBottom: Spacing.xl }]}>
-              {MAT_OPTIONS.map((mat) => (
-                <PastelCard
-                  key={mat.id}
-                  title={mat.id}
-                  emoji={mat.emoji}
-                  selectedColorHex={mat.bg}
-                  selected={selectedMaterials.has(mat.id)}
-                  onPress={() => onToggleMaterial(mat.id)}
-                />
-              ))}
-            </View>
-
-            {/* ── Action buttons ── */}
+            {/* ── Adjust preferences toggle ── */}
             <TouchableOpacity
-              style={[
-                styles.secondaryBtn,
-                { borderColor: colors.primary },
-                checkedCount === 0 && styles.btnDisabled,
-              ]}
-              onPress={onRegenerate}
-              disabled={checkedCount === 0}
-              activeOpacity={0.8}
+              style={styles.preferencesToggle}
+              onPress={() => setPreferencesExpanded((v) => !v)}
+              activeOpacity={0.7}
             >
-              <Ionicons
-                name="refresh"
-                size={18}
-                color={checkedCount === 0 ? colors.textTertiary : colors.primary}
-              />
-              <Text
-                style={[
-                  styles.secondaryBtnText,
-                  { color: checkedCount === 0 ? colors.textTertiary : colors.primary },
-                ]}
-              >
-                Regenerate Selected ({checkedCount})
+              <View style={[styles.preferencesDividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.preferencesToggleLabel, { color: colors.textSecondary }]}>
+                Adjust Preferences
               </Text>
+              <Ionicons
+                name={preferencesExpanded ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSecondary}
+              />
+              <View style={[styles.preferencesDividerLine, { backgroundColor: colors.border }]} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.generateBtn, { backgroundColor: colors.primary }]}
-              onPress={onAddToCalendar}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="calendar" size={20} color="#fff" />
-              <Text style={styles.generateBtnText}>Add to Calendar</Text>
-            </TouchableOpacity>
+            {preferencesExpanded && (
+              <>
+                <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>EFFORT</Text>
+                <View style={styles.effortRow}>
+                  {EFFORT_OPTIONS.map(({ value, label, emoji }) => {
+                    const active = effort === value;
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.effortBtn, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                        onPress={() => onEffortChange(effort === value && value !== 'No Restriction' ? 'No Restriction' : value)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.effortEmoji}>{emoji}</Text>
+                        <Text style={[styles.effortLabel, { color: active ? '#fff' : colors.text }]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>MODIFIERS</Text>
+                <View style={styles.materialsGrid}>
+                  {MODIFIER_OPTIONS.map(({ style, emoji, bg }) => (
+                    <PastelCard
+                      key={style}
+                      title={style}
+                      emoji={emoji}
+                      selectedColorHex={bg}
+                      selected={modifiers.has(style)}
+                      onPress={() => onToggleModifier(style)}
+                      cardWidth={CUISINE_CARD_W}
+                    />
+                  ))}
+                </View>
+
+                <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>CUISINES</Text>
+                <View style={styles.materialsGrid}>
+                  {CUISINE_OPTION_LIST.map(({ style, emoji, bg }) => (
+                    <PastelCard
+                      key={style}
+                      title={style}
+                      emoji={emoji}
+                      selectedColorHex={bg}
+                      selected={selectedCuisines.has(style)}
+                      onPress={() => onToggleCuisineSelection(style)}
+                      cardWidth={CUISINE_CARD_W}
+                    />
+                  ))}
+                </View>
+
+                <Text style={[styles.regenSectionLabel, { color: colors.textSecondary, marginTop: Spacing.lg }]}>
+                  Ingredient Seeds
+                </Text>
+                <View style={[styles.materialsGrid, { marginBottom: Spacing.xl }]}>
+                  {MAT_OPTIONS.map((mat) => (
+                    <PastelCard
+                      key={mat.id}
+                      title={mat.id}
+                      emoji={mat.emoji}
+                      selectedColorHex={mat.bg}
+                      selected={selectedMaterials.has(mat.id)}
+                      onPress={() => onToggleMaterial(mat.id)}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
           </View>
         }
       />
+
+      {/* Floating action bar */}
+      <View style={{ position: 'absolute', bottom: Spacing.xl, left: Spacing.xl, right: Spacing.xl, gap: Spacing.sm }}>
+
+        {/* TOP ROW: Auto-fix & Regen */}
+        <View style={styles.floatingCtaRow}>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border, flex: 1 }, Shadows.md]}
+            onPress={onRegenerateMismatched}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="warning-outline" size={18} color={colors.textSecondary} />
+            <Text style={[styles.secondaryBtnText, {
+              color: colors.textSecondary,
+              flexShrink: 1, // Allows the text to wrap instead of overflowing
+              textAlign: 'center', // Centers the wrapped text nicely
+              marginLeft: 4 // Optional: Adds breathing room between the icon and text
+            }]}>
+              Auto Fix
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.secondaryBtn,
+              { backgroundColor: colors.surface, borderColor: colors.primary, flex: 1 },
+              checkedCount === 0 && styles.btnDisabled,
+              Shadows.md
+            ]}
+            onPress={onRegenerate}
+            disabled={checkedCount === 0}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh" size={18} color={checkedCount === 0 ? colors.textTertiary : colors.primary} />
+            <Text style={[styles.secondaryBtnText, {
+              color: checkedCount === 0 ? colors.textTertiary : colors.primary,
+              flexShrink: 1,
+              textAlign: 'center',
+              marginLeft: 4
+            }]}>
+              Regenerate ({checkedCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* BOTTOM ROW: Add to Calendar */}
+        <TouchableOpacity
+          style={[styles.generateBtn, { backgroundColor: colors.primary, marginTop: 0 }, Shadows.md]}
+          onPress={onAddToCalendar}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="calendar" size={20} color="#fff" />
+          <Text style={styles.generateBtnText}>Add to Calendar</Text>
+        </TouchableOpacity>
+
+      </View>
     </SafeAreaView>
   );
 });
@@ -742,18 +992,22 @@ const MealResultCard = React.memo(function MealResultCard({
           </Text>
         </View>
 
-        {meal.recipe.course && meal.recipe.course.length > 0 && (
+        {((meal.recipe.course?.length ?? 0) + (meal.recipe.tags?.length ?? 0)) > 0 ? (
           <View style={styles.resultCoursePills}>
-            {meal.recipe.course.map((c, i) => (
+            {[...(meal.recipe.course ?? []), ...(meal.recipe.tags ?? [])].map((label, i) => (
               <View key={i} style={[styles.resultCoursePill, { borderColor: colors.border }]}>
                 <Text style={[styles.resultCoursePillText, { color: colors.textSecondary }]}>
-                  {c.replace(/\b\w/g, (ch) => ch.toUpperCase())}
+                  {label.replace(/\b\w/g, (ch) => ch.toUpperCase())}
                 </Text>
               </View>
             ))}
           </View>
-        )}
+        ) : null}
       </View>
+
+      {meal.recipe.imageUrl ? (
+        <Image source={{ uri: meal.recipe.imageUrl }} style={styles.resultCardImage} />
+      ) : null}
 
       <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
     </TouchableOpacity>
@@ -855,14 +1109,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: {
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.xs,
     paddingBottom: Spacing.huge,
   },
 
-  header: { marginBottom: Spacing.xxl },
-  gearBtn: { alignSelf: 'flex-end', marginBottom: Spacing.sm },
-  topLabel: { fontFamily: Fonts.bold, fontSize: FontSizes.md, marginBottom: Spacing.sm },
-  title: { fontSize: FontSizes.xxxl, fontFamily: Fonts.bold, lineHeight: 42, marginBottom: Spacing.md },
+  header: { marginBottom: Spacing.md },
+  gearBtn: { alignSelf: 'flex-end', marginTop: Spacing.xxs, marginBottom: Spacing.xxs },
+  topLabel: { fontFamily: Fonts.bold, fontSize: FontSizes.md, marginBottom: Spacing.xs },
+  title: { fontSize: FontSizes.xxxl, fontFamily: Fonts.bold, lineHeight: 42, marginBottom: Spacing.sm },
   pillSubText: {
     alignSelf: 'flex-start',
     paddingHorizontal: Spacing.md,
@@ -873,7 +1127,7 @@ const styles = StyleSheet.create({
 
   materialsWrapper: {
     alignItems: 'center',
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.lg,
   },
   materialsGrid: {
     flexDirection: 'row',
@@ -881,12 +1135,58 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     justifyContent: 'center',
   },
+  styleGroupLabel: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.semibold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+  },
+  effortRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    width: '100%',
+  },
+  effortBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    backgroundColor: colors.surface,
+  },
+  effortEmoji: { fontSize: 14 },
+  effortLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.semibold },
 
   divider: {
     height: 1,
     backgroundColor: '#E7E5E4',
     marginVertical: Spacing.xxl,
     marginHorizontal: Spacing.md,
+  },
+  preferencesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+    marginHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  preferencesDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  preferencesToggleLabel: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   sectionHeaderLabel: {
     fontSize: FontSizes.xl,
@@ -1009,7 +1309,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
   },
   generateBtnText: {
     color: '#fff',
@@ -1103,7 +1403,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: 'transparent',
   },
-  resultCoursePillText: { fontSize: FontSizes.xs, fontFamily: Fonts.regular },
+  resultCoursePillText: { fontSize: FontSizes.xs, fontFamily: Fonts.medium },
 
   secondaryBtn: {
     flexDirection: 'row',
@@ -1116,4 +1416,24 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { fontSize: FontSizes.md, fontFamily: Fonts.semibold },
   btnDisabled: { opacity: 0.4 },
+
+  floatingCta: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
+    borderTopWidth: 1,
+    gap: Spacing.sm,
+  },
+  floatingCtaRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+
+  resultCardImage: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.md,
+    flexShrink: 0,
+    backgroundColor: '#E7E5E4',
+  },
 });

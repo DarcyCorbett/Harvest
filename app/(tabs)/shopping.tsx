@@ -18,7 +18,9 @@ import {
   getRecipe,
   subscribeShoppingList,
   toggleShoppingItem,
+  updateShoppingItemQuantity,
 } from '@/services/firestoreService';
+import { applyServingScale } from '@/services/recipeScraperService';
 import type { Recipe, ShoppingCategory, ShoppingItem } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -43,6 +45,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ADD_SHEET_HEIGHT = SCREEN_HEIGHT * 0.82;
+const QUICK_SHEET_HEIGHT = SCREEN_HEIGHT * 0.88;
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -55,6 +58,9 @@ const CATEGORY_ORDER: ShoppingCategory[] = [
   'Bread & Bakery',
   'Frozen',
   'Pantry & Dry Goods',
+  'Drinks & Beverages',
+  'Personal Care',
+  'Household & Cleaning',
   'Other',
 ];
 
@@ -67,8 +73,23 @@ const CATEGORY_ICONS: Record<ShoppingCategory, string> = {
   'Bread & Bakery': 'cafe-outline',
   'Frozen': 'snow-outline',
   'Pantry & Dry Goods': 'archive-outline',
+  'Drinks & Beverages': 'wine-outline',
+  'Personal Care': 'person-outline',
+  'Household & Cleaning': 'home-outline',
   'Other': 'ellipsis-horizontal-circle-outline',
 };
+
+const QUICK_ADD_ITEMS: { category: ShoppingCategory; items: string[] }[] = [
+  { category: 'Produce', items: ['Bananas', 'Apples', 'Pears', 'Cucumbers'] },
+  { category: 'Dairy & Eggs', items: ['Milk', 'Eggs', 'Butter', 'Cheese', 'Parmesan', 'Yoghurt'] },
+  { category: 'Bread & Bakery', items: ['Bread'] },
+  { category: 'Meat & Seafood', items: ['Ham'] },
+  { category: 'Pantry & Dry Goods', items: ['Pasta', 'Cereal', 'Jam', 'Peanut Butter', 'Vegemite', 'Honey', 'Coffee', 'Decaf Coffee'] },
+  { category: 'Oils, Sauces & Condiments', items: ['Pesto'] },
+  { category: 'Drinks & Beverages', items: ['Juice', 'Soft Drinks', 'Water'] },
+  { category: 'Personal Care', items: ['Toothpaste', 'Toothbrush', 'Shampoo', 'Body Wash', 'Deodorant', 'Pads', 'Baby Wipes'] },
+  { category: 'Household & Cleaning', items: ['Dishwashing Liquid', 'Dishwashing Tablets', 'Tissues', 'Toilet Paper'] },
+];
 
 // ─── Paired-row types ─────────────────────────────────────────
 
@@ -96,6 +117,7 @@ export default function ShoppingScreen() {
   const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
 
@@ -157,9 +179,9 @@ export default function ShoppingScreen() {
   );
 
   const handleRecipePress = useCallback(
-    (recipeId: string) => {
+    (recipeId: string, servings?: number) => {
       getRecipe(recipeId).then((r) => {
-        if (r) setPreviewRecipe(r);
+        if (r) setPreviewRecipe(servings != null ? applyServingScale(r, servings) : r);
       }).catch(() => { });
     },
     []
@@ -209,7 +231,7 @@ export default function ShoppingScreen() {
   const selectedCount = selectedIds.size;
 
   return (
-    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* ── Header ── */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
@@ -342,15 +364,25 @@ export default function ShoppingScreen() {
 
       {/* ── Floating Add button (hidden in selection mode) ── */}
       {!selectionMode && (
-        <TouchableOpacity
-          style={[s.fabPrimary, { bottom: insets.bottom + Spacing.lg, backgroundColor: colors.primary }, Shadows.md]}
-          onPress={() => setShowAdd(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-          <Text style={s.fabPrimaryText}>Add Item</Text>
-        </TouchableOpacity>
+        <View style={{ position: 'absolute', bottom: Spacing.xl, left: Spacing.xl, right: Spacing.xl }}>
+          <TouchableOpacity
+            style={[s.fabPrimary, { backgroundColor: colors.primary }, Shadows.md]}
+            onPress={() => setShowQuickAdd(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={s.fabPrimaryText}>Add Item</Text>
+          </TouchableOpacity>
+        </View>
       )}
+
+      <QuickAddModal
+        visible={showQuickAdd}
+        colors={colors}
+        householdId={householdId ?? ''}
+        onClose={() => setShowQuickAdd(false)}
+        onOpenCustom={() => setShowAdd(true)}
+      />
 
       <AddItemModal
         visible={showAdd}
@@ -388,7 +420,7 @@ function CompactShoppingItem({
   selected: boolean;
   onToggle: () => void;
   onLongPress: () => void;
-  onRecipePress: (recipeId: string) => void;
+  onRecipePress: (recipeId: string, servings?: number) => void;
 }) {
   return (
     <TouchableOpacity
@@ -403,48 +435,52 @@ function CompactShoppingItem({
       activeOpacity={0.75}
       delayLongPress={400}
     >
-      {/* Checkbox / selection circle */}
-      <View style={s.compactTop}>
-        {selectionMode ? (
-          <View
-            style={[
-              s.selectionCircle,
-              { borderColor: selected ? colors.primary : colors.textTertiary },
-              selected && { backgroundColor: colors.primary },
-            ]}
-          >
-            {selected && <Ionicons name="checkmark" size={11} color="#fff" />}
-          </View>
-        ) : (
-          <View
-            style={[
-              s.checkbox,
-              { borderColor: item.checked ? colors.checked : colors.primary },
-              item.checked && { backgroundColor: colors.checked },
-            ]}
-          >
-            {item.checked && <Ionicons name="checkmark" size={11} color="#fff" />}
-          </View>
-        )}
+      {/* Top Row: Checkbox + Name + Manual Badge */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm }}>
+        {/* Checkbox / selection circle */}
+        <View style={{ marginTop: 1 }}>
+          {selectionMode ? (
+            <View
+              style={[
+                s.selectionCircle,
+                { borderColor: selected ? colors.primary : colors.textTertiary },
+                selected && { backgroundColor: colors.primary },
+              ]}
+            >
+              {selected && <Ionicons name="checkmark" size={11} color="#fff" />}
+            </View>
+          ) : (
+            <View
+              style={[
+                s.checkbox,
+                { borderColor: item.checked ? colors.checked : colors.primary },
+                item.checked && { backgroundColor: colors.checked },
+              ]}
+            >
+              {item.checked && <Ionicons name="checkmark" size={11} color="#fff" />}
+            </View>
+          )}
+        </View>
 
-        {item.manual && (
-          <View style={[s.manualBadge, { backgroundColor: colors.accentLight }]}>
-            <Text style={[s.manualText, { color: colors.accent }]}>manual</Text>
-          </View>
-        )}
+        {/* Item name & manual badge */}
+        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Text
+            style={[
+              s.itemName,
+              { color: item.checked ? colors.textTertiary : colors.text, flex: 1, marginRight: Spacing.xs },
+              item.checked && s.strikethrough,
+            ]}
+            numberOfLines={2}
+          >
+            {item.name}
+          </Text>
+          {item.manual && (
+            <View style={[s.manualBadge, { backgroundColor: colors.accentLight }]}>
+              <Text style={[s.manualText, { color: colors.accent }]}>manual</Text>
+            </View>
+          )}
+        </View>
       </View>
-
-      {/* Item name */}
-      <Text
-        style={[
-          s.itemName,
-          { color: item.checked ? colors.textTertiary : colors.text },
-          item.checked && s.strikethrough,
-        ]}
-        numberOfLines={2}
-      >
-        {item.name}
-      </Text>
 
       {/* Quantity */}
       {(item.quantity > 0 || item.unit) && (
@@ -460,7 +496,7 @@ function CompactShoppingItem({
             <TouchableOpacity
               key={src.id}
               style={[s.sourceChip, { backgroundColor: colors.primaryLight }]}
-              onPress={() => onRecipePress(src.id)}
+              onPress={() => onRecipePress(src.id, src.servings)}
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Ionicons name="book-outline" size={9} color={colors.primary} />
@@ -472,6 +508,201 @@ function CompactShoppingItem({
         </View>
       )}
     </TouchableOpacity>
+  );
+}
+
+// ─── Quick Add Bottom Sheet ───────────────────────────────────
+
+function QuickAddModal({
+  visible,
+  colors,
+  householdId,
+  onClose,
+  onOpenCustom,
+}: {
+  visible: boolean;
+  colors: (typeof Colors)['light'];
+  householdId: string;
+  onClose: () => void;
+  onOpenCustom: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [addedItems, setAddedItems] = useState<Record<string, { docId: string; qty: number }>>({});
+  const [lastAdded, setLastAdded] = useState<{ name: string; docId: string } | null>(null);
+  const [qtyInput, setQtyInput] = useState('1');
+  const addingRef = useRef<Set<string>>(new Set());
+
+  const translateY = useRef(new Animated.Value(QUICK_SHEET_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  const closeSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, { toValue: QUICK_SHEET_HEIGHT, duration: 260, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => onClose());
+  }, [onClose]);
+
+  useEffect(() => {
+    if (visible) {
+      setAddedItems({});
+      setLastAdded(null);
+      setQtyInput('1');
+      translateY.setValue(QUICK_SHEET_HEIGHT);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, tension: 62, friction: 11, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const handlePillTap = useCallback(async (name: string, category: ShoppingCategory) => {
+    const key = name.toLowerCase();
+    const existing = addedItems[key];
+    if (existing) {
+      setLastAdded({ name, docId: existing.docId });
+      setQtyInput(String(existing.qty));
+      return;
+    }
+    if (addingRef.current.has(key)) return;
+    addingRef.current.add(key);
+    try {
+      const docId = await addManualItem(householdId, name, 1, '', category);
+      setAddedItems((prev) => ({ ...prev, [key]: { docId, qty: 1 } }));
+      setLastAdded({ name, docId });
+      setQtyInput('1');
+    } catch {
+      // silently fail
+    } finally {
+      addingRef.current.delete(key);
+    }
+  }, [addedItems, householdId]);
+
+  const handleUpdate = useCallback(async () => {
+    if (!lastAdded || !householdId) return;
+    const qty = parseFloat(qtyInput) || 1;
+    await updateShoppingItemQuantity(householdId, lastAdded.docId, qty).catch(() => { });
+    setAddedItems((prev) => ({
+      ...prev,
+      [lastAdded.name.toLowerCase()]: { ...prev[lastAdded.name.toLowerCase()], qty },
+    }));
+  }, [lastAdded, qtyInput, householdId]);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent={Platform.OS === 'android'}
+      onRequestClose={closeSheet}
+    >
+      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSheet}>
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.45)', opacity: backdropOpacity }]}
+        />
+      </TouchableOpacity>
+
+      <Animated.View
+        style={[
+          s.addSheet,
+          {
+            height: QUICK_SHEET_HEIGHT,
+            paddingBottom: insets.bottom,
+            backgroundColor: colors.background,
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <View style={s.addHandleWrap}>
+          <View style={[s.addHandle, { backgroundColor: colors.border }]} />
+        </View>
+
+        <View style={[s.addTopBar, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={closeSheet} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={[s.modalTitle, { color: colors.text }]}>Quick Add</Text>
+          <View style={{ width: 22 }} />
+        </View>
+
+        <TouchableOpacity
+          style={[s.qaCustomRow, { borderBottomColor: colors.border }]}
+          onPress={onOpenCustom}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="create-outline" size={18} color={colors.primary} />
+          <Text style={[s.qaCustomText, { color: colors.primary }]}>Custom item…</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[s.qaScrollContent, { paddingBottom: lastAdded ? 80 : Spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {QUICK_ADD_ITEMS.map((section) => (
+            <View key={section.category}>
+              <View style={s.qaSectionHeader}>
+                <Ionicons name={CATEGORY_ICONS[section.category] as any} size={14} color={colors.textSecondary} />
+                <Text style={[s.qaSectionTitle, { color: colors.textSecondary }]}>{section.category}</Text>
+              </View>
+              <View style={s.qaPillRow}>
+                {section.items.map((item) => {
+                  const key = item.toLowerCase();
+                  const isAdded = !!addedItems[key];
+                  const isSelected = lastAdded?.name === item;
+                  return (
+                    <TouchableOpacity
+                      key={item}
+                      style={[
+                        s.qaPill,
+                        isAdded
+                          ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                          : { backgroundColor: 'transparent', borderColor: colors.primary },
+                        isSelected && { borderWidth: 2.5 },
+                      ]}
+                      onPress={() => handlePillTap(item, section.category)}
+                      activeOpacity={0.75}
+                    >
+                      {isAdded && (
+                        <Ionicons name="checkmark" size={12} color="#fff" style={{ marginRight: 2 }} />
+                      )}
+                      <Text style={[s.qaPillText, { color: isAdded ? '#fff' : colors.primary }]}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+
+        {lastAdded && (
+          <View style={[s.qaFloatingBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <Text style={[s.qaFloatingLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+              {lastAdded.name}
+            </Text>
+            <TextInput
+              style={[s.qaFloatingInput, { backgroundColor: colors.inputBackground, color: colors.text, borderColor: colors.border }]}
+              value={qtyInput}
+              onChangeText={setQtyInput}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
+            <TouchableOpacity
+              style={[s.qaUpdateBtn, { backgroundColor: colors.primary }]}
+              onPress={handleUpdate}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Text style={s.qaUpdateText}>Update</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </Animated.View>
+    </Modal>
   );
 }
 
@@ -684,17 +915,15 @@ const s = StyleSheet.create({
 
   // FAB
   fabPrimary: {
-    position: 'absolute',
-    left: Spacing.xl,
-    right: Spacing.xl,
+    width: '100%',
     flexDirection: 'row',
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    paddingVertical: Spacing.lg,
-    borderRadius: Radius.pill,
   },
-  fabPrimaryText: { color: '#fff', fontSize: FontSizes.md, fontFamily: Fonts.bold },
+  fabPrimaryText: { color: '#fff', fontSize: FontSizes.xl, fontFamily: Fonts.bold },
 
   // Selection action bar
   selectionBar: {
@@ -881,4 +1110,87 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   catChipText: { fontSize: FontSizes.sm, fontFamily: Fonts.medium },
+
+  // Quick Add sheet
+  qaCustomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  qaCustomText: {
+    fontSize: FontSizes.md,
+    fontFamily: Fonts.medium,
+  },
+  qaScrollContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.sm,
+  },
+  qaSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  qaSectionTitle: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  qaPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  qaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+  },
+  qaPillText: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+  },
+  qaFloatingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  qaFloatingLabel: {
+    flex: 1,
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+  },
+  qaFloatingInput: {
+    width: 60,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    fontSize: FontSizes.md,
+    textAlign: 'center',
+  },
+  qaUpdateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+  },
+  qaUpdateText: {
+    color: '#fff',
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+  },
 });

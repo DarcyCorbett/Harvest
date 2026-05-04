@@ -1,36 +1,52 @@
 // ============================================================
-// Meal Wizard — Generator Service
+// Meal Wizard — Generator Service (orchestrator)
 // Orchestrates meal plan generation: smart favourites injection,
 // recipe scraping per slot, shopping list aggregation, and
 // saving confirmed meals to Firestore.
+//
+// Implementation split:
+//   - services/gemini.ts        — callGemini + tagRecipesWithGemini
+//   - services/shoppingList.ts  — aggregateIngredients + getGeminiGroupings
+//   - services/scraper/*        — recipe fetching + filtering
 // ============================================================
 
 import {
-  scrapeRecipe,
-  calculateRequiredServings,
-  type ScrapeRequest,
-} from './recipeScraperService';
-import {
-  getStarredRecipes,
-  getRecipe,
   addMealPlanEntry,
   addShoppingItems,
   addToCookbook,
+  clearAllShoppingItems,
+  getRecipe,
+  getStarredRecipes,
+  updateRecipeTags,
 } from './firestoreService';
+import { tagRecipesWithGemini } from './gemini';
+import {
+  calculateRequiredServings,
+  checkTimeConstraint,
+  COURSE_TAG_VALUES,
+  isCourseCompatible,
+  isHealthy,
+  isKidFriendly,
+  isVegetarian,
+  matchesWord,
+  MEAT_INGREDIENTS,
+  scrapeRecipe,
+  seedMatchesRecipe,
+  type ScrapeRequest,
+} from './recipeScraperService';
+import {
+  aggregateByGeminiGroups,
+  aggregateIngredients,
+  getGeminiGroupings,
+  type RawIngredient,
+} from './shoppingList';
 import type {
-  HouseholdSettings,
-  Recipe,
-  MealType,
   CuisineStyle,
+  HouseholdSettings,
+  MealType,
+  Recipe,
   ShoppingItem,
-  ShoppingCategory,
 } from './types';
-
-// ─── Gemini config (shopping list combining only) ─────────────
-
-const GEMINI_MODEL = 'gemini-3-flash-preview';
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 // ─── Public Types ─────────────────────────────────────────────
 
@@ -41,6 +57,7 @@ export interface GeneratedMeal {
   date: string;
   mealType: MealType;
   isFromFavourites: boolean;
+  servings: number;
 }
 
 export interface GenerateConfig {
@@ -61,6 +78,15 @@ export type ProgressCallback = (
   total: number
 ) => void;
 
+// ─── Helpers ──────────────────────────────────────────────────
+
+function shuffleArray<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
 // ─── Date Utilities ───────────────────────────────────────────
 
 /**
@@ -69,7 +95,7 @@ export type ProgressCallback = (
  */
 export function getNextMonday(): Date {
   const today = new Date();
-  const day = today.getDay(); // 0 = Sun, 1 = Mon, …, 6 = Sat
+  const day = today.getDay();
   const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() + daysUntilMonday);
@@ -107,12 +133,104 @@ export function addDays(date: Date, n: number): Date {
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
 
+// Cuisine styles that have dedicated dish vocabularies — selected one-per-slot via round-robin.
+const CUISINE_STYLES = new Set<CuisineStyle>(['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian']);
+
+// Modifier tags that must appear on every recipe if the user selected them.
+const MODIFIER_TAGS = ['Vegetarian', 'Kid Friendly', 'Healthy'] as const;
+
+export interface MealMismatch {
+  index: number;
+  reasons: string[];
+}
+
+/**
+ * Return the indices of meals whose Gemini tags don't satisfy the originally
+ * selected cuisine/modifier criteria. Used by the "Auto Fix" button.
+ *
+ * Rules:
+ *  - Recipes with no tags are skipped (Gemini may have been unavailable).
+ *  - Modifier tags (Vegetarian, Kid Friendly, Healthy): ALL selected must be present.
+ *  - Regional cuisine tags (Asian, Mexican, etc.): at least ONE selected must match.
+ *  - Course: existing isCourseCompatible check.
+ *  - Time-based styles (Quick & Easy, Moderate): skipped — already enforced by scraper.
+ */
+export function findMismatchedMeals(
+  meals: GeneratedMeal[],
+  cuisineStyles: CuisineStyle[]
+): MealMismatch[] {
+  const requiredModifiers = MODIFIER_TAGS.filter((m) =>
+    cuisineStyles.includes(m as CuisineStyle)
+  );
+  const requiredCuisines = cuisineStyles.filter((s) => CUISINE_STYLES.has(s));
+
+  const out: MealMismatch[] = [];
+  meals.forEach((meal, index) => {
+    const tags = meal.recipe.tags ?? [];
+    if (tags.length === 0) return;
+
+    const reasons: string[] = [];
+
+    const tagCourses = tags.filter((t) => COURSE_TAG_VALUES.has(t as 'Breakfast'));
+    if (tagCourses.length > 0 && !isCourseCompatible(tagCourses, meal.mealType, cuisineStyles)) {
+      reasons.push(`course [${tagCourses.join(', ')}] incompatible with ${meal.mealType}`);
+    }
+
+    for (const mod of requiredModifiers) {
+      if (!tags.includes(mod)) reasons.push(`missing "${mod}" tag`);
+    }
+
+    if (requiredCuisines.length > 0 && !requiredCuisines.some((c) => tags.includes(c))) {
+      reasons.push(`no selected cuisine (${requiredCuisines.join('/')}) in tags`);
+    }
+
+    if (reasons.length > 0) out.push({ index, reasons });
+  });
+
+  return out;
+}
+
 const LOADING_MESSAGES = [
   'Searching for the perfect recipes…',
   'Scraping and reading recipes…',
   'Adjusting portions for your family…',
   'Building your meal plan…',
 ];
+
+/**
+ * Run the post-loop Gemini tagging pass for freshly scraped meals.
+ * Mutates each fresh meal's `recipe.tags` in place and persists to Firestore.
+ * Non-fatal — tagging errors are logged and skipped.
+ */
+async function applyGeminiTagsToFreshMeals(
+  meals: GeneratedMeal[],
+  freshRecipeIds: Set<string>
+): Promise<void> {
+  const freshMeals = meals.filter((m) => freshRecipeIds.has(m.recipeId));
+  if (freshMeals.length === 0) return;
+
+  const tagsByRecipeId = await tagRecipesWithGemini(
+    freshMeals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe }))
+  );
+
+  for (const meal of freshMeals) {
+    const geminiTags = tagsByRecipeId.get(meal.recipeId) ?? [];
+    if (geminiTags.length === 0) continue;
+    const courseSet = new Set((meal.recipe.course ?? []).map((c) => c.toLowerCase()));
+    const merged = [
+      ...new Set([
+        ...(meal.recipe.tags ?? []),
+        ...geminiTags.filter((t) => !courseSet.has(t.toLowerCase())),
+      ]),
+    ];
+    try {
+      await updateRecipeTags(meal.recipeId, merged);
+      meal.recipe.tags = merged;
+    } catch (err) {
+      console.warn('[Tagger] Firestore tag update failed (non-fatal):', err);
+    }
+  }
+}
 
 /**
  * Generate a full meal plan from config.
@@ -146,77 +264,160 @@ export async function generateMealPlan(
   }
   const total = slots.length;
 
+  // ── Cuisine round-robin setup ─────────────────────────────
+  const selectedCuisines = config.cuisineStyles.filter((s) => CUISINE_STYLES.has(s));
+  const modifierStyles = config.cuisineStyles.filter((s) => !CUISINE_STYLES.has(s));
+
+  // ── Seed round-robin setup ────────────────────────────────
+  const isVegetarianPlan = config.cuisineStyles.includes('Vegetarian');
+  const rawSeeds = config.settings?.selectedSeeds ?? [];
+  const filteredSeeds = isVegetarianPlan
+    ? rawSeeds.filter((s) => !(MEAT_INGREDIENTS as readonly string[]).some((m) => matchesWord(s, m)))
+    : rawSeeds;
+  if (isVegetarianPlan && filteredSeeds.length < rawSeeds.length) {
+    console.log(`[Generator] Dropped ${rawSeeds.length - filteredSeeds.length} meat seed(s) for Vegetarian plan`);
+  }
+  const seedQueue = [...filteredSeeds];
+  shuffleArray(seedQueue);
+
+  // Pre-compute per-slot cuisine + seed so each parallel task is independent of
+  // shared round-robin cursors. Cursor mutation under Promise.all would be racy.
+  const slotConfigs = slots.map((slot, i) => {
+    const slotCuisine = selectedCuisines.length > 0
+      ? selectedCuisines[i % selectedCuisines.length]
+      : undefined;
+    const slotCuisineStyles = slotCuisine ? [slotCuisine, ...modifierStyles] : config.cuisineStyles;
+    const forceSeed = seedQueue.length > 0 ? seedQueue[i % seedQueue.length] : undefined;
+    return { slot, slotCuisineStyles, forceSeed, index: i };
+  });
+
   // ── Smart Favourites ─────────────────────────────────────
-  // Maps slot index → recipeId for slots that will use a starred recipe.
-  const favouriteSlotMap = new Map<number, string>();
+  let starredEntries: { recipeId: string }[] = [];
   try {
     const starred = await getStarredRecipes(householdId);
-    if (starred.length > 10) {
-      const count = 1 + Math.floor(Math.random() * 3); // 1, 2, or 3
-      const shuffledStarred = [...starred]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, Math.min(count, total));
-      const shuffledSlotIndices = slots
-        .map((_, i) => i)
-        .sort(() => Math.random() - 0.5);
-      shuffledStarred.forEach((entry, i) => {
-        favouriteSlotMap.set(shuffledSlotIndices[i], entry.recipeId);
-      });
-    }
+    if (starred.length > 10) starredEntries = starred;
   } catch {
     // Non-fatal — continue without smart favourites
   }
+  const favouriteProbability = Math.min(0.4, 3 / total);
 
-  // ── Generate each slot ────────────────────────────────────
-  const results: GeneratedMeal[] = [];
+  // ── Generate slots (chunked concurrency) ──────────────────
+  const CONCURRENCY = 3;
+  const results: GeneratedMeal[] = new Array(slotConfigs.length);
   const usedRecipeIds: string[] = [];
+  const freshRecipeIds = new Set<string>();
+  const reservedFavourites = new Set<string>();
 
-  for (let i = 0; i < slots.length; i++) {
-    const slot = slots[i];
-    const current = i + 1;
-    const msgIndex = Math.min(Math.floor((i / total) * LOADING_MESSAGES.length), LOADING_MESSAGES.length - 1);
-    onProgress(LOADING_MESSAGES[msgIndex], current, total);
+  for (let chunkStart = 0; chunkStart < slotConfigs.length; chunkStart += CONCURRENCY) {
+    const chunk = slotConfigs.slice(chunkStart, chunkStart + CONCURRENCY);
+    const chunkExcludeSnapshot = [...usedRecipeIds];
 
-    const favouriteRecipeId = favouriteSlotMap.get(i);
-    if (favouriteRecipeId && !usedRecipeIds.includes(favouriteRecipeId)) {
-      try {
-        onProgress('Loading a favourite recipe…', current, total);
-        const recipe = await getRecipe(favouriteRecipeId);
-        if (recipe) {
-          results.push({
-            recipe,
-            recipeId: favouriteRecipeId,
+    const chunkResults = await Promise.all(
+      chunk.map(async (cfg) => {
+        const { slot, slotCuisineStyles, forceSeed, index } = cfg;
+        const current = index + 1;
+        const msgIndex = Math.min(Math.floor((index / total) * LOADING_MESSAGES.length), LOADING_MESSAGES.length - 1);
+        onProgress(LOADING_MESSAGES[msgIndex], current, total);
+        console.log(`[Generator] Slot ${current}/${total}: mealType=${slot.mealType} cuisines=[${slotCuisineStyles.join(',')}] forceSeed=${forceSeed ?? 'none'}`);
+
+        // ── Attempt favourite injection ───────────────────
+        if (starredEntries.length > 0 && Math.random() < favouriteProbability) {
+          const shuffled = [...starredEntries].sort(() => Math.random() - 0.5);
+          for (const entry of shuffled) {
+            if (chunkExcludeSnapshot.includes(entry.recipeId)) continue;
+            if (reservedFavourites.has(entry.recipeId)) continue;
+            reservedFavourites.add(entry.recipeId);
+            try {
+              const recipe = await getRecipe(entry.recipeId);
+              const passes = recipe
+                && isCourseCompatible(recipe.course, slot.mealType, slotCuisineStyles)
+                && (!slotCuisineStyles.includes('Vegetarian') || isVegetarian(recipe))
+                && (!slotCuisineStyles.includes('Kid Friendly') || isKidFriendly(recipe, config.settings?.kidFriendly))
+                && (!slotCuisineStyles.includes('Healthy') || isHealthy(recipe))
+                && checkTimeConstraint(recipe, slotCuisineStyles) !== 'fail'
+                && (!forceSeed || seedMatchesRecipe(forceSeed, recipe));
+              if (!passes || !recipe) {
+                reservedFavourites.delete(entry.recipeId);
+                continue;
+              }
+              onProgress('Loading a favourite recipe…', current, total);
+              return {
+                cfg,
+                meal: {
+                  recipe,
+                  recipeId: entry.recipeId,
+                  date: formatDateISO(slot.date),
+                  mealType: slot.mealType,
+                  isFromFavourites: true,
+                  servings: requiredServings,
+                } as GeneratedMeal,
+                fromCache: true,
+              };
+            } catch {
+              reservedFavourites.delete(entry.recipeId);
+            }
+          }
+        }
+
+        // ── Fresh scrape ──────────────────────────────────
+        const request: ScrapeRequest = {
+          mealType: slot.mealType,
+          cuisineStyles: slotCuisineStyles,
+          customInstructions: config.customInstructions,
+          requiredServings,
+          excludeRecipeIds: [...chunkExcludeSnapshot, ...reservedFavourites],
+          settings: config.settings,
+          forceSeed,
+        };
+        const scraped = await scrapeRecipe(request);
+        return {
+          cfg,
+          meal: {
+            recipe: scraped.recipe,
+            recipeId: scraped.recipeId,
             date: formatDateISO(slot.date),
             mealType: slot.mealType,
-            isFromFavourites: true,
-          });
-          usedRecipeIds.push(favouriteRecipeId);
-          continue;
-        }
-      } catch {
-        // Fall through to scraping
+            isFromFavourites: false,
+            servings: requiredServings,
+          } as GeneratedMeal,
+          fromCache: scraped.fromCache,
+        };
+      })
+    );
+
+    for (const r of chunkResults) {
+      let meal = r.meal;
+      let fromCache = r.fromCache;
+      if (usedRecipeIds.includes(meal.recipeId)) {
+        console.log(`[Generator] Duplicate ${meal.recipeId} within chunk — re-scraping slot ${r.cfg.index + 1} serially`);
+        const { slot, slotCuisineStyles, forceSeed } = r.cfg;
+        const reScraped = await scrapeRecipe({
+          mealType: slot.mealType,
+          cuisineStyles: slotCuisineStyles,
+          customInstructions: config.customInstructions,
+          requiredServings,
+          excludeRecipeIds: [...usedRecipeIds],
+          settings: config.settings,
+          forceSeed,
+        });
+        meal = {
+          recipe: reScraped.recipe,
+          recipeId: reScraped.recipeId,
+          date: formatDateISO(slot.date),
+          mealType: slot.mealType,
+          isFromFavourites: false,
+          servings: requiredServings,
+        };
+        fromCache = reScraped.fromCache;
       }
+      if (!fromCache && !meal.isFromFavourites) freshRecipeIds.add(meal.recipeId);
+      results[r.cfg.index] = meal;
+      usedRecipeIds.push(meal.recipeId);
     }
-
-    const request: ScrapeRequest = {
-      mealType: slot.mealType,
-      cuisineStyles: config.cuisineStyles,
-      customInstructions: config.customInstructions,
-      requiredServings,
-      excludeRecipeIds: [...usedRecipeIds],
-      settings: config.settings,
-    };
-
-    const scraped = await scrapeRecipe(request);
-    usedRecipeIds.push(scraped.recipeId);
-    results.push({
-      recipe: scraped.recipe,
-      recipeId: scraped.recipeId,
-      date: formatDateISO(slot.date),
-      mealType: slot.mealType,
-      isFromFavourites: false,
-    });
   }
+
+  // Phase 2: add Gemini modifier tags to freshly scraped recipes (one batched call)
+  await applyGeminiTagsToFreshMeals(results, freshRecipeIds);
 
   onProgress('Building your meal plan…', total, total);
   return results;
@@ -236,35 +437,82 @@ export async function regenerateMeals(
   const total = indicesToRegenerate.length;
   const requiredServings = calculateRequiredServings(config.adults, config.children);
 
-  // Start with IDs of meals we are keeping (not regenerating) as the exclude set,
-  // then accumulate newly generated IDs to prevent duplicates within the regen batch.
+  const isVegetarianPlan = config.cuisineStyles.includes('Vegetarian');
+  const rawSeeds = config.settings?.selectedSeeds ?? [];
+  const filteredSeeds = isVegetarianPlan
+    ? rawSeeds.filter((s) => !(MEAT_INGREDIENTS as readonly string[]).some((m) => matchesWord(s, m)))
+    : rawSeeds;
+
+  const regenSelectedCuisines = config.cuisineStyles.filter((s) => CUISINE_STYLES.has(s));
+  const regenModifierStyles = config.cuisineStyles.filter((s) => !CUISINE_STYLES.has(s));
+
   const excludeIds: string[] = meals
     .filter((_, i) => !indicesToRegenerate.includes(i))
     .map((m) => m.recipeId);
+  const freshRecipeIds = new Set<string>();
 
-  for (let i = 0; i < indicesToRegenerate.length; i++) {
-    const idx = indicesToRegenerate[i];
+  const regenSlotConfigs = indicesToRegenerate.map((idx) => {
     const meal = meals[idx];
-    onProgress(`Regenerating recipe ${i + 1} of ${total}…`, i + 1, total);
+    const slotCuisine = regenSelectedCuisines.length > 0
+      ? regenSelectedCuisines[Math.floor(Math.random() * regenSelectedCuisines.length)]
+      : undefined;
+    const slotCuisineStyles = slotCuisine ? [slotCuisine, ...regenModifierStyles] : config.cuisineStyles;
+    const forceSeed = filteredSeeds.length > 0
+      ? filteredSeeds[Math.floor(Math.random() * filteredSeeds.length)]
+      : undefined;
+    return { idx, meal, slotCuisineStyles, forceSeed };
+  });
 
-    const result = await scrapeRecipe({
-      mealType: meal.mealType,
-      cuisineStyles: config.cuisineStyles,
-      customInstructions: config.customInstructions,
-      requiredServings,
-      excludeRecipeIds: [...excludeIds],
-      settings: config.settings,
-    });
+  const CONCURRENCY = 3;
+  for (let chunkStart = 0; chunkStart < regenSlotConfigs.length; chunkStart += CONCURRENCY) {
+    const chunk = regenSlotConfigs.slice(chunkStart, chunkStart + CONCURRENCY);
+    const chunkExcludeSnapshot = [...excludeIds];
 
-    excludeIds.push(result.recipeId);
-    updated[idx] = {
-      recipe: result.recipe,
-      recipeId: result.recipeId,
-      date: meal.date,
-      mealType: meal.mealType,
-      isFromFavourites: false,
-    };
+    const chunkResults = await Promise.all(
+      chunk.map(async (cfg, j) => {
+        const globalIdx = chunkStart + j;
+        onProgress(`Regenerating recipe ${globalIdx + 1} of ${total}…`, globalIdx + 1, total);
+        const result = await scrapeRecipe({
+          mealType: cfg.meal.mealType,
+          cuisineStyles: cfg.slotCuisineStyles,
+          customInstructions: config.customInstructions,
+          requiredServings,
+          excludeRecipeIds: [...chunkExcludeSnapshot],
+          settings: config.settings,
+          forceSeed: cfg.forceSeed,
+        });
+        return { cfg, result };
+      })
+    );
+
+    for (const { cfg, result } of chunkResults) {
+      let finalResult = result;
+      if (excludeIds.includes(result.recipeId)) {
+        console.log(`[Regenerate] Duplicate ${result.recipeId} within chunk — re-scraping slot ${cfg.idx} serially`);
+        finalResult = await scrapeRecipe({
+          mealType: cfg.meal.mealType,
+          cuisineStyles: cfg.slotCuisineStyles,
+          customInstructions: config.customInstructions,
+          requiredServings,
+          excludeRecipeIds: [...excludeIds],
+          settings: config.settings,
+          forceSeed: cfg.forceSeed,
+        });
+      }
+      if (!finalResult.fromCache) freshRecipeIds.add(finalResult.recipeId);
+      excludeIds.push(finalResult.recipeId);
+      updated[cfg.idx] = {
+        recipe: finalResult.recipe,
+        recipeId: finalResult.recipeId,
+        date: cfg.meal.date,
+        mealType: cfg.meal.mealType,
+        isFromFavourites: false,
+        servings: requiredServings,
+      };
+    }
   }
+
+  await applyGeminiTagsToFreshMeals(updated, freshRecipeIds);
 
   return updated;
 }
@@ -272,450 +520,66 @@ export async function regenerateMeals(
 /**
  * Confirm a reviewed meal plan: save every meal to mealPlan + cookbook,
  * then aggregate all ingredients into the household shopping list.
+ *
+ * `shoppingListMode` controls how the new aggregation interacts with any
+ * existing items on the list:
+ *   - 'add'     (default): append new items alongside existing ones
+ *   - 'replace':           wipe the entire shopping list first
  */
 export async function confirmMealPlan(
   meals: GeneratedMeal[],
-  householdId: string
+  householdId: string,
+  shoppingListMode: 'add' | 'replace' = 'add'
 ): Promise<void> {
   for (const meal of meals) {
     await addMealPlanEntry(householdId, {
       recipeId: meal.recipeId,
       date: meal.date,
       mealType: meal.mealType,
+      servings: meal.servings,
     });
     await addToCookbook(householdId, meal.recipeId);
   }
 
-  const rawItems = aggregateIngredients(meals);
-  if (rawItems.length === 0) return;
+  if (shoppingListMode === 'replace') {
+    await clearAllShoppingItems(householdId);
+  }
 
-  console.log('\n[ShoppingList] ── Raw aggregated ingredients ─────────────────────');
-  rawItems.forEach((i) =>
-    console.log(`  [${i.category.padEnd(20)}]  ${String(i.quantity).padStart(6)} ${i.unit.padEnd(5)}  ${i.name}`)
-  );
-  console.log(`[ShoppingList] Total: ${rawItems.length} items\n`);
+  const rawIngredients: RawIngredient[] = [];
+  for (const meal of meals) {
+    const source = { id: meal.recipeId, title: meal.recipe.title, servings: meal.servings };
+    for (const ing of meal.recipe.ingredients) {
+      rawIngredients.push({ id: rawIngredients.length, name: ing.name, quantity: ing.quantity, unit: ing.unit, source });
+    }
+  }
 
-  // Use Gemini to intelligently merge semantically equivalent ingredients
-  // (e.g. "chopped onion" + "onion" → "onion") and round up produce counts.
-  let items = rawItems;
+  if (rawIngredients.length === 0) return;
+
+  console.log(`\n[ShoppingList] ${rawIngredients.length} raw ingredients across ${meals.length} meals`);
+
+  let items: Omit<ShoppingItem, 'id'>[];
   try {
-    items = await combineIngredientsWithGemini(rawItems);
+    const groups = await getGeminiGroupings(rawIngredients);
+    console.log(`[ShoppingList] Gemini produced ${groups.length} groups`);
+    items = aggregateByGeminiGroups(rawIngredients, groups);
 
-    console.log('\n[ShoppingList] ── After Gemini consolidation ────────────────────');
+    console.log('\n[ShoppingList] ── After Gemini-guided aggregation ────────────────');
     items.forEach((i) =>
       console.log(`  [${i.category.padEnd(20)}]  ${String(i.quantity).padStart(6)} ${i.unit.padEnd(5)}  ${i.name}`)
     );
-    console.log(`[ShoppingList] Total: ${items.length} items (was ${rawItems.length})\n`);
-
-    // Quantity sanity check — flag items where Gemini changed the amount
-    // beyond what simple rounding or unit conversion can explain.
-    const rawByName = new Map(rawItems.map((r) => [r.name.toLowerCase(), r]));
-    items.forEach((gi) => {
-      const orig = rawByName.get(gi.name.toLowerCase());
-      if (!orig || orig.unit !== gi.unit) return; // skip name-changed or unit-changed items
-      const ratio = gi.quantity / (orig.quantity || 1);
-      if (ratio < 0.5 || ratio > 2) {
-        console.warn(
-          `[ShoppingList] ⚠️  Quantity change flagged: "${gi.name}" ` +
-          `${orig.quantity} ${orig.unit} → ${gi.quantity} ${gi.unit} (×${ratio.toFixed(2)})`
-        );
-      }
-    });
+    console.log(`[ShoppingList] Total: ${items.length} items\n`);
   } catch (err) {
-    console.warn('[Generator] Gemini ingredient combining failed — using raw aggregation:', err);
+    console.warn('[Generator] Gemini grouping failed — falling back to programmatic aggregation:', err);
+    items = aggregateIngredients(
+      meals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe, servings: m.servings }))
+    );
+
+    console.log('\n[ShoppingList] ── Fallback programmatic aggregation ────────────────');
+    items.forEach((i) =>
+      console.log(`  [${i.category.padEnd(20)}]  ${String(i.quantity).padStart(6)} ${i.unit.padEnd(5)}  ${i.name}`)
+    );
+    console.log(`[ShoppingList] Total: ${items.length} items\n`);
   }
 
   await addShoppingItems(householdId, items);
-}
-
-// ─── Ingredient Aggregation ───────────────────────────────────
-
-// Volume conversion factors → ml
-const VOLUME_TO_ML: Record<string, number> = {
-  tsp: 4.92892,
-  tbsp: 14.7868,
-  cup: 236.588,
-  ml: 1,
-  l: 1000,
-};
-// Weight conversion factors → g
-const WEIGHT_TO_G: Record<string, number> = {
-  g: 1,
-  kg: 1000,
-  oz: 28.3495,
-  lb: 453.592,
-};
-
-function getUnitFamily(unit: string): 'volume' | 'weight' | 'other' {
-  if (unit in VOLUME_TO_ML) return 'volume';
-  if (unit in WEIGHT_TO_G) return 'weight';
-  return 'other';
-}
-
-function toBase(quantity: number, unit: string): number {
-  return (VOLUME_TO_ML[unit] ?? WEIGHT_TO_G[unit] ?? 1) * quantity;
-}
-
-/** Convert a base-unit amount back to the most readable volume unit. */
-function fromBaseVolume(ml: number): { quantity: number; unit: string } {
-  if (ml < VOLUME_TO_ML.tsp * 0.75) return { quantity: ml / VOLUME_TO_ML.tsp, unit: 'tsp' };
-  if (ml < VOLUME_TO_ML.tbsp * 3)   return { quantity: ml / VOLUME_TO_ML.tsp, unit: 'tsp' };
-  if (ml < VOLUME_TO_ML.cup)        return { quantity: ml / VOLUME_TO_ML.tbsp, unit: 'tbsp' };
-  return { quantity: ml / VOLUME_TO_ML.cup, unit: 'cup' };
-}
-
-/** Convert a base-unit amount back to the most readable weight unit. */
-function fromBaseWeight(g: number): { quantity: number; unit: string } {
-  if (g >= 1000) return { quantity: g / 1000, unit: 'kg' };
-  return { quantity: g, unit: 'g' };
-}
-
-/** Internal map value for aggregation */
-interface AggEntry {
-  baseQty: number;
-  family: 'volume' | 'weight' | 'other';
-  displayUnit: string;
-  name: string;
-  category: ShoppingCategory;
-  sources: { id: string; title: string }[];
-}
-
-/**
- * Merge all ingredients across meals into a deduplicated shopping list.
- * Items with the same normalized name and unit family are combined —
- * quantities are summed in a common base unit (ml / g) then converted back
- * to the most practical display unit. This handles e.g. "0.75 tsp lemon juice"
- * + "1 tbsp lemon juice" → a single merged item.
- */
-function aggregateIngredients(
-  meals: GeneratedMeal[]
-): Omit<ShoppingItem, 'id'>[] {
-  const merged = new Map<string, AggEntry>();
-
-  for (const meal of meals) {
-    const source = { id: meal.recipeId, title: meal.recipe.title };
-    for (const ing of meal.recipe.ingredients) {
-      const normName = normalizeIngredientName(ing.name);
-      const normUnit = normalizeUnit(ing.unit);
-      const family = getUnitFamily(normUnit);
-      // Key by name + unit family so tsp and tbsp merge together
-      const key = `${normName}|${family === 'other' ? normUnit : family}`;
-
-      const existing = merged.get(key);
-      if (existing) {
-        existing.baseQty += toBase(ing.quantity, normUnit);
-        if (!existing.sources.some((s) => s.id === source.id)) {
-          existing.sources.push(source);
-        }
-      } else {
-        merged.set(key, {
-          baseQty: toBase(ing.quantity, normUnit),
-          family,
-          displayUnit: normUnit || ing.unit.trim(),
-          name: normName || ing.name.trim(),
-          // Pass the original name so qualifiers like "dried" are visible
-          category: categoriseIngredient(ing.name),
-          sources: [source],
-        });
-      }
-    }
-  }
-
-  return Array.from(merged.values()).map(({ baseQty, family, displayUnit, name, category, sources }) => {
-    let finalQty: number;
-    let finalUnit: string;
-
-    if (family === 'volume') {
-      const r = fromBaseVolume(baseQty);
-      finalQty = r.quantity;
-      finalUnit = r.unit;
-    } else if (family === 'weight') {
-      const r = fromBaseWeight(baseQty);
-      finalQty = r.quantity;
-      finalUnit = r.unit;
-    } else {
-      finalQty = baseQty;
-      finalUnit = displayUnit;
-    }
-
-    return {
-      name,
-      quantity: Math.round(finalQty * 100) / 100,
-      unit: finalUnit,
-      category,
-      checked: false,
-      manual: false,
-      sources,
-    };
-  });
-}
-
-/**
- * Send the aggregated shopping list to Gemini for smart combining.
- *
- * Gemini handles cases our normalization misses:
- *  - "chopped onion" + "onion" → "onion"
- *  - "pepper" + "black pepper" → "pepper"
- *  - 1 tsp pepper + 1g pepper → single entry
- *  - 1.2 carrots → 2 carrots (whole produce rounded up)
- *
- * Sources are stripped before sending (they inflate the payload past the token
- * limit) and re-attached afterward via name matching.
- *
- * Falls back to the raw aggregated list if the API call fails.
- */
-async function combineIngredientsWithGemini(
-  items: Omit<ShoppingItem, 'id'>[]
-): Promise<Omit<ShoppingItem, 'id'>[]> {
-  if (!GEMINI_API_KEY) return items;
-
-  // Strip sources before sending — they inflate the payload and can push the
-  // response past maxOutputTokens, truncating the JSON.
-  const prompt = `You are given a shopping list as JSON. Your job is to clean it up:
-
-1. Combine items that refer to the same ingredient even if worded differently.
-   Examples: "chopped onion" + "onion" → "onion"; "black pepper" + "pepper" → "pepper"; "spring onion" and "scallion" → "spring onion".
-2. When combining items with different units, convert to the most practical unit and sum the quantities (e.g. 1 tsp + 1 g pepper → keep tsp or g, whichever is more useful).
-3. For whole produce items (fruits and vegetables sold individually — e.g. carrots, lemons, onions, potatoes, apples), round the final quantity UP to the nearest whole number (e.g. 1.2 carrots → 2, 0.5 lemon → 1).
-4. Keep quantities for weight/volume units (g, kg, ml, l, cup, tbsp, tsp, oz) as-is — do NOT round those.
-5. Review and correct the "category" field if it is wrong.
-   Valid values: "Produce", "Meat & Seafood", "Dairy & Eggs", "Herbs & Spices", "Oils, Sauces & Condiments", "Pantry & Dry Goods", "Frozen", "Bread & Bakery", "Other".
-   Rules:
-   - Fresh or dried herbs (basil, parsley, thyme, rosemary…) and any spice or spice blend (cumin, paprika, garam masala, curry powder…) → "Herbs & Spices"
-   - Any cooking oil, vinegar, liquid sauce, or table condiment (soy sauce, fish sauce, oyster sauce, Worcestershire, sriracha, ketchup, mayo, mustard, miso, tahini, hoisin) → "Oils, Sauces & Condiments"
-   - Stocks, broths, canned/tinned goods, pasta, rice, flour, sugar, honey, baking ingredients → "Pantry & Dry Goods"
-   - Fresh fruit and vegetables → "Produce"
-   - Raw meat, fish, seafood → "Meat & Seafood"
-   - Dairy products and eggs → "Dairy & Eggs"
-   - Bread, wraps, rolls, tortillas → "Bread & Bakery"
-
-Return ONLY a valid JSON array — no markdown, no explanation:
-[{"name": "...", "quantity": 0, "unit": "...", "category": "..."}, ...]
-
-Input:
-${JSON.stringify(items.map(({ name, quantity, unit, category }) => ({ name, quantity, unit, category })))}`;
-
-  const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 16384,
-        // Force plain JSON output — no markdown fences, no explanatory text.
-        responseMimeType: 'application/json',
-        // Disable thinking tokens so they don't eat into the output budget.
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => '');
-    throw new Error(`Gemini API error ${response.status}: ${errBody.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const finishReason: string | undefined = data?.candidates?.[0]?.finishReason;
-  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (finishReason === 'MAX_TOKENS') {
-    throw new Error('Gemini response truncated (MAX_TOKENS) — shopping list may be too large');
-  }
-  if (!text) throw new Error('Gemini returned no text');
-
-  // With responseMimeType: application/json the model returns raw JSON,
-  // but strip fences as a safety net in case an older model ignores the flag.
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-  const jsonStr = fenceMatch ? fenceMatch[1] : text.trim();
-  const parsed: unknown = JSON.parse(jsonStr);
-
-  if (!Array.isArray(parsed)) throw new Error('Gemini response is not an array');
-
-  // Re-attach sources: for each combined item, union sources from any original
-  // item whose name overlaps with the Gemini output name.
-  return (parsed as Record<string, unknown>[]).map((item) => {
-    const combinedName = String(item.name ?? '').trim().toLowerCase();
-    const matchedSources: { id: string; title: string }[] = [];
-    const seenIds = new Set<string>();
-
-    for (const orig of items) {
-      const origName = orig.name.toLowerCase();
-      // Match if either name contains the other (handles "onion" ↔ "chopped onion")
-      if (combinedName === origName || combinedName.includes(origName) || origName.includes(combinedName)) {
-        for (const s of orig.sources ?? []) {
-          if (!seenIds.has(s.id)) {
-            seenIds.add(s.id);
-            matchedSources.push(s);
-          }
-        }
-      }
-    }
-
-    return {
-      name: String(item.name ?? '').trim(),
-      quantity: Number(item.quantity) || 0,
-      unit: String(item.unit ?? '').trim(),
-      category: (item.category as ShoppingCategory) ?? 'Pantry & Dry Goods',
-      checked: false,
-      manual: false,
-      sources: matchedSources.length > 0 ? matchedSources : undefined,
-    };
-  });
-}
-
-/**
- * Normalise an ingredient name for deduplication.
- *
- * Examples:
- *   "garlic, minced"               → "garlic"
- *   "garlic cloves"                → "garlic"
- *   "garlic finely chopped or minced" → "garlic"
- *   "spring onion, thinly sliced"  → "spring onion"
- */
-function normalizeIngredientName(name: string): string {
-  let n = name.toLowerCase().trim();
-
-  // Drop post-comma prep instructions: "garlic, minced" → "garlic"
-  n = n.replace(/,.*$/, '').trim();
-
-  // Drop "or X" alternatives at end: "chopped or minced" → handled by verb strip below
-  n = n.replace(/\s+or\s+\S+\s*$/, '').trim();
-
-  // Strip parenthetical content
-  n = n.replace(/\(.*?\)/g, '').trim();
-
-  // Strip measurement-unit words that bleed into names: "garlic cloves" → "garlic"
-  n = n.replace(/\b(cloves?|heads?|stalks?|sprigs?)\b/g, '');
-
-  // Strip descriptive adverbs
-  n = n.replace(
-    /\b(finely|roughly|coarsely|thinly|freshly|lightly|well|extra|very)\b/g,
-    ''
-  );
-
-  // Strip prep verbs and state/size descriptors
-  n = n.replace(
-    /\b(chopped|minced|diced|sliced|crushed|grated|peeled|trimmed|halved|quartered|shredded|torn|whole|fresh|dried|ground|powdered|frozen|toasted|roasted|cooked|raw|large|small|medium|big)\b/g,
-    ''
-  );
-
-  return n.replace(/\s{2,}/g, ' ').trim();
-}
-
-/**
- * Normalise unit strings for deduplication.
- * Collapses common plural/abbreviation variants to a canonical singular form.
- */
-function normalizeUnit(unit: string): string {
-  const u = unit.toLowerCase().trim();
-  const MAP: Record<string, string> = {
-    cloves: 'clove',
-    cups: 'cup',
-    tablespoons: 'tbsp',
-    tablespoon: 'tbsp',
-    teaspoons: 'tsp',
-    teaspoon: 'tsp',
-    grams: 'g',
-    gram: 'g',
-    kilograms: 'kg',
-    kilogram: 'kg',
-    millilitres: 'ml',
-    milliliters: 'ml',
-    millilitre: 'ml',
-    milliliter: 'ml',
-    litres: 'l',
-    liters: 'l',
-    litre: 'l',
-    liter: 'l',
-    ounces: 'oz',
-    ounce: 'oz',
-    pounds: 'lb',
-    pound: 'lb',
-    slices: 'slice',
-    pieces: 'piece',
-    stalks: 'stalk',
-    sprigs: 'sprig',
-    cans: 'can',
-    jars: 'jar',
-    bags: 'bag',
-  };
-  return MAP[u] ?? u;
-}
-
-function categoriseIngredient(name: string): ShoppingCategory {
-  const n = name.toLowerCase();
-
-  // ── 1. Herbs & Spices ────────────────────────────────────────
-  // Rule: pure spices (always dried) → always Herbs & Spices.
-  //       herbs → Herbs & Spices only when explicitly dried/ground/powdered;
-  //               fresh herbs (no qualifier) fall through to Produce below.
-  const isDried = /\b(dried|ground|powdered|dehydrated)\b/.test(n);
-  const isHerb  = /\b(basil|parsley|coriander|cilantro|mint|thyme|rosemary|dill|oregano|sage|tarragon|chive|bay\s+lea|lemongrass|kaffir|galangal|chervil|marjoram|lovage|sorrel)\b/.test(n);
-
-  // Dried/ground herb → Herbs & Spices
-  if (isHerb && isDried) return 'Herbs & Spices';
-
-  // Pure spices (these are always dried; no fresh qualifier needed)
-  if (
-    /\b(cumin|paprika|turmeric|cinnamon|cardamom|nutmeg|clove|allspice|star\s+anise|fennel\s+seed|caraway|coriander\s+seed|mustard\s+seed|fenugreek|sumac|za.atar|ras\s+el\s+hanout|garam\s+masala|curry\s+powder|five\s+spice|chinese\s+five|cajun|chili\s+powder|cayenne|smoked\s+paprika|sweet\s+paprika|onion\s+powder|garlic\s+powder|celery\s+salt|mixed\s+spice|mixed\s+herb|italian\s+season|herbes?\s+de\s+provence|baharat|dukkah|harissa\s+spice)\b/.test(n) ||
-    /\bspice\b/.test(n)
-  )
-    return 'Herbs & Spices';
-
-  // ── 2. Oils, Sauces & Condiments ────────────────────────────
-  // Must run before Pantry so oils and sauces aren't lost to the generic catch-all.
-  if (
-    /\b(olive\s+oil|vegetable\s+oil|canola\s+oil|sunflower\s+oil|coconut\s+oil|sesame\s+oil|avocado\s+oil|peanut\s+oil|grapeseed\s+oil|neutral\s+oil|cooking\s+oil)\b/.test(n) ||
-    /\b(?<!coconut\s)oil\b/.test(n) ||   // generic "oil" but not "coconut oil" (already above)
-    /\b(vinegar|balsamic|rice\s+wine\s+vinegar|apple\s+cider\s+vinegar|white\s+wine\s+vinegar|red\s+wine\s+vinegar|sherry\s+vinegar)\b/.test(n) ||
-    /\b(soy\s+sauce|fish\s+sauce|oyster\s+sauce|hoisin|teriyaki|worcestershire|sriracha|hot\s+sauce|tabasco|ketchup|mayo|mayonnaise|mustard|dijon|relish|chutney|miso|tahini|nam\s+pla|ponzu|tamari|liquid\s+aminos)\b/.test(n)
-  )
-    return 'Oils, Sauces & Condiments';
-
-  // ── 3. Pantry exclusions ─────────────────────────────────────
-  // Words that would match meat/dairy/produce patterns but are shelf-stable.
-  // Also catches remaining pantry staples not covered above.
-  if (
-    /\b(stock|broth|bouillon|jus)\b/.test(n) ||
-    /\b(coconut\s+milk|coconut\s+cream|coconut\s+water)\b/.test(n) ||
-    /\boat\s+milk\b|\balmond\s+milk\b|\brice\s+milk\b|\bsoy\s+milk\b/.test(n) ||
-    /\b(tomato\s+paste|tomato\s+puree|tomato\s+sauce|tomato\s+can|canned\s+tomato|crushed\s+tomato|diced\s+tomato|sun.dried\s+tomato)\b/.test(n) ||
-    /\b(pasta|noodle|rice|flour|sugar|salt|honey|maple|syrup|jam|paste|powder|seasoning|extract|baking|yeast|stock\s+cube|bouillon\s+cube|tinned|canned)\b/.test(n)
-  )
-    return 'Pantry & Dry Goods';
-
-  // ── 4. Meat & Seafood ────────────────────────────────────────
-  if (
-    /\b(chicken|beef|pork|lamb|fish|salmon|tuna|cod|trout|shrimp|prawn|turkey|bacon|sausage|mince|steak|fillet|duck|veal|crab|anchov|seafood|pancetta|chorizo|salami|ham|venison|brisket|ribs)\b/.test(n)
-  )
-    return 'Meat & Seafood';
-
-  // ── 5. Dairy & Eggs ──────────────────────────────────────────
-  if (
-    /\b(milk|cream|butter|cheese|yogurt|yoghurt|egg|eggs|parmesan|mozzarella|cheddar|feta|ricotta|brie|haloumi|sour\s+cream|creme\s+fraiche|ghee|quark|gouda|gruyere|pecorino|cream\s+cheese|cottage\s+cheese)\b/.test(n)
-  )
-    return 'Dairy & Eggs';
-
-  // ── 6. Bread & Bakery ────────────────────────────────────────
-  if (
-    /\b(bread|bun|wrap|pita|pitta|roll|loaf|tortilla|naan|bagel|croissant|brioche|sourdough|crumpet|muffin|flatbread)\b/.test(n)
-  )
-    return 'Bread & Bakery';
-
-  // ── 7. Frozen ────────────────────────────────────────────────
-  if (/\bfrozen\b/.test(n)) return 'Frozen';
-
-  // ── 8. Produce ───────────────────────────────────────────────
-  // Fresh herbs (no "dried" qualifier) are included here alongside veg and fruit.
-  // Dried herbs were already caught by block 1.
-  if (
-    isHerb ||   // fresh herb names without a dried qualifier
-    /\b(onion|garlic|tomato|potato|carrot|cucumber|lettuce|spinach|mushroom|pepper|capsicum|broccoli|celery|ginger|lemon|lime|orange|apple|banana|avocado|chilli|chili|spring\s+onion|zucchini|courgette|eggplant|aubergine|cabbage|kale|asparagus|leek|fennel|beetroot|radish|pumpkin|sweet\s+potato|corn|pea|bean|green\s+bean|snow\s+pea|bok\s+choy|pak\s+choi|shallot|scallion|rocket|arugula|silverbeet|broccolini|chard|watercress|endive|witlof|sprout|mango|pineapple|strawberr|blueberr|raspberr|grape|peach|plum|pear|kiwi|melon|pomegranate|fig|date|cherry|passionfruit|mandarin|grapefruit|zest|rind)\b/.test(n)
-  )
-    return 'Produce';
-
-  return 'Pantry & Dry Goods';
 }

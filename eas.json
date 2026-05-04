@@ -5,13 +5,57 @@
   },
   "build": {
     "preview": {
+      "autoIncrement": true,
       "android": {
         "buildType": "apk"
-      }
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAZyonky_stSeKjFC-WaoBbAuQTMetyLJg",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "meal-wizard-ad202.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "meal-wizard-ad202",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "meal-wizard-ad202.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1023058847517",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1023058847517:web:3da2434cbc278cd62c63f4",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-QH2NEWMFCE",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyA9F5YCUqlbJ-q5PVlEAG2zggj9RcTC_-o",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1023058847517-fqein87hocmkds0oibe52a1seepl70fv.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com"
+      },
+      "channel": "preview"
     },
     "production": {
+      "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAZyonky_stSeKjFC-WaoBbAuQTMetyLJg",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "meal-wizard-ad202.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "meal-wizard-ad202",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "meal-wizard-ad202.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1023058847517",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1023058847517:web:3da2434cbc278cd62c63f4",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-QH2NEWMFCE",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyA9F5YCUqlbJ-q5PVlEAG2zggj9RcTC_-o",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1023058847517-fqein87hocmkds0oibe52a1seepl70fv.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com"
+      },
+      "channel": "production"
+    },
+    "verify": {
+      "extends": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "verify"
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./pc-api-google-play.json",
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }

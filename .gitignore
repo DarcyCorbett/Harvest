@@ -4,7 +4,8 @@
 node_modules/
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/settings.json
 
 # Dev scratch files
 scratch*.js
@@ -32,6 +33,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
@@ -40,6 +42,9 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+
+# Google Play service account key (for `eas submit`)
+pc-api-google-play.json
 
 # typescript
 *.tsbuildinfo

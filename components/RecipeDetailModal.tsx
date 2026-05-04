@@ -5,7 +5,7 @@
 // ============================================================
 
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
-import { updateRecipeCourse } from '@/services/firestoreService';
+import { updateRecipeCourse, updateRecipeTags } from '@/services/firestoreService';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Image,
   Linking,
   Modal,
   PanResponder,
@@ -38,9 +39,11 @@ interface Props {
   onClose: () => void;
   /** Called after a course update is persisted so the parent can refresh its recipe copy. */
   onCourseUpdate?: (recipeId: string, newCourse: string[]) => void;
+  /** Called after a tag update is persisted so the parent can refresh its recipe copy. */
+  onTagsUpdate?: (recipeId: string, newTags: string[]) => void;
 }
 
-export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUpdate }: Props) {
+export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUpdate, onTagsUpdate }: Props) {
   const insets = useSafeAreaInsets();
 
   // ── Animation values ──────────────────────────────────────
@@ -118,27 +121,39 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
     })
   ).current;
 
-  // ── Course editing state ──────────────────────────────────
-  const [editingCourse, setEditingCourse] = useState(false);
+  // ── Unified label editing state (course + tags combined) ────
+  const [editingLabels, setEditingLabels] = useState(false);
   const [localCourse, setLocalCourse] = useState<string[]>([]);
+  const [localTags, setLocalTags] = useState<string[]>([]);
 
   useEffect(() => {
     setLocalCourse(recipe?.course ?? []);
-    setEditingCourse(false);
+    setLocalTags(recipe?.tags ?? []);
+    setEditingLabels(false);
   }, [recipe]);
 
-  const handleSaveCourse = useCallback(async () => {
+  const handleSaveLabels = useCallback(async () => {
     if (!recipe?.id) return;
     try {
       await updateRecipeCourse(recipe.id, localCourse);
-      setEditingCourse(false);
+      await updateRecipeTags(recipe.id, localTags);
+      setEditingLabels(false);
       onCourseUpdate?.(recipe.id, localCourse);
+      onTagsUpdate?.(recipe.id, localTags);
     } catch {
       Alert.alert('Error', 'Could not save changes.');
     }
-  }, [recipe?.id, localCourse, onCourseUpdate]);
+  }, [recipe?.id, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
+
+  const handleCancelLabels = useCallback(() => {
+    setLocalCourse(recipe?.course ?? []);
+    setLocalTags(recipe?.tags ?? []);
+    setEditingLabels(false);
+  }, [recipe]);
 
   const COURSE_TAGS = ['Breakfast', 'Lunch', 'Dinner', 'Side', 'Snack', 'Salad'];
+  const MODIFIER_TAGS = ['Healthy', 'Vegetarian', 'Kid Friendly'];
+  const CUISINE_TAGS = ['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian'];
 
   if (!recipe) return null;
 
@@ -217,51 +232,46 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          {/* Course pills — with inline editing */}
+          {/* Hero image */}
+          {recipe.imageUrl && (
+            <Image
+              source={{ uri: recipe.imageUrl }}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          )}
+
+          {/* Labels (course + cuisine + modifier) — unified section */}
           <View style={styles.courseRow}>
-            <View style={styles.coursePills}>
-              {localCourse.map((c, i) =>
-                editingCourse ? (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.coursePill, styles.coursePillRemovable]}
-                    onPress={() => setLocalCourse((prev) => prev.filter((_, idx) => idx !== i))}
-                  >
-                    <Text style={styles.coursePillText}>
-                      {c.replace(/\b\w/g, (ch) => ch.toUpperCase())}
-                    </Text>
-                    <Ionicons name="close" size={11} color={colors.textSecondary} style={{ marginLeft: 3 }} />
-                  </TouchableOpacity>
-                ) : (
+            {!editingLabels && (
+              <View style={styles.coursePills}>
+                {[...localCourse, ...localTags].map((label, i) => (
                   <View key={i} style={styles.coursePill}>
                     <Text style={styles.coursePillText}>
-                      {c.replace(/\b\w/g, (ch) => ch.toUpperCase())}
+                      {label.replace(/\b\w/g, (ch) => ch.toUpperCase())}
                     </Text>
                   </View>
-                )
-              )}
-              {localCourse.length === 0 && !editingCourse && (
-                <Text style={[styles.coursePillText, { color: colors.textTertiary, paddingHorizontal: 0 }]}>
-                  No tags
-                </Text>
-              )}
-            </View>
+                ))}
+                {localCourse.length === 0 && localTags.length === 0 && (
+                  <Text style={[styles.coursePillText, { color: colors.textTertiary, paddingHorizontal: 0 }]}>
+                    No tags
+                  </Text>
+                )}
+              </View>
+            )}
             {recipe.id ? (
-              editingCourse ? (
+              editingLabels ? (
                 <View style={styles.courseEditActions}>
-                  <TouchableOpacity onPress={handleSaveCourse} style={styles.courseEditBtn}>
+                  <TouchableOpacity onPress={handleSaveLabels} style={styles.courseEditBtn}>
                     <Text style={[styles.courseEditBtnText, { color: colors.primary }]}>Save</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => { setLocalCourse(recipe.course ?? []); setEditingCourse(false); }}
-                    style={styles.courseEditBtn}
-                  >
+                  <TouchableOpacity onPress={handleCancelLabels} style={styles.courseEditBtn}>
                     <Text style={[styles.courseEditBtnText, { color: colors.textSecondary }]}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <TouchableOpacity
-                  onPress={() => setEditingCourse(true)}
+                  onPress={() => setEditingLabels(true)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Ionicons name="pencil-outline" size={15} color={colors.textTertiary} />
@@ -269,21 +279,33 @@ export default function RecipeDetailModal({ recipe, visible, onClose, onCourseUp
               )
             ) : null}
           </View>
-          {editingCourse && (
+          {editingLabels && (
             <View style={styles.courseTagPicker}>
-              {COURSE_TAGS.map((tag) => {
-                const active = localCourse.some((c) => c.toLowerCase() === tag.toLowerCase());
+              {[...COURSE_TAGS, ...CUISINE_TAGS, ...MODIFIER_TAGS].map((tag) => {
+                // Check both course and tags arrays
+                const inCourse = localCourse.some((c) => c.toLowerCase() === tag.toLowerCase());
+                const inTags = localTags.some((t) => t.toLowerCase() === tag.toLowerCase());
+                const active = inCourse || inTags;
+                const isCourseTag = COURSE_TAGS.includes(tag);
                 return (
                   <TouchableOpacity
                     key={tag}
                     style={[styles.courseTagChip, active && styles.courseTagChipActive]}
-                    onPress={() =>
-                      setLocalCourse((prev) =>
-                        active
-                          ? prev.filter((c) => c.toLowerCase() !== tag.toLowerCase())
-                          : [...prev, tag]
-                      )
-                    }
+                    onPress={() => {
+                      if (isCourseTag) {
+                        setLocalCourse((prev) =>
+                          active
+                            ? prev.filter((c) => c.toLowerCase() !== tag.toLowerCase())
+                            : [...prev, tag]
+                        );
+                      } else {
+                        setLocalTags((prev) =>
+                          active
+                            ? prev.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+                            : [...prev, tag]
+                        );
+                      }
+                    }}
                   >
                     <Text style={[styles.courseTagChipText, active && styles.courseTagChipTextActive]}>
                       {tag}
@@ -470,6 +492,12 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.massive,
   },
 
+  heroImage: {
+    height: 220,
+    marginHorizontal: -Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+
   // Course pills
   courseRow: {
     flexDirection: 'row',
@@ -483,10 +511,6 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     flex: 1,
     marginBottom: Spacing.xs,
-  },
-  coursePillRemovable: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   courseEditActions: {
     flexDirection: 'row',
@@ -533,7 +557,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: colors.border,
   },
   coursePillText: {
     fontSize: FontSizes.xs,
@@ -681,4 +705,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 22,
   },
+
+
 });

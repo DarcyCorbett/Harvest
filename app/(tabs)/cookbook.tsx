@@ -16,6 +16,7 @@ import {
   TextInput,
   ActivityIndicator,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ import {
   subscribeCookbook,
   toggleStarred,
   getRecipe,
+  removeFromCookbook,
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, Recipe } from '@/services/types';
@@ -71,13 +73,28 @@ export default function CookbookScreen() {
     if (!toLoad.length) return;
     toLoad.forEach((id) => loadedIdsRef.current.add(id));
     Promise.all(toLoad.map(getRecipe)).then((fetched) => {
+      const missingIds: string[] = [];
       setRecipes((prev) => {
         const next = { ...prev };
-        fetched.forEach((r, i) => { if (r) next[toLoad[i]] = r; });
+        fetched.forEach((r, i) => {
+          if (r) next[toLoad[i]] = r;
+          else missingIds.push(toLoad[i]);
+        });
         return next;
       });
+      // Self-heal orphan cookbook entries whose recipe no longer exists
+      // (typically after "Clear Recipe Cache"). The real-time cookbook
+      // listener will drop the entry from `entries` once the delete commits.
+      if (missingIds.length && householdId) {
+        console.log(`[Cookbook] Self-healing ${missingIds.length} orphan entries`);
+        missingIds.forEach((id) =>
+          removeFromCookbook(householdId, id).catch((err) =>
+            console.warn(`[Cookbook] Failed to remove orphan ${id}:`, err)
+          )
+        );
+      }
     });
-  }, [entries]);
+  }, [entries, householdId]);
 
   // ── Filtered + sorted list ──
   const filtered = useMemo(() => {
@@ -280,37 +297,41 @@ function GridCard({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      {/* Colour avatar */}
-      <View style={[s.cardAvatar, { backgroundColor: colors.primaryLight }]}>
-        {recipe ? (
-          <Text style={[s.avatarText, { color: colors.primary }]}>{initials}</Text>
-        ) : (
-          <ActivityIndicator size="small" color={colors.primary} />
-        )}
-      </View>
+      {/* Top-half image (falls back to initials when no imageUrl) */}
+      {recipe?.imageUrl ? (
+        <Image source={{ uri: recipe.imageUrl }} style={s.cardImage} resizeMode="cover" />
+      ) : (
+        <View style={[s.cardImage, s.cardImageFallback, { backgroundColor: colors.primaryLight }]}>
+          {recipe ? (
+            <Text style={[s.avatarText, { color: colors.primary }]}>{initials}</Text>
+          ) : (
+            <ActivityIndicator size="small" color={colors.primary} />
+          )}
+        </View>
+      )}
 
       <View style={s.cardBody}>
-        <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={2}>
-          {recipe?.title ?? 'Loading…'}
-        </Text>
+        <View style={s.cardTitleRow}>
+          <Text style={[s.cardTitle, s.cardTitleFlex, { color: colors.text }]} numberOfLines={2}>
+            {recipe?.title ?? 'Loading…'}
+          </Text>
+          <TouchableOpacity
+            onPress={onStar}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={entry.starred ? 'star' : 'star-outline'}
+              size={18}
+              color={entry.starred ? colors.warning : colors.textTertiary}
+            />
+          </TouchableOpacity>
+        </View>
         {recipe && (
           <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
             {recipe.prepTime} · {recipe.cookTime}
           </Text>
         )}
       </View>
-
-      <TouchableOpacity
-        style={s.starBtn}
-        onPress={onStar}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <Ionicons
-          name={entry.starred ? 'star' : 'star-outline'}
-          size={18}
-          color={entry.starred ? colors.warning : colors.textTertiary}
-        />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
@@ -338,13 +359,17 @@ function ListRow({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <View style={[s.listAvatar, { backgroundColor: colors.primaryLight }]}>
-        {recipe ? (
-          <Text style={[s.listAvatarText, { color: colors.primary }]}>{initial}</Text>
-        ) : (
-          <ActivityIndicator size="small" color={colors.primary} />
-        )}
-      </View>
+      {recipe?.imageUrl ? (
+        <Image source={{ uri: recipe.imageUrl }} style={s.listAvatar} resizeMode="cover" />
+      ) : (
+        <View style={[s.listAvatar, s.listAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+          {recipe ? (
+            <Text style={[s.listAvatarText, { color: colors.primary }]}>{initial}</Text>
+          ) : (
+            <ActivityIndicator size="small" color={colors.primary} />
+          )}
+        </View>
+      )}
 
       <View style={s.listInfo}>
         <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>
@@ -442,9 +467,11 @@ const s = StyleSheet.create({
     borderRadius: Radius.xl,
     overflow: 'hidden',
   },
-  cardAvatar: {
+  cardImage: {
     width: '100%',
-    height: 80,
+    aspectRatio: 1,
+  },
+  cardImageFallback: {
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -453,14 +480,15 @@ const s = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   cardBody: { padding: Spacing.md, flex: 1 },
-  cardTitle: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, lineHeight: 18 },
-  cardMeta: { fontSize: FontSizes.xs, marginTop: Spacing.xs },
-  starBtn: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    padding: Spacing.xs,
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
+  cardTitle: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, lineHeight: 18 },
+  cardTitleFlex: { flex: 1 },
+  cardMeta: { fontSize: FontSizes.xs, marginTop: Spacing.xs },
 
   // List
   listContent: {
@@ -480,9 +508,12 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.lg,
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  listAvatarFallback: {
     justifyContent: 'center',
     alignItems: 'center',
-    flexShrink: 0,
   },
   listAvatarText: {
     fontSize: FontSizes.lg,

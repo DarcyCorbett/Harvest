@@ -98,6 +98,17 @@ export async function getHousehold(householdId: string): Promise<Household | nul
   return snap.exists() ? (snap.data() as Household) : null;
 }
 
+/**
+ * Join a new household by invite code and update the user's profile to point at it.
+ * Returns the new householdId, or null if the invite code was invalid.
+ */
+export async function switchHousehold(userId: string, inviteCode: string): Promise<string | null> {
+  const newId = await joinHousehold(userId, inviteCode);
+  if (!newId) return null;
+  await updateDoc(doc(db, 'users', userId), { householdId: newId });
+  return newId;
+}
+
 // ─── User Profile Operations ──────────────────────────────
 
 /** Save user profile */
@@ -109,6 +120,16 @@ export async function saveUserProfile(userId: string, profile: UserProfile): Pro
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, 'users', userId));
   return snap.exists() ? (snap.data() as UserProfile) : null;
+}
+
+// ─── Authentication Allowlist ────────────────────────────────
+
+/** Check if an email is on the allowlist to use the app. */
+export async function isEmailAllowed(email: string): Promise<boolean> {
+  if (!email) return false;
+  // Simplest approach: The Document ID in the 'allowlist' collection is the email address.
+  const snap = await getDoc(doc(db, 'allowlist', email.toLowerCase().trim()));
+  return snap.exists();
 }
 
 // ─── Recipe Operations ─────────────────────────────────────
@@ -155,7 +176,7 @@ export async function getCachedRecipeByUrl(url: string): Promise<Recipe | null> 
 
 // ─── Household Settings ────────────────────────────────────
 
-const DEFAULT_SETTINGS: HouseholdSettings = { sourceWeights: {}, ingredientWeights: {} };
+const DEFAULT_SETTINGS: HouseholdSettings = { sourceWeights: {}, ingredientWeights: {}, selectedSeeds: [] };
 
 // Firestore does not allow dots in field names. Encode/decode site keys for storage.
 function encodeSiteKey(site: string): string { return site.replace(/\./g, '_'); }
@@ -165,12 +186,22 @@ function decodeSiteKey(key: string): string { return key.replace(/_/g, '.'); }
 export async function getHouseholdSettings(householdId: string): Promise<HouseholdSettings> {
   const snap = await getDoc(doc(db, 'households', householdId, 'settings', 'preferences'));
   if (!snap.exists()) return { ...DEFAULT_SETTINGS };
-  const raw = snap.data() as { sourceWeights?: Record<string, number>; ingredientWeights?: Record<string, number> };
+  const raw = snap.data() as {
+    sourceWeights?: Record<string, number>;
+    ingredientWeights?: Record<string, number>;
+    selectedSeeds?: string[];
+    kidFriendly?: { excludedIngredients?: string[]; allowedExceptions?: string[] };
+  };
   const sourceWeights: Record<string, number> = {};
   Object.entries(raw.sourceWeights ?? {}).forEach(([k, v]) => {
     sourceWeights[decodeSiteKey(k)] = v;
   });
-  return { sourceWeights, ingredientWeights: raw.ingredientWeights ?? {} };
+  return {
+    sourceWeights,
+    ingredientWeights: raw.ingredientWeights ?? {},
+    selectedSeeds: raw.selectedSeeds ?? [],
+    kidFriendly: raw.kidFriendly,
+  };
 }
 
 /** Persist generation settings for a household. */
@@ -185,12 +216,19 @@ export async function saveHouseholdSettings(
   await setDoc(doc(db, 'households', householdId, 'settings', 'preferences'), {
     sourceWeights: encodedSourceWeights,
     ingredientWeights: settings.ingredientWeights,
+    selectedSeeds: settings.selectedSeeds ?? [],
+    ...(settings.kidFriendly ? { kidFriendly: settings.kidFriendly } : {}),
   });
 }
 
 /** Update the course tags on a cached recipe. */
 export async function updateRecipeCourse(recipeId: string, course: string[]): Promise<void> {
   await updateDoc(doc(db, 'recipes', recipeId), { course });
+}
+
+/** Update the Gemini-assigned tags on a cached recipe. */
+export async function updateRecipeTags(recipeId: string, tags: string[]): Promise<void> {
+  await updateDoc(doc(db, 'recipes', recipeId), { tags });
 }
 
 // ─── Recipe Cache Operations ────────────────────────────────
@@ -230,6 +268,7 @@ export async function addMealPlanEntry(householdId: string, entry: MealPlanEntry
       recipeId: entry.recipeId,
       date: entry.date,
       mealType: entry.mealType,
+      ...(entry.servings != null ? { servings: entry.servings } : {}),
     }
   );
 }
@@ -345,6 +384,24 @@ export async function clearPurchasedItems(householdId: string): Promise<void> {
   await batch.commit();
 }
 
+/** Delete every item on the household shopping list (used by "replace" flow). */
+export async function clearAllShoppingItems(householdId: string): Promise<void> {
+  const snapshot = await getDocs(collection(db, 'households', householdId, 'shoppingList'));
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}
+
+/** Count the number of unpurchased (unchecked) items currently on the list. */
+export async function countUnpurchasedShoppingItems(householdId: string): Promise<number> {
+  const q = query(
+    collection(db, 'households', householdId, 'shoppingList'),
+    where('checked', '==', false)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.size;
+}
+
 /** Add a manual item to the shopping list */
 export async function addManualItem(
   householdId: string,
@@ -363,6 +420,18 @@ export async function addManualItem(
   });
 }
 
+/** Update the quantity of a shopping list item */
+export async function updateShoppingItemQuantity(
+  householdId: string,
+  itemId: string,
+  quantity: number
+): Promise<void> {
+  await updateDoc(
+    doc(db, 'households', householdId, 'shoppingList', itemId),
+    { quantity }
+  );
+}
+
 // ─── Cookbook Operations ────────────────────────────────────
 
 /** Add a recipe to the household cookbook */
@@ -375,6 +444,11 @@ export async function addToCookbook(householdId: string, recipeId: string): Prom
       addedAt: serverTimestamp(),
     }
   );
+}
+
+/** Remove a recipe from the household cookbook. */
+export async function removeFromCookbook(householdId: string, recipeId: string): Promise<void> {
+  await deleteDoc(doc(db, 'households', householdId, 'cookbook', recipeId));
 }
 
 /** Toggle a recipe's starred status in the cookbook */

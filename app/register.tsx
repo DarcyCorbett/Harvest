@@ -23,17 +23,35 @@ export default function RegisterScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      if (error.message === 'Access Denied') {
+        Alert.alert('Access Denied', 'Your email is not authorized to use this app. Please request an invitation.');
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        Alert.alert('Account Exists', 'This email is already registered with email/password. Please sign in with your email and password instead.');
+      } else if (error.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert('Sign-In Failed', 'Google sign-in failed. Please try again.');
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!email.trim() || !password.trim()) {
@@ -58,6 +76,11 @@ export default function RegisterScreen() {
       }
       // If joined existing household, onAuthStateChanged handles navigation
     } catch (error: any) {
+      if (error.message === 'Access Denied') {
+        Alert.alert('Access Denied', 'Your email is not authorized to use this app. Please request an invitation.');
+        return;
+      }
+
       let message = 'Failed to create account. Please try again.';
       if (error.code === 'auth/email-already-in-use') {
         message = 'This email is already registered. Try logging in.';
@@ -99,7 +122,7 @@ export default function RegisterScreen() {
           <View style={[styles.logoContainer, { backgroundColor: colors.primaryLight }]}>
             <Ionicons name="restaurant" size={48} color={colors.primary} />
           </View>
-          <Text style={[styles.appName, { color: colors.text }]}>Meal Wizard</Text>
+          <Text style={[styles.appName, { color: colors.text }]}>Harvest</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
             Create your household
           </Text>
@@ -202,6 +225,30 @@ export default function RegisterScreen() {
               <ActivityIndicator color={colors.textInverse} />
             ) : (
               <Text style={[styles.primaryButtonText, { color: colors.textInverse }]}>Create Account</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.textTertiary }]}>or</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          {/* Google Sign-In */}
+          <TouchableOpacity
+            style={[styles.googleButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading}
+            activeOpacity={0.8}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={20} color="#4285F4" style={styles.googleIcon} />
+                <Text style={[styles.googleButtonText, { color: colors.text }]}>Continue with Google</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -365,6 +412,34 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.md,
   },
   switchLink: {
+    fontSize: FontSizes.md,
+    fontFamily: Fonts.semibold,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.lg,
+    gap: Spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: FontSizes.sm,
+  },
+  googleButton: {
+    height: 52,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    marginRight: Spacing.sm,
+  },
+  googleButtonText: {
     fontSize: FontSizes.md,
     fontFamily: Fonts.semibold,
   },

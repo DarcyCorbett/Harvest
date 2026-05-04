@@ -12,6 +12,7 @@ import {
   useColorScheme,
   ScrollView,
   FlatList,
+  Image,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -27,6 +28,7 @@ import {
   getRecipe,
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
+import { applyServingScale } from '@/services/recipeScraperService';
 import type { MealPlanEntry, Recipe, MealType } from '@/services/types';
 
 // ─── Layout constants ─────────────────────────────────────────
@@ -137,6 +139,8 @@ export default function CalendarScreen() {
   }, [householdId]);
 
   // ── Lazy recipe loading ──
+  // Also self-heals orphaned meal plan entries whose recipe was deleted
+  // (e.g. after "Clear Recipe Cache" in Settings).
   useEffect(() => {
     const toLoad = [...new Set(entries.map((e) => e.recipeId))].filter(
       (id) => !loadedIdsRef.current.has(id)
@@ -144,13 +148,28 @@ export default function CalendarScreen() {
     if (!toLoad.length) return;
     toLoad.forEach((id) => loadedIdsRef.current.add(id));
     Promise.all(toLoad.map(getRecipe)).then((fetched) => {
+      const missingIds = new Set<string>();
       setRecipes((prev) => {
         const next = { ...prev };
-        fetched.forEach((r, i) => { if (r) next[toLoad[i]] = r; });
+        fetched.forEach((r, i) => {
+          if (r) next[toLoad[i]] = r;
+          else missingIds.add(toLoad[i]);
+        });
         return next;
       });
+      if (missingIds.size && householdId) {
+        const orphans = entries.filter((e) => e.id && missingIds.has(e.recipeId));
+        if (orphans.length) {
+          console.log(`[Home] Self-healing ${orphans.length} orphan meal plan entries`);
+          orphans.forEach((e) =>
+            deleteMealPlanEntry(householdId, e.id!).catch((err) =>
+              console.warn(`[Home] Failed to remove orphan ${e.id}:`, err)
+            )
+          );
+        }
+      }
     });
-  }, [entries]);
+  }, [entries, householdId]);
 
   const forDate = useCallback(
     (dateStr: string) =>
@@ -295,12 +314,13 @@ export default function CalendarScreen() {
               );
               const hasMacros = dayEntries.some((e) => recipes[e.recipeId]);
               // First loaded recipe — used when tapping the card outside a meal row
-              const firstRecipe = dayEntries.map((e) => recipes[e.recipeId]).find(Boolean) ?? null;
+              const firstEntry = dayEntries.find((e) => recipes[e.recipeId]);
+              const firstRecipe = firstEntry ? recipes[firstEntry.recipeId] : null;
 
               return (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => firstRecipe && setPreviewRecipe(firstRecipe)}
+                  onPress={() => firstRecipe && firstEntry && setPreviewRecipe(applyServingScale(firstRecipe, firstEntry.servings ?? firstRecipe.originalServings))}
                   style={[
                     s.dayCard,
                     { backgroundColor: colors.surface, width: CARD_WIDTH, marginRight: CARD_GAP },
@@ -340,7 +360,7 @@ export default function CalendarScreen() {
                           <TouchableOpacity
                             key={entry.id}
                             style={[s.cardMealRow, { backgroundColor: colors.background }]}
-                            onPress={() => recipe && setPreviewRecipe(recipe)}
+                            onPress={() => recipe && setPreviewRecipe(applyServingScale(recipe, entry.servings ?? recipe.originalServings))}
                             onLongPress={() => handleDelete(entry)}
                             activeOpacity={0.7}
                           >
@@ -359,6 +379,12 @@ export default function CalendarScreen() {
                                 </Text>
                               )}
                             </View>
+                            {recipe?.imageUrl && (
+                              <Image
+                                source={{ uri: recipe.imageUrl }}
+                                style={s.mealRowThumb}
+                              />
+                            )}
                           </TouchableOpacity>
                         );
                       })}
@@ -617,6 +643,7 @@ const s = StyleSheet.create({
   cardMealInfo: { flex: 1 },
   cardMealTitle: { fontSize: FontSizes.md, fontFamily: Fonts.semibold, lineHeight: 20 },
   cardMealMeta: { fontSize: FontSizes.xs, fontFamily: Fonts.regular, marginTop: 2 },
+  mealRowThumb: { width: 44, height: 44, borderRadius: Radius.md, flexShrink: 0 },
 
   mealBadge: {
     paddingHorizontal: Spacing.sm,

@@ -1,0 +1,669 @@
+// ============================================================
+// Shopping list aggregation — merges ingredients across recipes,
+// categorises them, and optionally uses Gemini for semantic grouping.
+// ============================================================
+
+import { callGemini } from './gemini';
+import type { Recipe, ShoppingCategory, ShoppingItem } from './types';
+
+// ─── Public Types ─────────────────────────────────────────────
+
+/** Input row for the aggregator — decoupled from GeneratedMeal to avoid circular imports. */
+export interface MealForShopping {
+  recipeId: string;
+  recipe: Recipe;
+  servings: number;
+}
+
+// ─── Unit Conversion Primitives ───────────────────────────────
+
+// Volume conversion factors → ml
+const VOLUME_TO_ML: Record<string, number> = {
+  tsp: 4.92892,
+  tbsp: 14.7868,
+  cup: 236.588,
+  ml: 1,
+  l: 1000,
+  pinch: 0.3083,
+  dash: 0.6166,
+  smidgen: 0.1542,
+};
+// Weight conversion factors → g
+const WEIGHT_TO_G: Record<string, number> = {
+  g: 1,
+  kg: 1000,
+  oz: 28.3495,
+  lb: 453.592,
+};
+
+function getUnitFamily(unit: string): 'volume' | 'weight' | 'other' {
+  if (unit in VOLUME_TO_ML) return 'volume';
+  if (unit in WEIGHT_TO_G) return 'weight';
+  return 'other';
+}
+
+function toBase(quantity: number, unit: string): number {
+  return (VOLUME_TO_ML[unit] ?? WEIGHT_TO_G[unit] ?? 1) * quantity;
+}
+
+/**
+ * Convert a base ml amount to a display quantity+unit, applying the category-aware
+ * formatting rules shared by both aggregators:
+ *   - Herbs & Spices → tsp/tbsp
+ *   - Liquid preferred (oils/sauces, or originally expressed in ml/l) → ml or l
+ *   - Everything else → tsp/tbsp/cup (cup-scale)
+ */
+function formatVolumeOutput(
+  baseMl: number,
+  category: ShoppingCategory,
+  liquidPreferred: boolean
+): { quantity: number; unit: string } {
+  if (category === 'Herbs & Spices') return fromBaseVolume(baseMl);
+  if (liquidPreferred) {
+    return baseMl >= 1000
+      ? { quantity: Math.round(baseMl / 10) / 100, unit: 'l' }
+      : { quantity: Math.round(baseMl), unit: 'ml' };
+  }
+  return fromBaseVolume(baseMl);
+}
+
+function fromBaseVolume(ml: number): { quantity: number; unit: string } {
+  if (ml < VOLUME_TO_ML.tsp * 0.75) return { quantity: ml / VOLUME_TO_ML.tsp, unit: 'tsp' };
+  if (ml < VOLUME_TO_ML.tbsp * 3) return { quantity: ml / VOLUME_TO_ML.tsp, unit: 'tsp' };
+  if (ml < VOLUME_TO_ML.cup) return { quantity: ml / VOLUME_TO_ML.tbsp, unit: 'tbsp' };
+  return { quantity: ml / VOLUME_TO_ML.cup, unit: 'cup' };
+}
+
+function fromBaseWeight(g: number): { quantity: number; unit: string } {
+  if (g >= 1000) return { quantity: g / 1000, unit: 'kg' };
+  return { quantity: g, unit: 'g' };
+}
+
+// ─── Density / Standard-Weight Tables ─────────────────────────
+
+const DRY_GOODS_G_PER_CUP: Record<string, number> = {
+  rice: 200, flour: 120, oats: 90, breadcrumbs: 115, sugar: 200,
+  pasta: 85, lentils: 190, chickpeas: 200, cornstarch: 120,
+  cocoa: 100, 'cocoa powder': 100, 'icing sugar': 120, 'brown sugar': 200,
+  'almond meal': 100, 'almond flour': 100, 'desiccated coconut': 90,
+  quinoa: 170, couscous: 170, polenta: 160, 'rolled oats': 90,
+};
+
+function lookupDryDensity(name: string): number | null {
+  const n = name.toLowerCase().trim();
+  for (const [key, gPerCup] of Object.entries(DRY_GOODS_G_PER_CUP)) {
+    if (n.includes(key) || key.includes(n)) return gPerCup / VOLUME_TO_ML.cup;
+  }
+  return null;
+}
+
+const STANDARD_WEIGHTS_G: Record<string, number> = {
+  'chicken thigh': 150, 'chicken thighs': 150,
+  'chicken breast': 200, 'chicken breasts': 200,
+  'chicken drumstick': 100, 'chicken drumsticks': 100,
+  'chicken wing': 90, 'chicken wings': 90,
+  'chicken leg': 250, 'chicken legs': 250,
+  'chicken maryland': 300, 'chicken marylands': 300,
+  'chicken': 150,
+  'duck breast': 200, 'duck leg': 300,
+  'turkey breast': 500,
+  'egg': 55, 'eggs': 55,
+  'onion': 150, 'onions': 150,
+  'shallot': 30, 'shallots': 30,
+  'spring onion': 15, 'spring onions': 15,
+  'green onion': 15, 'green onions': 15,
+  'scallion': 15, 'scallions': 15,
+  'garlic clove': 5, 'garlic cloves': 5, 'garlic': 5,
+  'leek': 150, 'leeks': 150,
+  'potato': 150, 'potatoes': 150,
+  'sweet potato': 200, 'sweet potatoes': 200,
+  'carrot': 80, 'carrots': 80,
+  'beetroot': 150, 'parsnip': 100, 'parsnips': 100,
+  'turnip': 120, 'radish': 15, 'radishes': 15,
+  'broccoli': 300,
+  'broccoli floret': 20, 'broccoli florets': 20,
+  'cauliflower': 600, 'cabbage': 500,
+  'tomato': 120, 'tomatoes': 120,
+  'cherry tomato': 15, 'cherry tomatoes': 15,
+  'capsicum': 150, 'bell pepper': 150, 'bell peppers': 150,
+  'zucchini': 200, 'courgette': 200,
+  'eggplant': 350, 'aubergine': 350,
+  'cucumber': 300,
+  'corn cob': 250, 'corn': 250,
+  'celery stalk': 50, 'celery stalks': 50, 'celery': 50,
+  'fennel': 250, 'avocado': 200,
+  'jalapeño': 15, 'jalapeno': 15, 'chilli': 15, 'chili': 15,
+  'asparagus spear': 20, 'asparagus spears': 20, 'asparagus': 20,
+  'mushroom': 35, 'mushrooms': 35,
+  'lemon': 85, 'lemons': 85,
+  'lime': 65, 'limes': 65,
+  'orange': 180, 'oranges': 180,
+  'apple': 180, 'apples': 180,
+  'banana': 120, 'bananas': 120,
+  'pear': 170, 'pears': 170,
+  'mango': 300, 'mangoes': 300,
+  'kiwi': 75, 'kiwis': 75, 'kiwifruit': 75,
+  'peach': 150, 'peaches': 150,
+  'plum': 80, 'plums': 80,
+  'fig': 50, 'figs': 50,
+  'date': 24, 'dates': 24,
+  'strawberry': 18, 'strawberries': 18,
+  'passionfruit': 55,
+  'sausage': 80, 'sausages': 80,
+  'bacon rasher': 25, 'bacon rashers': 25,
+  'bread slice': 30, 'bread slices': 30,
+  'tortilla': 45, 'tortillas': 45,
+  'pita': 60, 'pita bread': 60,
+  'naan': 90,
+  'bread roll': 60, 'bread rolls': 60,
+};
+
+const SIZE_WORDS = /^(extra\s+|very\s+)?(large|small|medium|big)\s+/;
+
+function lookupWeight(name: string): number | null {
+  const n = name.toLowerCase().trim();
+  if (STANDARD_WEIGHTS_G[n] !== undefined) return STANDARD_WEIGHTS_G[n];
+  const stripped = n.replace(SIZE_WORDS, '');
+  if (stripped !== n && STANDARD_WEIGHTS_G[stripped] !== undefined) return STANDARD_WEIGHTS_G[stripped];
+  const words = stripped.split(' ');
+  for (let len = words.length - 1; len >= 1; len--) {
+    const partial = words.slice(0, len).join(' ');
+    if (STANDARD_WEIGHTS_G[partial] !== undefined) return STANDARD_WEIGHTS_G[partial];
+  }
+  return null;
+}
+
+// Approximate volume for count-style units, used when a group's target family
+// is volume but it has count members (e.g. "1 bunch basil" + "2 tbsp basil").
+const COUNT_UNIT_ML: Record<string, number> = {
+  bunch: 120,
+  sprig: 5,
+  leaf: 1,
+  slice: 15,
+  clove: 5,
+  head: 200,
+  stalk: 30,
+};
+
+// ─── Raw / Group Internal Types ───────────────────────────────
+
+export interface RawIngredient {
+  id: number;
+  name: string;
+  quantity: number;
+  unit: string;
+  source: { id: string; title: string; servings: number };
+}
+
+interface GeminiGroup {
+  canonicalName: string;
+  category: ShoppingCategory;
+  sourceIds: number[];
+  /** Natural unit word for count items, e.g. "thighs", "eggs". Empty string if none. */
+  unit?: string;
+}
+
+// ─── Programmatic Aggregator (fallback) ───────────────────────
+
+/**
+ * Merge all ingredients across meals into a deduplicated shopping list.
+ * Items with the same normalized name are grouped (regardless of unit), then
+ * folded into a single ShoppingItem via the same target-family logic used by
+ * the Gemini-guided path.
+ */
+export function aggregateIngredients(
+  meals: MealForShopping[]
+): Omit<ShoppingItem, 'id'>[] {
+  interface FallbackGroup {
+    canonicalName: string;
+    category: ShoppingCategory;
+    members: { quantity: number; unit: string }[];
+    sources: { id: string; title: string; servings?: number }[];
+  }
+  const grouped = new Map<string, FallbackGroup>();
+
+  for (const meal of meals) {
+    const source = { id: meal.recipeId, title: meal.recipe.title };
+    for (const ing of meal.recipe.ingredients) {
+      const normName = normalizeIngredientName(ing.name) || ing.name.trim();
+      const existing = grouped.get(normName);
+      if (existing) {
+        existing.members.push({ quantity: ing.quantity, unit: ing.unit });
+        if (!existing.sources.some((s) => s.id === source.id)) {
+          existing.sources.push(source);
+        }
+      } else {
+        grouped.set(normName, {
+          canonicalName: normName,
+          category: categoriseIngredient(ing.name),
+          members: [{ quantity: ing.quantity, unit: ing.unit }],
+          sources: [source],
+        });
+      }
+    }
+  }
+
+  const result: Omit<ShoppingItem, 'id'>[] = [];
+  for (const g of grouped.values()) {
+    const item = collapseGroupToItem(g.canonicalName, g.category, undefined, g.members, g.sources);
+    if (item) result.push(item);
+  }
+  return result;
+}
+
+/**
+ * Best-effort singular/plural selection for a count-style unit derived from
+ * an item name (e.g. "carrot" + qty 1 → "carrot"; qty 3 → "carrots").
+ * Handles the common English cases only — ambiguous inputs round-trip unchanged.
+ */
+function pluralizeUnit(name: string, quantity: number): string {
+  const n = name.trim();
+  if (!n) return '';
+  const singular = quantity <= 1;
+
+  const lower = n.toLowerCase();
+  const endsWithS = /s$/.test(lower);
+
+  if (singular) {
+    // Naive de-pluralise for simple cases.
+    if (/(ies)$/.test(lower)) return n.slice(0, -3) + 'y';
+    if (/(ses|xes|zes|ches|shes)$/.test(lower)) return n.slice(0, -2);
+    if (endsWithS && !/ss$/.test(lower)) return n.slice(0, -1);
+    return n;
+  }
+
+  if (endsWithS) return n;
+  if (/(s|x|z|ch|sh)$/.test(lower)) return n + 'es';
+  if (/[^aeiou]y$/.test(lower)) return n.slice(0, -1) + 'ies';
+  return n + 's';
+}
+
+// ─── Single-Entry Collapse ────────────────────────────────────
+
+interface CollapseMember {
+  quantity: number;
+  unit: string;
+}
+
+/**
+ * Collapse all of a group's members into exactly one ShoppingItem.
+ * Members may span weight / volume / count families; this picks one target
+ * family then folds the others in via density / standard-weight / count-volume
+ * bridges. Members that can't be converted are warned and dropped (preferring
+ * one slightly-undercounted row over multiple duplicate rows).
+ */
+function collapseGroupToItem(
+  canonicalName: string,
+  category: ShoppingCategory,
+  groupUnit: string | undefined,
+  members: CollapseMember[],
+  sources: { id: string; title: string; servings?: number }[]
+): Omit<ShoppingItem, 'id'> | null {
+  const families = members.map((m) => getUnitFamily(normalizeUnit(m.unit)));
+  const hasWeightMember = families.some((f) => f === 'weight');
+  const hasVolumeMember = families.some((f) => f === 'volume');
+  const hasCountMember = families.some((f) => f === 'other');
+  const hasMetricVolume = members.some((m) => {
+    const n = normalizeUnit(m.unit);
+    return n === 'ml' || n === 'l';
+  });
+  const stdWeight = lookupWeight(canonicalName);
+  const dryDensity = lookupDryDensity(canonicalName);
+
+  // Preserve the supermarket-style count unit (Gemini's plural noun, falling
+  // back to the first count member's original unit string).
+  let countUnit = groupUnit?.trim() ?? '';
+  if (!countUnit) {
+    const firstCount = members.find((m) => getUnitFamily(normalizeUnit(m.unit)) === 'other');
+    if (firstCount) countUnit = firstCount.unit.trim().toLowerCase();
+  }
+
+  // Pick the single target family. The category-based volume rule only fires
+  // when there's actually a volume member to anchor on — otherwise lone count
+  // items like "0.5 leaves bay leaf" stay as count.
+  let target: 'weight' | 'volume' | 'count';
+  if (hasWeightMember) {
+    target = 'weight';
+  } else if (stdWeight !== null && hasCountMember) {
+    target = 'count';
+  } else if (hasMetricVolume) {
+    target = 'volume';
+  } else if (
+    hasVolumeMember &&
+    (category === 'Herbs & Spices' || category === 'Oils, Sauces & Condiments')
+  ) {
+    target = 'volume';
+  } else if (hasCountMember) {
+    target = 'count';
+  } else if (hasVolumeMember) {
+    target = 'volume';
+  } else {
+    target = 'count';
+  }
+
+  let baseG = 0;
+  let baseMl = 0;
+  let baseCount = 0;
+
+  for (const m of members) {
+    const normUnit = normalizeUnit(m.unit);
+    const family = getUnitFamily(normUnit);
+    const baseInOwnFamily =
+      family === 'weight' || family === 'volume' ? toBase(m.quantity, normUnit) : m.quantity;
+
+    if (target === 'weight') {
+      if (family === 'weight') {
+        baseG += baseInOwnFamily;
+      } else if (family === 'volume') {
+        baseG += baseInOwnFamily * (dryDensity ?? 1);
+      } else if (stdWeight !== null) {
+        baseG += m.quantity * stdWeight;
+      } else {
+        console.warn(
+          `[ShoppingList] dropping unconvertible count "${m.quantity} ${m.unit}" — no stdWeight for "${canonicalName}"`
+        );
+      }
+    } else if (target === 'volume') {
+      if (family === 'volume') {
+        baseMl += baseInOwnFamily;
+      } else if (family === 'weight') {
+        baseMl += baseInOwnFamily / (dryDensity ?? 1);
+      } else {
+        const ml = COUNT_UNIT_ML[normUnit];
+        if (ml !== undefined) {
+          baseMl += m.quantity * ml;
+        } else if (stdWeight !== null) {
+          baseMl += m.quantity * stdWeight; // 1 g ≈ 1 ml fallback
+        } else {
+          console.warn(
+            `[ShoppingList] dropping unconvertible count "${m.quantity} ${m.unit}" — no count→volume mapping for "${canonicalName}"`
+          );
+        }
+      }
+    } else {
+      // target === 'count'
+      if (family === 'other') {
+        baseCount += m.quantity;
+      } else if (stdWeight !== null) {
+        const grams = family === 'weight' ? baseInOwnFamily : baseInOwnFamily * (dryDensity ?? 1);
+        baseCount += grams / stdWeight;
+      } else {
+        const countUnitMl = COUNT_UNIT_ML[normalizeUnit(countUnit)];
+        if (family === 'volume' && countUnitMl !== undefined) {
+          baseCount += baseInOwnFamily / countUnitMl;
+        } else {
+          console.warn(
+            `[ShoppingList] dropping unconvertible "${m.quantity} ${m.unit}" — no path to count "${countUnit}" for "${canonicalName}"`
+          );
+        }
+      }
+    }
+  }
+
+  if (target === 'weight' && baseG > 0) {
+    const r = fromBaseWeight(baseG);
+    return {
+      name: canonicalName,
+      quantity: Math.round(r.quantity * 100) / 100,
+      unit: r.unit,
+      category,
+      checked: false,
+      manual: false,
+      sources,
+    };
+  }
+  if (target === 'volume' && baseMl > 0) {
+    const liquidPreferred = category === 'Oils, Sauces & Condiments' || hasMetricVolume;
+    const { quantity, unit } = formatVolumeOutput(baseMl, category, liquidPreferred);
+    return {
+      name: canonicalName,
+      quantity: Math.round(quantity * 100) / 100,
+      unit,
+      category,
+      checked: false,
+      manual: false,
+      sources,
+    };
+  }
+  if (target === 'count' && baseCount > 0) {
+    const qty = Math.round(baseCount * 100) / 100;
+    const finalCountUnit = countUnit || pluralizeUnit(canonicalName, qty);
+    return {
+      name: canonicalName,
+      quantity: qty,
+      unit: finalCountUnit,
+      category,
+      checked: false,
+      manual: false,
+      sources,
+    };
+  }
+
+  return null;
+}
+
+// ─── Gemini-Guided Aggregator ─────────────────────────────────
+
+/**
+ * Given a flat list of raw ingredients and Gemini's groupings,
+ * sum each group's quantities in base units then convert to display units.
+ */
+export function aggregateByGeminiGroups(
+  rawIngredients: RawIngredient[],
+  groups: GeminiGroup[]
+): Omit<ShoppingItem, 'id'>[] {
+  const rawById = new Map(rawIngredients.map((r) => [r.id, r]));
+  const result: Omit<ShoppingItem, 'id'>[] = [];
+
+  for (const group of groups) {
+    const members = group.sourceIds
+      .map((id) => rawById.get(id))
+      .filter((r): r is RawIngredient => r !== undefined);
+
+    if (members.length === 0) continue;
+
+    const sources: { id: string; title: string; servings: number }[] = [];
+    const seenSourceIds = new Set<string>();
+    for (const m of members) {
+      if (!seenSourceIds.has(m.source.id)) {
+        seenSourceIds.add(m.source.id);
+        sources.push(m.source);
+      }
+    }
+
+    const category = group.category;
+
+    const item = collapseGroupToItem(group.canonicalName, category, group.unit, members, sources);
+    if (item) result.push(item);
+  }
+
+  return result;
+}
+
+/**
+ * Ask Gemini to semantically group raw ingredients. Returns `[{canonicalName, category, sourceIds[]}]`
+ * with every raw id placed into exactly one group.
+ */
+export async function getGeminiGroupings(rawIngredients: RawIngredient[]): Promise<GeminiGroup[]> {
+  const prompt = `You are given a list of recipe ingredients as JSON. Group them into shopping list items.
+
+Rules:
+1. Group ingredients that refer to the same item despite different wording. Use the most natural canonical name (e.g. "garlic", not "minced garlic").
+2. Prep-state differences done at home → merge into one group: "minced garlic" + "garlic" → "garlic"; "diced onion" + "onion" → "onion"; "chopped tomato" + "tomato" → "tomato".
+3. Different cuts or forms of meat, poultry, and fish → ALWAYS keep as separate groups (they are sold separately): "chicken breast" ≠ "chicken thighs" ≠ "chicken mince"; "beef mince" ≠ "beef steak"; "salmon fillet" ≠ "smoked salmon".
+4. "shredded chicken" with no whole-chicken ingredient → treat as "chicken breast". "shredded chicken" where a whole roast chicken ingredient also appears → merge into "whole chicken".
+5. Every ingredient id must appear in exactly one group. If uncertain, create a single-item group.
+6. Set the "category" field for each group using these rules:
+   - Herbs & Spices: fresh/dried herbs, spices, spice blends
+   - Oils, Sauces & Condiments: cooking oils, vinegar, soy sauce, fish sauce, oyster sauce, Worcestershire, sriracha, ketchup, mayo, mustard, miso, tahini, hoisin
+   - Pantry & Dry Goods: stocks, broths, canned goods, pasta, rice, flour, sugar, honey, baking
+   - Produce: fresh fruit and vegetables
+   - Meat & Seafood: raw meat, fish, seafood
+   - Dairy & Eggs: milk, cream, butter, cheese, yoghurt, eggs
+   - Bread & Bakery: bread, wraps, rolls, tortillas
+   - Frozen: anything frozen
+   - Other: anything else
+7. For dry pantry ingredients measured in ml (converted from cups/tbsp), note this in the canonicalName or leave as-is — the quantity conversion will be handled by the caller.
+8. For groups whose natural shopping unit is a count (e.g. "chicken thighs", "eggs", "onions", "lemons"), set the "unit" field to the plural noun used when counting that item at the supermarket. Examples: "chicken thighs" → unit "thighs"; "eggs" → unit "eggs"; "onions" → unit "onions"; "lemons" → unit "lemons"; "bananas" → unit "bananas". A count-style group should always have a non-empty unit so the list reads "3 onions" not "3". Only leave unit as "" when the item is measured by weight or volume (e.g. flour, olive oil).
+
+Return ONLY a valid JSON array — no markdown, no explanation:
+[{"canonicalName": "...", "category": "...", "sourceIds": [0, 4, 7], "unit": ""}, ...]
+
+Input:
+${JSON.stringify(rawIngredients.map(({ id, name, quantity, unit }) => ({ id, name, quantity, unit })))}`;
+
+  // Each group's JSON averages ~55–80 output tokens. Scale the ceiling with
+  // ingredient count so large plans don't truncate while small plans stay cheap.
+  // (maxOutputTokens is a truncation cap, not a billing amount — Gemini bills
+  // only for tokens actually produced.)
+  const maxOutputTokens = Math.min(65536, 4096 + rawIngredients.length * 200);
+  const parsed = await callGemini<unknown>(prompt, maxOutputTokens);
+
+  if (!Array.isArray(parsed)) throw new Error('Gemini response is not an array');
+
+  const coveredIds = new Set<number>();
+  const groups = (parsed as Record<string, unknown>[]).map((g) => ({
+    canonicalName: String(g.canonicalName ?? '').trim(),
+    category: (g.category as ShoppingCategory) ?? 'Other',
+    sourceIds: (g.sourceIds as number[]) ?? [],
+    unit: g.unit != null ? String(g.unit) : undefined,
+  }));
+  groups.forEach((g) => g.sourceIds.forEach((id) => coveredIds.add(id)));
+
+  for (const raw of rawIngredients) {
+    if (!coveredIds.has(raw.id)) {
+      groups.push({
+        canonicalName: raw.name.trim(),
+        category: categoriseIngredient(raw.name),
+        sourceIds: [raw.id],
+        unit: undefined,
+      });
+    }
+  }
+
+  return groups;
+}
+
+// ─── Name / Unit Normalisation ────────────────────────────────
+
+/**
+ * Normalise an ingredient name for deduplication.
+ * Examples:
+ *   "garlic, minced"               → "garlic"
+ *   "garlic cloves"                → "garlic"
+ *   "spring onion, thinly sliced"  → "spring onion"
+ */
+function normalizeIngredientName(name: string): string {
+  let n = name.toLowerCase().trim();
+  n = n.replace(/,.*$/, '').trim();
+  n = n.replace(/\s+or\s+\S+\s*$/, '').trim();
+  n = n.replace(/\(.*?\)/g, '').trim();
+  n = n.replace(/\b(cloves?|heads?|stalks?|sprigs?)\b/g, '');
+  n = n.replace(
+    /\b(finely|roughly|coarsely|thinly|freshly|lightly|well|extra|very)\b/g,
+    ''
+  );
+  n = n.replace(
+    /\b(chopped|minced|diced|sliced|crushed|grated|peeled|trimmed|halved|quartered|shredded|torn|whole|fresh|dried|ground|powdered|frozen|toasted|roasted|cooked|raw|large|small|medium|big)\b/g,
+    ''
+  );
+  return n.replace(/\s{2,}/g, ' ').trim();
+}
+
+function normalizeUnit(unit: string): string {
+  const u = unit.toLowerCase().trim();
+  const MAP: Record<string, string> = {
+    cloves: 'clove',
+    cups: 'cup',
+    tablespoons: 'tbsp',
+    tablespoon: 'tbsp',
+    teaspoons: 'tsp',
+    teaspoon: 'tsp',
+    grams: 'g',
+    gram: 'g',
+    kilograms: 'kg',
+    kilogram: 'kg',
+    millilitres: 'ml',
+    milliliters: 'ml',
+    millilitre: 'ml',
+    milliliter: 'ml',
+    litres: 'l',
+    liters: 'l',
+    litre: 'l',
+    liter: 'l',
+    ounces: 'oz',
+    ounce: 'oz',
+    pounds: 'lb',
+    pound: 'lb',
+    slices: 'slice',
+    pieces: 'piece',
+    stalks: 'stalk',
+    sprigs: 'sprig',
+    bunches: 'bunch',
+    leaves: 'leaf',
+    heads: 'head',
+    cans: 'can',
+    jars: 'jar',
+    bags: 'bag',
+  };
+  return MAP[u] ?? u;
+}
+
+// ─── Categorisation ───────────────────────────────────────────
+
+export function categoriseIngredient(name: string): ShoppingCategory {
+  const n = name.toLowerCase();
+
+  const isDried = /\b(dried|ground|powdered|dehydrated)\b/.test(n);
+  const isHerb = /\b(basil|parsley|coriander|cilantro|mint|thyme|rosemary|dill|oregano|sage|tarragon|chive|bay\s+lea|lemongrass|kaffir|galangal|chervil|marjoram|lovage|sorrel)\b/.test(n);
+
+  if (isHerb && isDried) return 'Herbs & Spices';
+
+  if (
+    /\b(cumin|paprika|turmeric|cinnamon|cardamom|nutmeg|clove|allspice|star\s+anise|fennel\s+seed|caraway|coriander\s+seed|mustard\s+seed|fenugreek|sumac|za.atar|ras\s+el\s+hanout|garam\s+masala|curry\s+powder|five\s+spice|chinese\s+five|cajun|chili\s+powder|cayenne|smoked\s+paprika|sweet\s+paprika|onion\s+powder|garlic\s+powder|celery\s+salt|mixed\s+spice|mixed\s+herb|italian\s+season|herbes?\s+de\s+provence|baharat|dukkah|harissa\s+spice)\b/.test(n) ||
+    /\bspice\b/.test(n)
+  )
+    return 'Herbs & Spices';
+
+  if (
+    /\b(olive\s+oil|vegetable\s+oil|canola\s+oil|sunflower\s+oil|coconut\s+oil|sesame\s+oil|avocado\s+oil|peanut\s+oil|grapeseed\s+oil|neutral\s+oil|cooking\s+oil)\b/.test(n) ||
+    /\b(?<!coconut\s)oil\b/.test(n) ||
+    /\b(vinegar|balsamic|rice\s+wine\s+vinegar|apple\s+cider\s+vinegar|white\s+wine\s+vinegar|red\s+wine\s+vinegar|sherry\s+vinegar)\b/.test(n) ||
+    /\b(soy\s+sauce|fish\s+sauce|oyster\s+sauce|hoisin|teriyaki|worcestershire|sriracha|hot\s+sauce|tabasco|ketchup|mayo|mayonnaise|mustard|dijon|relish|chutney|miso|tahini|nam\s+pla|ponzu|tamari|liquid\s+aminos)\b/.test(n)
+  )
+    return 'Oils, Sauces & Condiments';
+
+  if (
+    /\b(stock|broth|bouillon|jus)\b/.test(n) ||
+    /\b(coconut\s+milk|coconut\s+cream|coconut\s+water)\b/.test(n) ||
+    /\boat\s+milk\b|\balmond\s+milk\b|\brice\s+milk\b|\bsoy\s+milk\b/.test(n) ||
+    /\b(tomato\s+paste|tomato\s+puree|tomato\s+sauce|tomato\s+can|canned\s+tomato|crushed\s+tomato|diced\s+tomato|sun.dried\s+tomato)\b/.test(n) ||
+    /\b(pasta|noodle|rice|flour|sugar|salt|honey|maple|syrup|jam|paste|powder|seasoning|extract|baking|yeast|stock\s+cube|bouillon\s+cube|tinned|canned)\b/.test(n)
+  )
+    return 'Pantry & Dry Goods';
+
+  if (
+    /\b(chicken|beef|pork|lamb|fish|salmon|tuna|cod|trout|shrimp|prawn|turkey|bacon|sausage|mince|steak|fillet|duck|veal|crab|anchov|seafood|pancetta|chorizo|salami|ham|venison|brisket|ribs)\b/.test(n)
+  )
+    return 'Meat & Seafood';
+
+  if (
+    /\b(milk|cream|butter|cheese|yogurt|yoghurt|egg|eggs|parmesan|mozzarella|cheddar|feta|ricotta|brie|haloumi|sour\s+cream|creme\s+fraiche|ghee|quark|gouda|gruyere|pecorino|cream\s+cheese|cottage\s+cheese)\b/.test(n)
+  )
+    return 'Dairy & Eggs';
+
+  if (
+    /\b(bread|bun|wrap|pita|pitta|roll|loaf|tortilla|naan|bagel|croissant|brioche|sourdough|crumpet|muffin|flatbread)\b/.test(n)
+  )
+    return 'Bread & Bakery';
+
+  if (/\bfrozen\b/.test(n)) return 'Frozen';
+
+  if (
+    isHerb ||
+    /\b(onion|garlic|tomato|potato|carrot|cucumber|lettuce|spinach|mushroom|pepper|capsicum|broccoli|celery|ginger|lemon|lime|orange|apple|banana|avocado|chilli|chili|spring\s+onion|zucchini|courgette|eggplant|aubergine|cabbage|kale|asparagus|leek|fennel|beetroot|radish|pumpkin|sweet\s+potato|corn|pea|bean|green\s+bean|snow\s+pea|bok\s+choy|pak\s+choi|shallot|scallion|rocket|arugula|silverbeet|broccolini|chard|watercress|endive|witlof|sprout|mango|pineapple|strawberr|blueberr|raspberr|grape|peach|plum|pear|kiwi|melon|pomegranate|fig|date|cherry|passionfruit|mandarin|grapefruit|zest|rind)\b/.test(n)
+  )
+    return 'Produce';
+
+  return 'Pantry & Dry Goods';
+}

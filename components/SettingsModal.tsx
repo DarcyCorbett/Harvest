@@ -1,15 +1,17 @@
 // ============================================================
 // Meal Wizard — Settings Modal
-// Per-household generation settings: source weights + ingredient weights.
+// Per-household generation settings: source weights, ingredient
+// weights, seed selection, and kid friendly filters.
 // ============================================================
 
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import {
+  clearAllCachedRecipes,
   getHouseholdSettings,
   saveHouseholdSettings,
 } from '@/services/firestoreService';
-import { SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
-import type { HouseholdSettings } from '@/services/types';
+import { KID_FRIENDLY_DEFAULTS, SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
+import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -20,6 +22,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -39,6 +42,13 @@ function displayDomain(site: string): string {
   return site.replace(/^www\./, '');
 }
 
+/** All default blocked terms as a flat list */
+const ALL_DEFAULT_TERMS = [
+  ...KID_FRIENDLY_DEFAULTS.hotIngredients,
+  ...KID_FRIENDLY_DEFAULTS.adultFlavours,
+  ...KID_FRIENDLY_DEFAULTS.alcohol,
+];
+
 export default function SettingsModal({
   visible,
   onClose,
@@ -49,6 +59,8 @@ export default function SettingsModal({
   const [saving, setSaving] = useState(false);
   const [sourceWeights, setSourceWeights] = useState<Record<string, number>>({});
   const [ingredientWeights, setIngredientWeights] = useState<Record<string, number>>({});
+  const [kidFriendly, setKidFriendly] = useState<KidFriendlySettings>({});
+  const [newBlockTerm, setNewBlockTerm] = useState('');
 
   // Remember the last non-zero weight for each site so toggling off→on restores it
   const [lastNonZeroSource, setLastNonZeroSource] = useState<Record<string, number>>({});
@@ -61,6 +73,7 @@ export default function SettingsModal({
       .then((s: HouseholdSettings) => {
         setSourceWeights(s.sourceWeights);
         setIngredientWeights(s.ingredientWeights);
+        setKidFriendly(s.kidFriendly ?? {});
         // Pre-populate lastNonZero from existing weights
         const lnz: Record<string, number> = {};
         TRUSTED_SITES.forEach((site) => {
@@ -85,11 +98,9 @@ export default function SettingsModal({
     setSourceWeights((prev) => {
       const current = prev[site] ?? 1;
       if (current !== 0) {
-        // Disable — store last non-zero weight
         setLastNonZeroSource((lnz) => ({ ...lnz, [site]: current }));
         return { ...prev, [site]: 0 };
       } else {
-        // Re-enable — restore last non-zero or default to 1
         const restore = lastNonZeroSource[site] ?? 1;
         return { ...prev, [site]: restore };
       }
@@ -101,7 +112,7 @@ export default function SettingsModal({
     setLastNonZeroSource((lnz) => ({ ...lnz, [site]: w }));
   }, []);
 
-  // ── Ingredient helpers ─────────────────────────────────────
+  // ── Ingredient weight helpers ──────────────────────────────
 
   const getIngredientWeight = (name: string): number =>
     ingredientWeights[name] ?? 1;
@@ -114,12 +125,51 @@ export default function SettingsModal({
     });
   }, []);
 
+  // ── Kid Friendly helpers ───────────────────────────────────
+
+  const isDefaultTermAllowed = (term: string): boolean =>
+    (kidFriendly.allowedExceptions ?? []).includes(term);
+
+  const toggleDefaultTermException = useCallback((term: string) => {
+    setKidFriendly((prev) => {
+      const current = prev.allowedExceptions ?? [];
+      const updated = current.includes(term)
+        ? current.filter((t) => t !== term)
+        : [...current, term];
+      return { ...prev, allowedExceptions: updated };
+    });
+  }, []);
+
+  const addCustomBlockTerm = useCallback(() => {
+    const trimmed = newBlockTerm.trim().toLowerCase();
+    if (!trimmed) return;
+    setKidFriendly((prev) => {
+      const current = prev.excludedIngredients ?? [];
+      if (current.includes(trimmed)) return prev;
+      return { ...prev, excludedIngredients: [...current, trimmed] };
+    });
+    setNewBlockTerm('');
+  }, [newBlockTerm]);
+
+  const removeCustomBlockTerm = useCallback((term: string) => {
+    setKidFriendly((prev) => ({
+      ...prev,
+      excludedIngredients: (prev.excludedIngredients ?? []).filter((t) => t !== term),
+    }));
+  }, []);
+
   // ── Save ──────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await saveHouseholdSettings(householdId, { sourceWeights, ingredientWeights });
+      await saveHouseholdSettings(householdId, {
+        sourceWeights,
+        ingredientWeights,
+        kidFriendly: (kidFriendly.allowedExceptions?.length || kidFriendly.excludedIngredients?.length)
+          ? kidFriendly
+          : undefined,
+      });
       onSaved();
       onClose();
     } catch (err) {
@@ -128,7 +178,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, sourceWeights, ingredientWeights, onSaved, onClose]);
+  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, onSaved, onClose]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -227,10 +277,10 @@ export default function SettingsModal({
 
             <View style={styles.divider} />
 
-            {/* ── Ingredient Seeds ── */}
+            {/* ── Ingredient Weights ── */}
             <Text style={styles.sectionTitle}>Ingredient Weights</Text>
             <Text style={styles.sectionHint}>
-              Tap a chip to cycle its weight (1× → 2× → 3×). Higher weight means that ingredient appears more often.
+              Tap a chip to cycle its weight (1× → 2× → 3×). Higher weight means that ingredient appears more often in random selection.
             </Text>
 
             <View style={styles.ingredientGrid}>
@@ -259,6 +309,116 @@ export default function SettingsModal({
                 );
               })}
             </View>
+
+            <View style={styles.divider} />
+
+            {/* ── Kid Friendly Filters ── */}
+            <Text style={styles.sectionTitle}>Kid Friendly Filters</Text>
+            <Text style={styles.sectionHint}>
+              When "Kid Friendly" is selected during generation, recipes containing any blocked ingredient are skipped. Tap a default term to allow it through. Add custom terms below.
+            </Text>
+
+            <Text style={styles.subSectionLabel}>Default blocked ingredients</Text>
+            <View style={styles.ingredientGrid}>
+              {ALL_DEFAULT_TERMS.map((term) => {
+                const allowed = isDefaultTermAllowed(term);
+                return (
+                  <TouchableOpacity
+                    key={term}
+                    onPress={() => toggleDefaultTermException(term)}
+                    style={[
+                      styles.ingredientChip,
+                      allowed && styles.allowedChip,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.ingredientChipText,
+                        allowed && styles.allowedChipText,
+                      ]}
+                    >
+                      {allowed ? '✓ ' : ''}{term}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.subSectionLabel, { marginTop: Spacing.md }]}>Custom blocked ingredients</Text>
+            <View style={styles.addTermRow}>
+              <TextInput
+                style={styles.addTermInput}
+                value={newBlockTerm}
+                onChangeText={setNewBlockTerm}
+                placeholder="e.g. wasabi"
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={addCustomBlockTerm}
+              />
+              <TouchableOpacity
+                onPress={addCustomBlockTerm}
+                style={styles.addTermBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {(kidFriendly.excludedIngredients ?? []).length > 0 && (
+              <View style={[styles.ingredientGrid, { marginTop: Spacing.sm }]}>
+                {(kidFriendly.excludedIngredients ?? []).map((term) => (
+                  <TouchableOpacity
+                    key={term}
+                    onPress={() => removeCustomBlockTerm(term)}
+                    style={[styles.ingredientChip, styles.customBlockChip]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.ingredientChipText, styles.customBlockChipText]}>
+                      {term} ×
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* ── Cache ── */}
+            <Text style={styles.sectionTitle}>Cache</Text>
+            <Text style={styles.sectionHint}>
+              Recipes are cached after first scrape. Clear the cache to force fresh scrapes on the next generation.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  'Clear Recipe Cache',
+                  'Delete all cached recipes so they are re-scraped on next generation. Continue?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Clear',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const count = await clearAllCachedRecipes();
+                          Alert.alert('Cache Cleared', `${count} cached recipe${count !== 1 ? 's' : ''} deleted.`);
+                        } catch {
+                          Alert.alert('Error', 'Failed to clear cache.');
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+              activeOpacity={0.7}
+              style={styles.clearCacheBtn}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.error} />
+              <Text style={styles.clearCacheText}>Clear Recipe Cache</Text>
+            </TouchableOpacity>
+
           </ScrollView>
         )}
       </SafeAreaView>
@@ -330,11 +490,35 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: Spacing.md,
   },
+  subSectionLabel: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+    color: colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
 
   divider: {
     height: 1,
     backgroundColor: '#E5E7EB',
     marginVertical: Spacing.xl,
+  },
+
+  // Cache section
+  clearCacheBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  clearCacheText: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+    color: colors.error,
   },
 
   // Source rows
@@ -394,7 +578,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // Ingredient chips
+  // Ingredient / seed chips
   ingredientGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -419,5 +603,69 @@ const styles = StyleSheet.create({
   },
   ingredientChipTextActive: {
     color: colors.primary,
+  },
+
+  // Seed chips (teal/green accent to distinguish from weight chips)
+  seedChipActive: {
+    borderColor: '#059669',
+    backgroundColor: '#D1FAE5',
+  },
+  seedChipTextActive: {
+    color: '#065F46',
+  },
+  seedCountHint: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.regular,
+    color: '#065F46',
+    marginTop: Spacing.sm,
+    lineHeight: 18,
+  },
+
+  // Kid Friendly — allowed (struck-through look via muted style)
+  allowedChip: {
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+    opacity: 0.5,
+  },
+  allowedChipText: {
+    color: colors.textTertiary,
+  },
+
+  // Kid Friendly — custom blocked terms
+  customBlockChip: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  customBlockChipText: {
+    color: '#B91C1C',
+  },
+
+  // Add custom term row
+  addTermRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  addTermInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.regular,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  addTermBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
   },
 });

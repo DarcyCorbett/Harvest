@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "meal-wizard",
+    "name": "Harvest",
     "slug": "meal-wizard",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,10 +14,8 @@
     "android": {
       "package": "com.mealwizard.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F2EAD3",
+        "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -40,7 +38,10 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-web-browser",
+      "./plugins/withAdiRegistration",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -52,6 +53,12 @@
         "projectId": "9507ac20-2ee7-420a-a438-104532854497"
       }
     },
-    "owner": "darcycorbett"
+    "owner": "darcycorbett",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9507ac20-2ee7-420a-a438-104532854497"
+    }
   }
 }
