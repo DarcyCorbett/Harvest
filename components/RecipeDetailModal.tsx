@@ -499,14 +499,32 @@ export default function RecipeDetailModal({
 
           {/* Instructions */}
           <SectionLabel title="Instructions" styles={styles} />
-          {recipe.instructions.map((step, idx) => (
-            <View key={idx} style={styles.stepRow}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepNum}>{idx + 1}</Text>
-              </View>
-              <Text style={styles.stepText}>{step}</Text>
-            </View>
-          ))}
+          {(() => {
+            let stepNum = 0;
+            return recipe.instructions.map((step, idx) => {
+              if (step.isHeader) {
+                return (
+                  <Text key={idx} style={styles.stepHeader}>
+                    {step.text}
+                  </Text>
+                );
+              }
+              stepNum += 1;
+              return (
+                <View key={idx} style={styles.stepRow}>
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepNum}>{stepNum}</Text>
+                  </View>
+                  <View style={styles.stepBody}>
+                    <Text style={styles.stepText}>{step.text}</Text>
+                    {step.imageUrl ? (
+                      <Image source={{ uri: step.imageUrl }} style={styles.stepImage} />
+                    ) : null}
+                  </View>
+                </View>
+              );
+            });
+          })()}
 
           {/* Notes */}
           {recipe.notes?.trim() ? (
@@ -827,12 +845,25 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 1,
   },
   stepNum: { fontSize: FontSizes.sm, fontFamily: Fonts.bold, color: colors.primary },
+  stepBody: { flex: 1, gap: Spacing.sm },
   stepText: {
-    flex: 1,
     fontSize: FontSizes.lg,
     fontFamily: Fonts.regular,
     color: colors.text,
     lineHeight: 22,
+  },
+  stepImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surface,
+  },
+  stepHeader: {
+    fontSize: FontSizes.lg,
+    fontFamily: Fonts.bold,
+    color: colors.text,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
   },
 
   // Notes

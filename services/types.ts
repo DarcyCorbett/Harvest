@@ -25,6 +25,14 @@ export interface Nutrition {
   fat: number;     // grams
 }
 
+/** A single instruction step. May have an inline image (from JSON-LD HowToStep.image)
+ *  or be a section header flattened from a HowToSection wrapper. */
+export interface InstructionStep {
+  text: string;
+  imageUrl?: string;
+  isHeader?: boolean;
+}
+
 /** A fully scraped and parsed recipe (root-level collection) */
 export interface Recipe {
   id?: string;
@@ -42,7 +50,7 @@ export interface Recipe {
   difficulty?: string;      // e.g. "Easy", "Medium"
   ingredients: Ingredient[];
   ingredientGroups?: IngredientGroup[]; // WPRM grouped ingredients (if present)
-  instructions: string[];
+  instructions: InstructionStep[];
   notes: string;
   nutrition: Nutrition;
   scrapedAt: Date;

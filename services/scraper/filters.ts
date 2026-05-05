@@ -120,7 +120,7 @@ const HEAVY_CREAM_TERMS = [
 const UNHEALTHY_FAT_INGREDIENTS = ['lard', 'shortening', 'suet', 'duck fat', 'goose fat'];
 
 function checkHealthy(recipe: Recipe): { ok: boolean; reason?: string } {
-  if (DEEP_FRY_RE.test(recipe.instructions.join(' ')))
+  if (DEEP_FRY_RE.test(recipe.instructions.map((s) => s.text).join(' ')))
     return { ok: false, reason: 'deep frying detected in instructions' };
   if (recipe.nutrition.calories > 0 && recipe.nutrition.calories > 800)
     return { ok: false, reason: `calories ${recipe.nutrition.calories} > 800` };

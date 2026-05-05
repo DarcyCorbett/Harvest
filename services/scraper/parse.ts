@@ -2,7 +2,7 @@
 // HTML primitives + WPRM recipe parsing — turns raw HTML into Recipe objects.
 // ============================================================
 
-import type { Ingredient, IngredientGroup, Recipe } from '../types';
+import type { Ingredient, IngredientGroup, InstructionStep, Recipe } from '../types';
 
 // ─── HTML Utilities ───────────────────────────────────────────
 
@@ -321,7 +321,7 @@ export function parseRecipeFromWprm(rawHtml: string, sourceUrl: string): Recipe 
     ...(difficulty ? { difficulty } : {}),
     ingredients,
     ingredientGroups: ingredientGroups.length > 0 ? ingredientGroups : undefined,
-    instructions: instructions.map(convertInstructionUnits),
+    instructions: instructions.map(convertInstructionUnits).map((text): InstructionStep => ({ text })),
     notes,
     nutrition,
     tags: buildTagsFromRecipe(cuisine || undefined),

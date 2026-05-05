@@ -69,7 +69,7 @@ export async function tagRecipesWithGemini(
     title: recipe.title,
     totalMinutes: recipe.totalTime ? parseInt(recipe.totalTime) : null,
     ingredients: recipe.ingredients.map((i) => i.name),
-    steps: recipe.instructions.map((s) => s.substring(0, 150)).join(' | '),
+    steps: recipe.instructions.map((s) => s.text.substring(0, 150)).join(' | '),
     existingTags: recipe.tags ?? [],
   }));
 
