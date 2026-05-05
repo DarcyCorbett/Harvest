@@ -5,7 +5,10 @@
 
 import type { CuisineStyle, HouseholdSettings, MealType } from '../types';
 
-// ─── Trusted Sites (WP Recipe Maker only) ────────────────────
+// ─── Trusted Sites ──────────────────────────────────────────
+// The scraper now uses Schema.org JSON-LD as its primary data source, so any
+// site that ships a <script type="application/ld+json"> Recipe block is
+// fair game — no longer limited to WP Recipe Maker plugin sites.
 
 export const TRUSTED_SITES = [
   'www.recipetineats.com',
@@ -15,6 +18,7 @@ export const TRUSTED_SITES = [
   'www.spendwithpennies.com',
   'cafedelites.com',
   'www.skinnytaste.com',
+  'pinchofyum.com',
 ] as const;
 
 export const SITE_SEARCH_URLS: Record<string, (q: string) => string> = {
@@ -32,6 +36,8 @@ export const SITE_SEARCH_URLS: Record<string, (q: string) => string> = {
     `https://cafedelites.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
   'www.skinnytaste.com': (q) =>
     `https://www.skinnytaste.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
+  'pinchofyum.com': (q) =>
+    `https://pinchofyum.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
 };
 
 // ─── Cuisine Keywords ────────────────────────────────────────
