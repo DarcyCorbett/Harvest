@@ -258,77 +258,6 @@ function buildTagsFromRecipe(cuisine: string | undefined): string[] {
   return tags;
 }
 
-/**
- * Parse a full Recipe from WP Recipe Maker HTML.
- * Throws if the page has no WPRM markup or required fields are absent.
- */
-export function parseRecipeFromWprm(rawHtml: string, sourceUrl: string): Recipe {
-  const recipeHtml = extractByClass(rawHtml, 'wprm-recipe-container');
-  if (!recipeHtml) {
-    throw new Error('No WPRM recipe container found on page');
-  }
-
-  const title = getFirstText(recipeHtml, 'wprm-recipe-name').trim();
-  if (!title) throw new Error('Could not extract recipe title from WPRM');
-
-  const prepTime = buildTimeString(recipeHtml, 'prep_time');
-  const cookTime = buildTimeString(recipeHtml, 'cook_time');
-
-  const servingsText = getFirstText(recipeHtml, 'wprm-recipe-servings');
-  const servingsUnit = getFirstText(recipeHtml, 'wprm-recipe-servings-unit').trim().toLowerCase();
-  const originalServings = resolveOriginalServings(parseInt(servingsText, 10) || 4, servingsUnit);
-
-  // WPRM sites vary: some put all courses comma-separated in one span,
-  // others use a separate span per course. Handle both by collecting all
-  // matching spans then splitting each on commas.
-  const courseItems = extractAllByClass(recipeHtml, 'wprm-recipe-course')
-    .flatMap((inner) => htmlToText(inner).split(','))
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const course = courseItems.length > 0 ? courseItems : undefined;
-
-  const wprmTotal = buildTimeString(recipeHtml, 'total_time');
-  const totalTime = wprmTotal !== 'N/A' ? wprmTotal : combineTimes(prepTime, cookTime);
-  const description = getFirstText(recipeHtml, 'wprm-recipe-summary').trim() || undefined;
-  const cuisine = getFirstText(recipeHtml, 'wprm-recipe-cuisine').trim() || undefined;
-  const difficulty = getFirstText(recipeHtml, 'wprm-recipe-difficulty').trim() || undefined;
-
-  const { ingredients, ingredientGroups } = parseWprmIngredients(recipeHtml);
-  if (ingredients.length === 0) throw new Error('No ingredients found in WPRM recipe');
-
-  const instructions = parseWprmInstructions(recipeHtml);
-  if (instructions.length === 0) throw new Error('No instructions found in WPRM recipe');
-
-  const notes = parseWprmNotes(recipeHtml);
-  const nutrition = parseWprmNutrition(rawHtml, recipeHtml);
-  const imageUrl = parseRecipeImage(rawHtml) ?? undefined;
-
-  console.log(
-    `[RecipeScraper] Parsed WPRM "${title}" — ${ingredients.length} ingredient(s), ${instructions.length} step(s)${imageUrl ? ' [img]' : ''}`
-  );
-
-  return {
-    title,
-    sourceUrl,
-    ...(imageUrl ? { imageUrl } : {}),
-    prepTime,
-    cookTime,
-    ...(totalTime !== 'N/A' ? { totalTime } : {}),
-    originalServings,
-    ...(course ? { course } : {}),
-    ...(description ? { description } : {}),
-    ...(cuisine ? { cuisine } : {}),
-    ...(difficulty ? { difficulty } : {}),
-    ingredients,
-    ingredientGroups: ingredientGroups.length > 0 ? ingredientGroups : undefined,
-    instructions: instructions.map(convertInstructionUnits).map((text): InstructionStep => ({ text })),
-    notes,
-    nutrition,
-    tags: buildTagsFromRecipe(cuisine || undefined),
-    scrapedAt: new Date(),
-  };
-}
-
 // Units that represent individual items rather than people served.
 // When a recipe says "makes 24 cookies", we treat it as serving 4 people.
 // "piece"/"pieces" excluded: too broadly matches savory portioning ("serves 4 pieces of chicken").
@@ -348,32 +277,6 @@ const ITEM_SERVINGS_UNITS = new Set([
 function resolveOriginalServings(rawCount: number, unit: string): number {
   if (ITEM_SERVINGS_UNITS.has(unit)) return 4;
   return rawCount || 4;
-}
-
-/**
- * Add two time strings (e.g. "20 min" + "30 min" → "50 min").
- * Returns 'N/A' if neither time is parseable.
- */
-function combineTimes(t1: string, t2: string): string {
-  const m1 = parseMinutes(t1) ?? 0;
-  const m2 = parseMinutes(t2) ?? 0;
-  const total = m1 + m2;
-  if (!total) return 'N/A';
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (h && m) return `${h} hr ${m} min`;
-  return h ? `${h} hr` : `${m} min`;
-}
-
-/** Build a human-readable time string from WPRM hour/minute spans. */
-function buildTimeString(html: string, timeType: string): string {
-  const hoursText = getFirstText(html, `wprm-recipe-${timeType}-hours`);
-  const minsText = getFirstText(html, `wprm-recipe-${timeType}-minutes`);
-  const hours = parseInt(hoursText, 10) || 0;
-  const mins = parseInt(minsText, 10) || 0;
-  if (!hours && !mins) return 'N/A';
-  if (hours && mins) return `${hours} hr ${mins} min`;
-  return hours ? `${hours} hr` : `${mins} min`;
 }
 
 /**
@@ -542,46 +445,6 @@ function convertIngredientWeight(quantity: number, unit: string): { quantity: nu
     return { quantity: Math.round(grams), unit: 'g' };
   }
   return { quantity, unit };
-}
-
-/** Parse all WPRM instruction steps into plain text strings. */
-function parseWprmInstructions(html: string): string[] {
-  return extractAllByClass(html, 'wprm-recipe-instruction-text')
-    .map(htmlToText)
-    .filter((t) => t.length > 0);
-}
-
-/** Parse the WPRM notes container, numbering list items where present. */
-function parseWprmNotes(html: string): string {
-  const inner = extractByClass(html, 'wprm-recipe-notes-container');
-  if (!inner) return '';
-
-  // If the notes contain <li> items, extract and number them (1. 2. 3.)
-  const liItems = extractAllByTag(inner, 'li')
-    .map((li) => htmlToText(li).trim())
-    .filter((t) => t.length > 0);
-
-  if (liItems.length > 0) {
-    return liItems.map((item, i) => `${i + 1}. ${item}`).join('\n');
-  }
-
-  // Fallback: convert to plain text, split by paragraph/line, number if multiple.
-  // Use a sentinel (\x00) to preserve intended newlines through htmlToText's whitespace collapse.
-  const marked = inner
-    .replace(/<br\s*\/?>/gi, '\x00')
-    .replace(/<\/p>/gi, '\x00');
-  const plain = htmlToText(marked)   // strips tags + decodes ALL entities
-    .replace(/\x00/g, '\n')          // restore newline sentinels
-    .replace(/ *\n */g, '\n')        // trim spaces around newlines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  const lines = plain.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-  if (lines.length > 1) {
-    return lines.map((line, i) => `${i + 1}. ${line}`).join('\n');
-  }
-
-  return plain;
 }
 
 // ─── Nutrition Parsing ───────────────────────────────────────
@@ -1193,69 +1056,6 @@ export function parseRecipe(rawHtml: string, sourceUrl: string): Recipe {
   const node = findJsonLdRecipe(rawHtml);
   if (!node) throw new Error('No JSON-LD Recipe found on page');
   return extractRecipeFromJsonLd(node, rawHtml, sourceUrl);
-}
-
-/**
- * Parse WPRM nutrition via CSS classes.
- *
- * Three patterns observed in real WPRM HTML:
- *
- * Pattern A — container has nutrient suffix, value span is generic (RecipeTin Eats style):
- *   <span class="wprm-nutrition-label-text-nutrition-container-calories">
- *     <span class="wprm-nutrition-label-text-nutrition-value">362</span>
- *   </span>
- *
- * Pattern B — value span has nutrient suffix (WPRM Nutrition Label block):
- *   <span class="wprm-nutrition-label-text-nutrition-value-calories">320</span>
- *
- * Pattern C — legacy simple-text mode:
- *   <span class="wprm-nutrition-label-text-for-calories">320</span>
- *
- * Pattern D — compact per-serving strip:
- *   <span class="wprm-recipe-calories">320</span>
- */
-function parseWprmNutritionByClass(html: string): Recipe['nutrition'] {
-  // Pattern A: extract the per-nutrient container, then find the generic value span inside it.
-  const fromContainer = (nutrient: string): number => {
-    const container = extractByClass(html, `wprm-nutrition-label-text-nutrition-container-${nutrient}`);
-    if (!container) return 0;
-    const text = getFirstText(container, 'wprm-nutrition-label-text-nutrition-value');
-    const m = text.match(/[\d.]+/);
-    return m ? Math.round(parseFloat(m[0])) : 0;
-  };
-
-  // Patterns B / C / D: direct class on the value element.
-  const fromClass = (...classes: string[]): number => {
-    for (const cls of classes) {
-      const text = getFirstText(html, cls);
-      const m = text.match(/[\d.]+/);
-      if (m) return Math.round(parseFloat(m[0]));
-    }
-    return 0;
-  };
-
-  const pick = (nutrient: string, ...fallbacks: string[]): number =>
-    fromContainer(nutrient) ||
-    fromClass(
-      `wprm-nutrition-label-text-nutrition-value-${nutrient}`,
-      ...fallbacks,
-    );
-
-  return {
-    calories: pick('calories', 'wprm-nutrition-label-text-for-calories', 'wprm-recipe-calories'),
-    protein: pick('protein', 'wprm-nutrition-label-text-for-protein', 'wprm-recipe-protein'),
-    carbs: pick('carbohydrates', 'wprm-nutrition-label-text-for-carbohydrates', 'wprm-recipe-carbohydrates'),
-    fat: pick('fat', 'wprm-nutrition-label-text-for-fat', 'wprm-recipe-fat'),
-  };
-}
-
-/** Parse nutrition: JSON-LD first (most reliable), CSS classes as fallback. */
-function parseWprmNutrition(rawHtml: string, recipeHtml: string): Recipe['nutrition'] {
-  const fromJsonLd = parseJsonLdNutrition(rawHtml);
-  if (fromJsonLd) return fromJsonLd;
-
-  console.log('[RecipeScraper] No JSON-LD nutrition found — falling back to CSS class extraction');
-  return parseWprmNutritionByClass(recipeHtml);
 }
 
 // ─── Instruction Unit Conversion ──────────────────────────────
