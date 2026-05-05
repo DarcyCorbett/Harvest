@@ -1,0 +1,230 @@
+{
+  "title": "Easy Lamb Curry Recipe",
+  "sourceUrl": "https://cafedelites.com/easy-lamb-curry/",
+  "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/04/Lamb-Curry-12.jpg",
+  "prepTime": "15 min",
+  "cookTime": "1 hr",
+  "totalTime": "1 hr 15 min",
+  "originalServings": 4,
+  "description": "Learn how to make a creamy lamb curry with spices, tomato, and coconut milk. This easy one-pan recipe is rich, flavorful, and perfect for any night.",
+  "ingredients": [
+    {
+      "name": "lamb fillet",
+      "quantity": 1,
+      "unit": "kg",
+      "notes": "or neck"
+    },
+    {
+      "name": "red onions",
+      "quantity": 2,
+      "unit": "",
+      "notes": "finely chopped"
+    },
+    {
+      "name": "ghee",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "grated ginger",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "garlic",
+      "quantity": 5,
+      "unit": "clove",
+      "notes": "chopped"
+    },
+    {
+      "name": "cumin",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "madras curry powder",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "turmeric",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "smoked paprika",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground coriander",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "chilli powder",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground cardamom",
+      "quantity": 0.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "honey",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "red chilli",
+      "quantity": 1,
+      "unit": "",
+      "notes": "finely chopped"
+    },
+    {
+      "name": "salt",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "vegetable stock",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "passata",
+      "quantity": 1,
+      "unit": "cup"
+    },
+    {
+      "name": "light coconut milk",
+      "quantity": 1,
+      "unit": "cup"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "lamb fillet",
+          "quantity": 1,
+          "unit": "kg",
+          "notes": "or neck"
+        },
+        {
+          "name": "red onions",
+          "quantity": 2,
+          "unit": "",
+          "notes": "finely chopped"
+        },
+        {
+          "name": "ghee",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "grated ginger",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "garlic",
+          "quantity": 5,
+          "unit": "clove",
+          "notes": "chopped"
+        },
+        {
+          "name": "cumin",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "madras curry powder",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "turmeric",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "smoked paprika",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground coriander",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "chilli powder",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground cardamom",
+          "quantity": 0.25,
+          "unit": "tsp"
+        },
+        {
+          "name": "honey",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "red chilli",
+          "quantity": 1,
+          "unit": "",
+          "notes": "finely chopped"
+        },
+        {
+          "name": "salt",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "vegetable stock",
+          "quantity": 0.5,
+          "unit": "cup"
+        },
+        {
+          "name": "passata",
+          "quantity": 1,
+          "unit": "cup"
+        },
+        {
+          "name": "light coconut milk",
+          "quantity": 1,
+          "unit": "cup"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    "Heat the ghee in a large pan over medium heat until melted.",
+    "Add the chopped onion and salt. Stir and cook for about 2 minutes.",
+    "Continue cooking the onions until soft and slightly translucent.",
+    "Add the garlic, ginger, and spices. Stir well to combine.",
+    "Cook until the mixture darkens slightly and becomes fragrant.",
+    "Add the lamb pieces directly into the pan.",
+    "Stir to coat the lamb in the onions and spices. Cook for about 2 minutes.",
+    "Pour in the passata, coconut milk, and vegetable stock. Add the honey.",
+    "Stir until the sauce is fully combined.",
+    "Bring to a simmer, then reduce the heat to low and cook until the lamb is tender.",
+    "Let the sauce reduce and thicken as it cooks.",
+    "Finish with yogurt and fresh coriander. Serve with rice or naan."
+  ],
+  "notes": "1. Cut the lamb into similar sizes so it cooks evenly\n2. Skim off excess oil at the top if needed before serving\n3. Stir gently toward the end to keep the lamb pieces intact",
+  "nutrition": {
+    "calories": 992,
+    "protein": 44,
+    "carbs": 21,
+    "fat": 81
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-05T19:12:51.392Z"
+}
