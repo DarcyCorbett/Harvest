@@ -17,7 +17,7 @@
 
 import { getCachedRecipeByUrl, saveRecipe } from './firestoreService';
 import { fetchRawHtml, fetchRestApiLinks } from './scraper/http';
-import { applyServingScale, parseMinutes, parseRecipeFromWprm } from './scraper/parse';
+import { applyServingScale, parseMinutes, parseRecipe } from './scraper/parse';
 import { buildSearchQuery, SITE_SEARCH_URLS, prioritiseSites } from './scraper/sites';
 import {
   checkTimeConstraint,
@@ -148,7 +148,7 @@ export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult
           }
 
           const rawHtml = await fetchRawHtml(recipeUrl);
-          const recipe = parseRecipeFromWprm(rawHtml, recipeUrl);
+          const recipe = parseRecipe(rawHtml, recipeUrl);
 
           const freshFilter = evaluateRecipeForRequest(recipe, request);
           if (!freshFilter.ok) {

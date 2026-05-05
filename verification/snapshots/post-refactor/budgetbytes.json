@@ -1,0 +1,201 @@
+{
+  "title": "Smash Burger Tacos",
+  "sourceUrl": "https://www.budgetbytes.com/smash-burger-tacos/",
+  "imageUrl": "https://www.budgetbytes.com/wp-content/uploads/2025/09/Smash-Burger-Tacos_Overhead.jpg",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "totalTime": "30 min",
+  "originalServings": 6,
+  "course": [
+    "Main Course"
+  ],
+  "description": "These Smash Burger Tacos have juicy beef, melty cheese, pickles, lettuce, and Thousand Island dressing in a crispy golden tortilla. Ready in about 30 minutes!",
+  "cuisine": "American",
+  "ingredients": [
+    {
+      "name": "ground beef",
+      "quantity": 1,
+      "unit": "lb.",
+      "notes": "(*)"
+    },
+    {
+      "name": "yellow onion",
+      "quantity": 0.25,
+      "unit": "cup",
+      "notes": "(minced, (45g) )"
+    },
+    {
+      "name": "Worcestershire sauce",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "()"
+    },
+    {
+      "name": "salt",
+      "quantity": 0.5,
+      "unit": "tsp",
+      "notes": "()"
+    },
+    {
+      "name": "garlic powder",
+      "quantity": 0.25,
+      "unit": "tsp",
+      "notes": "()"
+    },
+    {
+      "name": "black pepper",
+      "quantity": 0.25,
+      "unit": "tsp",
+      "notes": "(freshly cracked, )"
+    },
+    {
+      "name": "small flour tortillas",
+      "quantity": 6,
+      "unit": "",
+      "notes": "(taco size, )"
+    },
+    {
+      "name": "cooking oil",
+      "quantity": 1,
+      "unit": "tbsp",
+      "notes": "()"
+    },
+    {
+      "name": "American cheese",
+      "quantity": 6,
+      "unit": "slice",
+      "notes": "()"
+    },
+    {
+      "name": "iceberg lettuce",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "(shredded, (40g) )"
+    },
+    {
+      "name": "pickle chips",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "(100g, )"
+    },
+    {
+      "name": "Thousand Island dressing",
+      "quantity": 0.25,
+      "unit": "cup",
+      "notes": "(**)"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "ground beef",
+          "quantity": 1,
+          "unit": "lb.",
+          "notes": "(*)"
+        },
+        {
+          "name": "yellow onion",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "(minced, (45g) )"
+        },
+        {
+          "name": "Worcestershire sauce",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "()"
+        },
+        {
+          "name": "salt",
+          "quantity": 0.5,
+          "unit": "tsp",
+          "notes": "()"
+        },
+        {
+          "name": "garlic powder",
+          "quantity": 0.25,
+          "unit": "tsp",
+          "notes": "()"
+        },
+        {
+          "name": "black pepper",
+          "quantity": 0.25,
+          "unit": "tsp",
+          "notes": "(freshly cracked, )"
+        },
+        {
+          "name": "small flour tortillas",
+          "quantity": 6,
+          "unit": "",
+          "notes": "(taco size, )"
+        },
+        {
+          "name": "cooking oil",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": "()"
+        },
+        {
+          "name": "American cheese",
+          "quantity": 6,
+          "unit": "slice",
+          "notes": "()"
+        }
+      ]
+    },
+    {
+      "name": "To Serve",
+      "ingredients": [
+        {
+          "name": "iceberg lettuce",
+          "quantity": 0.5,
+          "unit": "cup",
+          "notes": "(shredded, (40g) )"
+        },
+        {
+          "name": "pickle chips",
+          "quantity": 0.5,
+          "unit": "cup",
+          "notes": "(100g, )"
+        },
+        {
+          "name": "Thousand Island dressing",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "(**)"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Gather all your ingredients."
+    },
+    {
+      "text": "Mix ground beef, minced onion, Worcestershire, salt, garlic powder, and black pepper in a large bowl. Divide into 6 equal balls and press each ball down onto tortillas."
+    },
+    {
+      "text": "Heat oil in a medium skillet over medium heat. Place a tortilla into the skillet, meat side down, pressing down with a spatula to cook. Cook for 2-3 minutes while pressing down, and flip when browned and crispy."
+    },
+    {
+      "text": "Flip the tortilla, top with a cheese slice, and cook 2 more minutes until the cheese melts."
+    },
+    {
+      "text": "Repeat with the remaining tortillas."
+    },
+    {
+      "text": "Top your smash burger tacos with shredded lettuce, pickle chips, and Thousand Island dressing. Serve and enjoy!"
+    }
+  ],
+  "notes": "Notes*I use 80/20 ground beef, which I found to be the most flavorful for the cost. I wouldn’t use a fattier beef as it’ll seep too much fat, but leaner beef should work just fine. You can also use other ground meat like chicken, pork, or turkey. **Any burger or “special” sauce works well in place of the Thousand Island dressing! Ranch, BBQ sauce, mayonnaise, ketchup, or mustard are all good options too.",
+  "nutrition": {
+    "calories": 430,
+    "protein": 20,
+    "carbs": 19,
+    "fat": 30
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-05T19:21:42.310Z"
+}

@@ -1023,6 +1023,178 @@ function parseRecipeYield(value: unknown): { servings: number; unitText: string 
   return { servings: 4, unitText: '' };
 }
 
+/** Format a minute count back to a human-readable "X min" / "X hr Y min" string. */
+function formatMinutes(min: number): string {
+  if (!min) return 'N/A';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h && m) return `${h} hr ${m} min`;
+  return h ? `${h} hr` : `${m} min`;
+}
+
+/**
+ * Recipe notes fall back across plugin-specific HTML selectors since JSON-LD
+ * has no notes property. Tries WPRM (wprm-recipe-notes-container), then Tasty
+ * Recipes (tasty-recipes-notes-body). Returns "" if neither matches.
+ *
+ * Numbering behaviour mirrors the legacy WPRM parser: <li> items get numbered
+ * "1. ... 2. ...", multi-paragraph text gets numbered, single-paragraph text
+ * is returned as-is.
+ */
+function extractNotesFromHtml(rawHtml: string): string {
+  // WPRM notes
+  const wprm = extractByClass(rawHtml, 'wprm-recipe-notes-container');
+  if (wprm) return formatNotesContainer(wprm);
+
+  // Tasty Recipes notes (Pinch of Yum, etc.)
+  const tasty = extractByClass(rawHtml, 'tasty-recipes-notes-body');
+  if (tasty) return formatNotesContainer(tasty);
+
+  return '';
+}
+
+/** Convert a notes-container's inner HTML to a numbered string. */
+function formatNotesContainer(inner: string): string {
+  // Numbered list items take precedence
+  const liItems = extractAllByTag(inner, 'li')
+    .map((li) => htmlToText(li).trim())
+    .filter((t) => t.length > 0);
+  if (liItems.length > 0) {
+    return liItems.map((item, i) => `${i + 1}. ${item}`).join('\n');
+  }
+  // Otherwise preserve paragraph breaks via a sentinel through htmlToText
+  const marked = inner
+    .replace(/<br\s*\/?>/gi, '\x00')
+    .replace(/<\/p>/gi, '\x00');
+  const plain = htmlToText(marked)
+    .replace(/\x00/g, '\n')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const lines = plain.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length > 1) return lines.map((line, i) => `${i + 1}. ${line}`).join('\n');
+  return plain;
+}
+
+/**
+ * Map a Schema.org Recipe JSON-LD node to our Recipe type.
+ * Pulls structured fields from JSON-LD; falls back to HTML scraping for
+ * fields JSON-LD doesn't carry (notes) or where the page has richer
+ * structure (WPRM ingredient groups).
+ */
+function extractRecipeFromJsonLd(
+  node: Record<string, unknown>,
+  rawHtml: string,
+  sourceUrl: string,
+): Recipe {
+  // ── Title (required) ───────────────────────────────────────
+  const title = (typeof node['name'] === 'string' ? htmlToText(node['name']).trim() : '');
+  if (!title) throw new Error('JSON-LD Recipe missing name');
+
+  // ── Description / image ────────────────────────────────────
+  const description = (typeof node['description'] === 'string'
+    ? htmlToText(node['description']).trim()
+    : '') || undefined;
+  const imageUrl = parseRecipeImage(rawHtml) ?? undefined;
+
+  // ── Times (ISO 8601 → "X min" / "X hr Y min") ─────────────
+  const prepMin = parseIso8601Duration(node['prepTime']);
+  const cookMin = parseIso8601Duration(node['cookTime']);
+  const totalMinIso = parseIso8601Duration(node['totalTime']);
+  const totalMin = totalMinIso ?? (prepMin || cookMin ? (prepMin ?? 0) + (cookMin ?? 0) : null);
+  const prepTime = prepMin !== null ? formatMinutes(prepMin) : 'N/A';
+  const cookTime = cookMin !== null ? formatMinutes(cookMin) : 'N/A';
+  const totalTime = totalMin !== null ? formatMinutes(totalMin) : undefined;
+
+  // ── Servings ──────────────────────────────────────────────
+  const yieldParsed = parseRecipeYield(node['recipeYield']);
+  const originalServings = resolveOriginalServings(yieldParsed.servings, yieldParsed.unitText);
+
+  // ── Course / cuisine ──────────────────────────────────────
+  const courseRaw = node['recipeCategory'];
+  let course: string[] | undefined;
+  if (typeof courseRaw === 'string') {
+    course = courseRaw.split(',').map((s) => s.trim()).filter(Boolean);
+  } else if (Array.isArray(courseRaw)) {
+    course = courseRaw.filter((c): c is string => typeof c === 'string').map((s) => s.trim()).filter(Boolean);
+  }
+  if (course && course.length === 0) course = undefined;
+
+  const cuisine = (typeof node['recipeCuisine'] === 'string'
+    ? node['recipeCuisine'].trim()
+    : Array.isArray(node['recipeCuisine']) && typeof node['recipeCuisine'][0] === 'string'
+      ? (node['recipeCuisine'][0] as string).trim()
+      : '') || undefined;
+
+  // ── Ingredients: prefer WPRM groups when the page exposes them ────────
+  // JSON-LD recipeIngredient is flat (no group structure). For sites running
+  // WP Recipe Maker we still get the richer grouped structure by parsing the
+  // WPRM container directly. Other sites use the JSON-LD flat list.
+  let ingredients: Ingredient[] = [];
+  let ingredientGroups: IngredientGroup[] = [];
+
+  const wprmContainer = extractByClass(rawHtml, 'wprm-recipe-container');
+  if (wprmContainer) {
+    const wprm = parseWprmIngredients(wprmContainer);
+    if (wprm.ingredients.length > 0) {
+      ingredients = wprm.ingredients;
+      ingredientGroups = wprm.ingredientGroups;
+    }
+  }
+  if (ingredients.length === 0 && Array.isArray(node['recipeIngredient'])) {
+    ingredients = (node['recipeIngredient'] as unknown[])
+      .filter((s): s is string => typeof s === 'string')
+      .map(parseIngredientString)
+      .filter((i) => i.name && i.name !== 'unknown');
+  }
+  if (ingredients.length === 0) throw new Error('JSON-LD Recipe has no ingredients');
+
+  // ── Instructions ──────────────────────────────────────────
+  const instructions = parseJsonLdInstructions(node['recipeInstructions'])
+    .map((step) => step.isHeader ? step : { ...step, text: convertInstructionUnits(step.text) });
+  if (instructions.length === 0) throw new Error('JSON-LD Recipe has no instructions');
+
+  // ── Notes / nutrition ─────────────────────────────────────
+  const notes = extractNotesFromHtml(rawHtml);
+  const nutrition = parseJsonLdNutrition(rawHtml) ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+  console.log(
+    `[RecipeScraper] Parsed JSON-LD "${title}" — ${ingredients.length} ingredient(s), ${instructions.length} step(s)${imageUrl ? ' [img]' : ''}${ingredientGroups.length ? ` [${ingredientGroups.length} group(s)]` : ''}`
+  );
+
+  return {
+    title,
+    sourceUrl,
+    ...(imageUrl ? { imageUrl } : {}),
+    prepTime,
+    cookTime,
+    ...(totalTime ? { totalTime } : {}),
+    originalServings,
+    ...(course ? { course } : {}),
+    ...(description ? { description } : {}),
+    ...(cuisine ? { cuisine } : {}),
+    ingredients,
+    ...(ingredientGroups.length > 0 ? { ingredientGroups } : {}),
+    instructions,
+    notes,
+    nutrition,
+    tags: buildTagsFromRecipe(cuisine),
+    scrapedAt: new Date(),
+  };
+}
+
+/**
+ * New scraper entry point. Detects a Schema.org Recipe via JSON-LD; if absent
+ * (e.g. a category/collection page) throws, which the caller treats as "skip,
+ * try the next candidate URL". This replaces the WPRM-container check that
+ * was used previously.
+ */
+export function parseRecipe(rawHtml: string, sourceUrl: string): Recipe {
+  const node = findJsonLdRecipe(rawHtml);
+  if (!node) throw new Error('No JSON-LD Recipe found on page');
+  return extractRecipeFromJsonLd(node, rawHtml, sourceUrl);
+}
+
 /**
  * Parse WPRM nutrition via CSS classes.
  *
