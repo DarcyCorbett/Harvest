@@ -712,6 +712,317 @@ function parseJsonLdNutrition(html: string): Recipe['nutrition'] | null {
   return null;
 }
 
+// ─── JSON-LD Recipe Parsing (Schema.org) ────────────────────
+// JSON-LD-first parsing widens scraper coverage from "WPRM-only" to anything
+// that ships Schema.org Recipe data — Tasty Recipes, Mediavine Create, custom
+// CMSes, etc. Helpers below convert raw JSON-LD shapes to our typed model.
+
+/**
+ * Convert ISO 8601 duration ("PT1H30M", "PT45M", "PT2H") to total minutes.
+ * Returns null if the string isn't parseable.
+ */
+export function parseIso8601Duration(iso: unknown): number | null {
+  if (typeof iso !== 'string' || !iso) return null;
+  // P[nD]T[nH][nM][nS] — recipes rarely use the full form, but cover it.
+  const m = iso.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+  if (!m) return null;
+  const days = parseInt(m[1] || '0', 10);
+  const hours = parseInt(m[2] || '0', 10);
+  const minutes = parseInt(m[3] || '0', 10);
+  const seconds = parseInt(m[4] || '0', 10);
+  const total = days * 1440 + hours * 60 + minutes + Math.round(seconds / 60);
+  return total > 0 ? total : null;
+}
+
+/**
+ * Walk every <script type="application/ld+json"> block on the page and return
+ * the first object whose @type is (or includes) "Recipe". Handles three
+ * wrapper shapes: root object, root array, and { "@graph": [...] }.
+ *
+ * Some publishers ship HTML-entity-escaped JSON inside the script body
+ * (&quot; instead of "), which JSON.parse rejects. Falls back to a
+ * once-decoded retry before giving up.
+ */
+export function findJsonLdRecipe(html: string): Record<string, unknown> | null {
+  const scriptRe = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = scriptRe.exec(html)) !== null) {
+    const body = match[1];
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      try {
+        parsed = JSON.parse(
+          body
+            .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&')
+        );
+      } catch {
+        continue;
+      }
+    }
+
+    const candidates: unknown[] = [];
+    if (Array.isArray(parsed)) {
+      candidates.push(...parsed);
+    } else if (parsed && typeof parsed === 'object') {
+      const graph = (parsed as Record<string, unknown>)['@graph'];
+      if (Array.isArray(graph)) candidates.push(...graph);
+      else candidates.push(parsed);
+    }
+
+    for (const obj of candidates) {
+      if (!obj || typeof obj !== 'object') continue;
+      const o = obj as Record<string, unknown>;
+      const types = Array.isArray(o['@type']) ? o['@type'] : [o['@type']];
+      if (types.includes('Recipe')) return o;
+    }
+  }
+
+  return null;
+}
+
+/** Pull a step image URL from a HowToStep.image field. Handles string,
+ *  array of strings, ImageObject {url|contentUrl}, or array thereof. */
+function extractStepImageUrl(img: unknown): string | undefined {
+  if (typeof img === 'string') return img;
+  if (Array.isArray(img)) {
+    for (const i of img) {
+      const u = extractStepImageUrl(i);
+      if (u) return u;
+    }
+    return undefined;
+  }
+  if (img && typeof img === 'object') {
+    const o = img as Record<string, unknown>;
+    const url = o['url'] ?? o['contentUrl'];
+    if (typeof url === 'string') return url;
+  }
+  return undefined;
+}
+
+/**
+ * Convert a Schema.org recipeInstructions value to InstructionStep[].
+ *
+ * Three accepted shapes (recursively):
+ *   - string                              → split on newlines
+ *   - HowToStep[]                         → { text, imageUrl? }
+ *   - HowToSection[] (with itemListElement) → flatten with isHeader rows
+ *   - Mixed array of strings + HowToStep  → coerce each element
+ */
+export function parseJsonLdInstructions(value: unknown): InstructionStep[] {
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((text) => ({ text }));
+  }
+
+  if (!Array.isArray(value)) return [];
+
+  const steps: InstructionStep[] = [];
+  for (const item of value) {
+    if (typeof item === 'string') {
+      const t = item.trim();
+      if (t) steps.push({ text: t });
+      continue;
+    }
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as Record<string, unknown>;
+    const type = obj['@type'];
+    const isSection =
+      type === 'HowToSection' || (Array.isArray(type) && type.includes('HowToSection'));
+
+    if (isSection) {
+      const name = typeof obj['name'] === 'string' ? htmlToText(obj['name']).trim() : '';
+      if (name) steps.push({ text: name, isHeader: true });
+      const sub = obj['itemListElement'];
+      if (Array.isArray(sub)) steps.push(...parseJsonLdInstructions(sub));
+      continue;
+    }
+
+    // Default: HowToStep (also catches plain objects with a text field)
+    const rawText = typeof obj['text'] === 'string' ? obj['text'] : '';
+    const text = htmlToText(rawText).trim();
+    if (!text) continue;
+    const imageUrl = extractStepImageUrl(obj['image']);
+    steps.push(imageUrl ? { text, imageUrl } : { text });
+  }
+  return steps;
+}
+
+/** Replace unicode vulgar fraction characters with their ASCII form. */
+function normalizeUnicodeFractions(s: string): string {
+  return s
+    .replace(/¼/g, '1/4').replace(/½/g, '1/2').replace(/¾/g, '3/4')
+    .replace(/⅓/g, '1/3').replace(/⅔/g, '2/3')
+    .replace(/⅛/g, '1/8').replace(/⅜/g, '3/8').replace(/⅝/g, '5/8').replace(/⅞/g, '7/8')
+    .replace(/⅕/g, '1/5').replace(/⅖/g, '2/5').replace(/⅗/g, '3/5').replace(/⅘/g, '4/5')
+    .replace(/⅙/g, '1/6').replace(/⅚/g, '5/6');
+}
+
+const KNOWN_UNITS_TWO_WORD = new Set([
+  'fl oz', 'fluid ounce', 'fluid ounces',
+]);
+const KNOWN_UNITS_ONE_WORD = new Set([
+  'tbsp', 'tbsps', 'tablespoon', 'tablespoons',
+  'tsp', 'tsps', 'teaspoon', 'teaspoons',
+  'cup', 'cups',
+  'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
+  'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres',
+  'l', 'liter', 'liters', 'litre', 'litres',
+  'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds',
+  'clove', 'cloves', 'slice', 'slices', 'piece', 'pieces',
+  'can', 'cans', 'jar', 'jars', 'bag', 'bags', 'bunch', 'bunches',
+  'stalk', 'stalks', 'sprig', 'sprigs', 'pinch', 'pinches', 'dash', 'dashes',
+  'handful', 'handfuls', 'pint', 'pints', 'quart', 'quarts',
+  'stick', 'sticks', 'head', 'heads',
+]);
+
+/**
+ * Strip the first balanced parenthetical group from a string (handles nesting:
+ * "(finely chopped (about 1 cup))" comes out as one note, not two).
+ * Returns the parenthetical content (without the surrounding parens) and the
+ * remaining string with the group excised.
+ */
+function stripBalancedParens(s: string): { paren: string; rest: string } {
+  const start = s.indexOf('(');
+  if (start < 0) return { paren: '', rest: s };
+  let depth = 1;
+  let end = start + 1;
+  while (end < s.length && depth > 0) {
+    if (s[end] === '(') depth++;
+    else if (s[end] === ')') depth--;
+    end++;
+  }
+  if (depth !== 0) return { paren: '', rest: s };
+  return {
+    paren: s.slice(start + 1, end - 1).trim(),
+    rest: (s.slice(0, start) + s.slice(end)).replace(/\s+/g, ' ').trim(),
+  };
+}
+
+/**
+ * Parse a Schema.org recipeIngredient string into our Ingredient type.
+ *
+ *   "2 cups butternut squash (peeled and cubed)"
+ *     → { quantity: 2, unit: 'cup', name: 'butternut squash', notes: 'peeled and cubed' }
+ *   "1/2 cup olive oil – rosemary olive oil or other herb infused oil is delicious"
+ *     → { quantity: 0.5, unit: 'cup', name: 'olive oil', notes: 'rosemary olive oil ...' }
+ *   "a swish of sherry"
+ *     → { quantity: 0, unit: '', name: 'a swish of sherry' }
+ *
+ * Strategy: extract balanced parenthetical (notes), pull leading quantity
+ * (handles fractions, mixed numbers, ranges — uses lower bound of ranges
+ * matching parseQuantityString semantics), match next token(s) against the
+ * units vocabulary, treat the remainder as the name. Trailing comma-suffixed
+ * text becomes additional notes.
+ */
+export function parseIngredientString(raw: string): Ingredient {
+  let s = normalizeUnicodeFractions(htmlToText(raw)).trim();
+
+  // 1. Pull out balanced parenthetical as primary notes
+  let notes = '';
+  const paren = stripBalancedParens(s);
+  if (paren.paren) {
+    notes = paren.paren;
+    s = paren.rest;
+  }
+
+  // 2. Quantity (mixed "1 1/2", fraction "1/2", decimal "0.5", range "2-3"/"2 to 3")
+  let quantity = 0;
+  const qtyRe = /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)(?:\s*(?:[-–—]|to)\s*(?:\d+(?:\.\d+)?|\d+\/\d+))?\s*/;
+  const qtyMatch = s.match(qtyRe);
+  if (qtyMatch) {
+    quantity = parseQuantityString(qtyMatch[1]); // lower bound of any range
+    s = s.slice(qtyMatch[0].length).trim();
+  }
+
+  // 3. Unit (try two-word first to catch "fluid ounces")
+  let unit = '';
+  const tokens = s.split(/\s+/);
+  if (tokens.length >= 2) {
+    const twoWord = `${tokens[0]} ${tokens[1]}`.toLowerCase();
+    if (KNOWN_UNITS_TWO_WORD.has(twoWord)) {
+      unit = normalizeWprmUnit(twoWord);
+      s = tokens.slice(2).join(' ');
+    }
+  }
+  if (!unit && tokens.length >= 1) {
+    const oneWord = tokens[0].toLowerCase().replace(/\.$/, ''); // drop "tsp."/"lb."/etc
+    if (KNOWN_UNITS_ONE_WORD.has(oneWord)) {
+      unit = normalizeWprmUnit(oneWord);
+      s = tokens.slice(1).join(' ');
+    }
+  }
+
+  // 4. Trailing comma-prefixed text → additional notes ("butter, melted")
+  // Skip if the comma is inside something that looks like a number ("1,000").
+  const commaIdx = s.search(/,(?!\d)/);
+  if (commaIdx >= 0) {
+    const trailing = s.slice(commaIdx + 1).trim();
+    if (trailing) notes = notes ? `${notes}; ${trailing}` : trailing;
+    s = s.slice(0, commaIdx).trim();
+  }
+
+  // 5. Trailing en/em-dash clause → notes ("olive oil – rosemary infused")
+  const dashIdx = s.search(/\s[–—]\s/);
+  if (dashIdx >= 0) {
+    const trailing = s.slice(dashIdx + 2).trim();
+    if (trailing) notes = notes ? `${notes}; ${trailing}` : trailing;
+    s = s.slice(0, dashIdx).trim();
+  }
+
+  let name = s.trim() || 'unknown';
+
+  // 6. Apply oz/lb → metric conversion (matches existing WPRM behaviour)
+  if (unit === 'oz' || unit === 'lb') {
+    const converted = convertIngredientWeight(quantity, unit);
+    quantity = converted.quantity;
+    unit = converted.unit;
+  }
+
+  return {
+    name,
+    quantity,
+    unit,
+    ...(notes ? { notes } : {}),
+  };
+}
+
+/**
+ * Parse Schema.org recipeYield into a numeric serving count.
+ * Accepts: "8" | "8 servings" | 8 | ["8", "8 servings"] | "Serves 4-6"
+ * Returns the lower bound for ranges, defaults to 4 if unparseable.
+ */
+function parseRecipeYield(value: unknown): { servings: number; unitText: string } {
+  const candidates: string[] = [];
+  if (typeof value === 'number') return { servings: value, unitText: '' };
+  if (typeof value === 'string') candidates.push(value);
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      if (typeof v === 'string') candidates.push(v);
+      else if (typeof v === 'number') return { servings: v, unitText: '' };
+    }
+  }
+  // Prefer the longer string for unit detection.
+  candidates.sort((a, b) => b.length - a.length);
+  for (const c of candidates) {
+    const m = c.match(/(\d+)/);
+    if (m) {
+      const unitText = c.replace(/\d+\s*(?:[-–]\s*\d+)?/, '').trim().toLowerCase();
+      return { servings: parseInt(m[1], 10), unitText };
+    }
+  }
+  return { servings: 4, unitText: '' };
+}
+
 /**
  * Parse WPRM nutrition via CSS classes.
  *
