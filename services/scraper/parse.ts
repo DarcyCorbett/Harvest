@@ -1152,10 +1152,173 @@ function formatNotesContainer(inner: string): string {
 }
 
 /**
+ * Extract ingredient groups from a plugin's DOM.
+ *
+ * JSON-LD's recipeIngredient is always a flat array of strings — it has no way
+ * to express "For the cake / For the frosting" sub-groupings. Plugin DOM does:
+ * either via dedicated group-wrapper classes (most plugins) or via heading
+ * separators inside the section container (Tasty Recipes, Mantle).
+ *
+ * Each item's text is parsed via parseIngredientString — same parser as the
+ * JSON-LD path. Returns null when the plugin's container is missing OR when
+ * the container has no detectable group structure (caller falls back to
+ * JSON-LD flat list).
+ */
+function extractIngredientGroupsForPlugin(
+  profile: PluginProfile,
+  rawHtml: string,
+): IngredientGroup[] | null {
+  const container = extractByClass(rawHtml, profile.ingredients.containerClass);
+  if (!container) return null;
+
+  // Heading-based mode (Tasty, Mantle): walk top-level <h3-6> separators + <li> items.
+  if (profile.ingredients.headingBasedGroups) {
+    const walked = walkHeadingBasedGroups<Ingredient>(container, (text) => {
+      const ing = parseIngredientString(text);
+      return ing.name && ing.name !== 'unknown' ? ing : null;
+    });
+    const groups = ingredientGroupsFromWalker(walked);
+    return groups.length > 0 ? groups : null;
+  }
+
+  // Class-based mode: find each group wrapper, pull its name + items.
+  if (profile.ingredients.groupClass) {
+    const groupHtmls = extractAllByClass(container, profile.ingredients.groupClass);
+    if (groupHtmls.length > 0) {
+      const groups: IngredientGroup[] = [];
+      for (const groupHtml of groupHtmls) {
+        const name = profile.ingredients.groupNameClass
+          ? htmlToText(extractByClass(groupHtml, profile.ingredients.groupNameClass) ?? '').trim()
+          : '';
+        const items = extractItemsForSection(groupHtml, profile.ingredients.itemClass)
+          .map((raw) => parseIngredientString(raw))
+          .filter((i) => i.name && i.name !== 'unknown');
+        if (items.length > 0) groups.push({ name, ingredients: items });
+      }
+      if (groups.length > 0) return groups;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract the raw text of items in a section. Tries the plugin's itemClass
+ * first; falls back to all <li> children if no class is specified or matches.
+ */
+function extractItemsForSection(html: string, itemClass: string | undefined): string[] {
+  if (itemClass) {
+    const byClass = extractAllByClass(html, itemClass);
+    if (byClass.length > 0) return byClass.map((s) => htmlToText(s).trim()).filter(Boolean);
+  }
+  return extractAllByTag(html, 'li').map((li) => htmlToText(li).trim()).filter(Boolean);
+}
+
+/**
+ * Walk a container looking for interleaved <h3>/<h4>/<h5>/<h6> separators
+ * (group names) and <li> items (group members). Each heading opens a new
+ * group; each <li> attaches to the most recent group (or to a default
+ * unnamed group if no heading has been seen yet).
+ *
+ * `coerce` converts the raw <li> text into the per-item type (Ingredient or
+ * InstructionStep). Returning null skips that item.
+ */
+function walkHeadingBasedGroups<T>(
+  containerHtml: string,
+  coerce: (rawText: string) => T | null,
+): { name: string; items: T[] }[] {
+  const groups: { name: string; items: T[] }[] = [{ name: '', items: [] }];
+  // Match outermost <h3-6> and <li> blocks. Skips <strong> on purpose — too
+  // many false positives inside list-item text.
+  const re = /<(h[3-6])[^>]*>([\s\S]*?)<\/\1>|<li[^>]*>([\s\S]*?)<\/li>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(containerHtml)) !== null) {
+    if (m[1]) {
+      // Heading match
+      const name = htmlToText(m[2]).trim();
+      if (name) groups.push({ name, items: [] });
+    } else {
+      // <li> match
+      const text = htmlToText(m[3]).trim();
+      if (!text) continue;
+      const item = coerce(text);
+      if (item !== null && item !== undefined) {
+        groups[groups.length - 1].items.push(item);
+      }
+    }
+  }
+  // Drop a leading empty unnamed group if subsequent named groups have content.
+  if (groups.length > 1 && groups[0].items.length === 0) groups.shift();
+  // Repackage as IngredientGroup-shaped output (name + ingredients/items).
+  // Caller treats `items` as the appropriate per-section type.
+  return groups
+    .filter((g) => g.items.length > 0)
+    .map((g) => ({ name: g.name, items: g.items }));
+}
+
+// Helper adapter: walkHeadingBasedGroups returns { name, items } — for ingredient
+// groups we need { name, ingredients }. Re-shape at the callsite.
+function ingredientGroupsFromWalker(
+  groups: { name: string; items: Ingredient[] }[],
+): IngredientGroup[] {
+  return groups.map((g) => ({ name: g.name, ingredients: g.items }));
+}
+
+/**
+ * Extract instruction groups from a plugin's DOM. Emits a flat InstructionStep[]
+ * where group names appear as { isHeader: true } rows interleaved with their
+ * step children — same convention as Schema.org HowToSection.
+ *
+ * Returns null when the plugin's container is missing or has no detectable
+ * group structure (caller falls back to the JSON-LD parse).
+ */
+function extractInstructionGroupsForPlugin(
+  profile: PluginProfile,
+  rawHtml: string,
+): InstructionStep[] | null {
+  const container = extractByClass(rawHtml, profile.instructions.containerClass);
+  if (!container) return null;
+
+  // Heading-based mode (Tasty, Mantle).
+  if (profile.instructions.headingBasedGroups) {
+    const walked = walkHeadingBasedGroups<string>(container, (text) => text || null);
+    if (walked.length === 0) return null;
+    const out: InstructionStep[] = [];
+    for (const group of walked) {
+      if (group.name) out.push({ text: group.name, isHeader: true });
+      for (const text of group.items) {
+        if (text) out.push({ text });
+      }
+    }
+    return out.length > 0 ? out : null;
+  }
+
+  // Class-based mode: each group is a wrapper containing a name + items.
+  if (profile.instructions.groupClass) {
+    const groupHtmls = extractAllByClass(container, profile.instructions.groupClass);
+    if (groupHtmls.length > 0) {
+      const out: InstructionStep[] = [];
+      for (const groupHtml of groupHtmls) {
+        const name = profile.instructions.groupNameClass
+          ? htmlToText(extractByClass(groupHtml, profile.instructions.groupNameClass) ?? '').trim()
+          : '';
+        if (name) out.push({ text: name, isHeader: true });
+        for (const raw of extractItemsForSection(groupHtml, profile.instructions.itemClass)) {
+          if (raw) out.push({ text: raw });
+        }
+      }
+      return out.length > 0 ? out : null;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Map a Schema.org Recipe JSON-LD node to our Recipe type.
  * Pulls structured fields from JSON-LD; falls back to HTML scraping for
  * fields JSON-LD doesn't carry (notes) or where the page has richer
- * structure (WPRM ingredient groups).
+ * structure (ingredient groups, instruction-group headings on Tasty).
  */
 function extractRecipeFromJsonLd(
   node: Record<string, unknown>,
