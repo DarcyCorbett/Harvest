@@ -727,6 +727,39 @@ function extractStepImageUrl(img: unknown): string | undefined {
 }
 
 /**
+ * Pull video URLs out of a Schema.org VideoObject (or array of them). Returns
+ * { embedUrl, thumbnailUrl } where:
+ *   - embedUrl is the player URL we feed to <WebView> (preferred for inline rendering)
+ *   - thumbnailUrl is the poster image — useful when a step has a video but no
+ *     standalone `image` field (Pinch of Yum's pure-video recipes)
+ *
+ * If multiple videos are present we use the first.
+ */
+function extractStepVideo(video: unknown): { embedUrl?: string; thumbnailUrl?: string } {
+  if (!video) return {};
+  if (Array.isArray(video)) {
+    for (const v of video) {
+      const result = extractStepVideo(v);
+      if (result.embedUrl || result.thumbnailUrl) return result;
+    }
+    return {};
+  }
+  if (typeof video === 'object') {
+    const o = video as Record<string, unknown>;
+    const embed = o['embedUrl'] ?? o['url'];
+    const thumb = extractStepImageUrl(o['thumbnailUrl']);
+    // Some publishers HTML-entity-encode "&" inside JSON-LD URLs (&amp;).
+    // Decode so query params parse correctly when the URL is loaded.
+    const decode = (s: string): string => s.replace(/&amp;/g, '&').replace(/&#38;/g, '&');
+    return {
+      ...(typeof embed === 'string' ? { embedUrl: decode(embed) } : {}),
+      ...(thumb ? { thumbnailUrl: decode(thumb) } : {}),
+    };
+  }
+  return {};
+}
+
+/**
  * Convert a Schema.org recipeInstructions value to InstructionStep[].
  *
  * Three accepted shapes (recursively):
@@ -772,7 +805,14 @@ export function parseJsonLdInstructions(value: unknown): InstructionStep[] {
     const text = htmlToText(rawText).trim();
     if (!text) continue;
     const imageUrl = extractStepImageUrl(obj['image']);
-    steps.push(imageUrl ? { text, imageUrl } : { text });
+    const { embedUrl: videoEmbedUrl, thumbnailUrl: videoThumb } = extractStepVideo(obj['video']);
+    // Use video thumbnail as imageUrl when no standalone image — gives the step a
+    // poster to render under the WebView (or as fallback if WebView fails to load).
+    const finalImageUrl = imageUrl ?? videoThumb;
+    const step: InstructionStep = { text };
+    if (finalImageUrl) step.imageUrl = finalImageUrl;
+    if (videoEmbedUrl) step.videoEmbedUrl = videoEmbedUrl;
+    steps.push(step);
   }
   return steps;
 }
@@ -1260,11 +1300,15 @@ function extractRecipeFromJsonLd(
   const title = (typeof node['name'] === 'string' ? htmlToText(node['name']).trim() : '');
   if (!title) throw new Error('JSON-LD Recipe missing name');
 
-  // ── Description / image ────────────────────────────────────
+  // ── Description / image / video ────────────────────────────
   const description = (typeof node['description'] === 'string'
     ? htmlToText(node['description']).trim()
     : '') || undefined;
   const imageUrl = parseRecipeImage(rawHtml) ?? undefined;
+  // Recipe-level overview video (e.g. Cafe Delites). When present the modal
+  // uses this as the banner instead of imageUrl. Reuses the step-level
+  // VideoObject extractor since the schema is identical.
+  const { embedUrl: videoEmbedUrl } = extractStepVideo(node['video']);
 
   // ── Times (ISO 8601 → "X min" / "X hr Y min") ─────────────
   const prepMin = parseIso8601Duration(node['prepTime']);
@@ -1353,6 +1397,7 @@ function extractRecipeFromJsonLd(
     title,
     sourceUrl,
     ...(imageUrl ? { imageUrl } : {}),
+    ...(videoEmbedUrl ? { videoEmbedUrl } : {}),
     prepTime,
     cookTime,
     ...(totalTime ? { totalTime } : {}),

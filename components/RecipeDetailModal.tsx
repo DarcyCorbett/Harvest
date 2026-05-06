@@ -29,6 +29,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
@@ -301,14 +302,26 @@ export default function RecipeDetailModal({
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          {/* Hero image */}
-          {recipe.imageUrl && (
+          {/* Hero: video takes precedence over image when both exist (recipe-level
+              overview clip from Schema.org Recipe.video). Fallback to imageUrl. */}
+          {recipe.videoEmbedUrl ? (
+            <View style={styles.heroVideo}>
+              <WebView
+                source={{ uri: recipe.videoEmbedUrl }}
+                style={styles.heroVideoInner}
+                allowsFullscreenVideo
+                allowsInlineMediaPlayback
+                javaScriptEnabled
+                domStorageEnabled
+              />
+            </View>
+          ) : recipe.imageUrl ? (
             <Image
               source={{ uri: recipe.imageUrl }}
               style={styles.heroImage}
               resizeMode="cover"
             />
-          )}
+          ) : null}
 
           {/* Labels (course + cuisine + modifier) — unified section */}
           <View style={styles.courseRow}>
@@ -517,7 +530,18 @@ export default function RecipeDetailModal({
                   </View>
                   <View style={styles.stepBody}>
                     <Text style={styles.stepText}>{step.text}</Text>
-                    {step.imageUrl ? (
+                    {step.videoEmbedUrl ? (
+                      <View style={styles.stepImage}>
+                        <WebView
+                          source={{ uri: step.videoEmbedUrl }}
+                          style={styles.stepVideoInner}
+                          allowsFullscreenVideo
+                          allowsInlineMediaPlayback
+                          javaScriptEnabled
+                          domStorageEnabled
+                        />
+                      </View>
+                    ) : step.imageUrl ? (
                       <Image source={{ uri: step.imageUrl }} style={styles.stepImage} />
                     ) : null}
                   </View>
@@ -665,6 +689,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 220,
     marginHorizontal: -Spacing.xl,
     marginBottom: Spacing.lg,
+  },
+  heroVideo: {
+    height: 220,
+    marginHorizontal: -Spacing.xl,
+    marginBottom: Spacing.lg,
+    backgroundColor: '#000',
+    overflow: 'hidden',
+  },
+  heroVideoInner: {
+    flex: 1,
+    backgroundColor: '#000',
   },
 
   // Course pills
@@ -857,6 +892,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  stepVideoInner: {
+    flex: 1,
+    backgroundColor: '#000',
   },
   stepHeader: {
     fontSize: FontSizes.lg,

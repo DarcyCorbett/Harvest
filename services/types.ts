@@ -25,11 +25,13 @@ export interface Nutrition {
   fat: number;     // grams
 }
 
-/** A single instruction step. May have an inline image (from JSON-LD HowToStep.image)
+/** A single instruction step. May have an inline image (from JSON-LD HowToStep.image
+ *  or recipe-card HTML), an inline video (from JSON-LD HowToStep.video.embedUrl),
  *  or be a section header flattened from a HowToSection wrapper. */
 export interface InstructionStep {
   text: string;
   imageUrl?: string;
+  videoEmbedUrl?: string;
   isHeader?: boolean;
 }
 
@@ -39,6 +41,7 @@ export interface Recipe {
   title: string;
   sourceUrl: string;
   imageUrl?: string;        // hero image URL extracted from JSON-LD / og:image
+  videoEmbedUrl?: string;   // hero overview video (Vimeo/YouTube embed URL); replaces banner image when present
   prepTime: string;         // e.g. "15 min"
   cookTime: string;         // e.g. "30 min"
   totalTime?: string;       // e.g. "45 min" — from wprm-recipe-total_time-*

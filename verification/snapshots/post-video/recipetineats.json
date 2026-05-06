@@ -1,0 +1,262 @@
+{
+  "title": "Poulet Rôti - French Roast Chicken",
+  "sourceUrl": "https://www.recipetineats.com/poulet-roti-french-roast-chicken/",
+  "imageUrl": "https://www.recipetineats.com/tachyon/2026/04/Poulet-Roti_6.jpg",
+  "prepTime": "40 min",
+  "cookTime": "1 hr 10 min",
+  "totalTime": "1 hr 50 min",
+  "originalServings": 4,
+  "course": [
+    "Main Course",
+    "Roast"
+  ],
+  "description": "Recipe video above. You've been asking for a simple but delicious roast chicken? Say no more! You must try this French roast chicken. With a herbes de Provence butter tucked under its skin and cooked over potato chunks and whole cloves of garlic, this pot roast chicken will be the juiciest piece of meat you've had for a long time. So now it's time to treat yourself! Say \"Oui, oui!\" to juicy chicken fragrant with herbs, confit garlic and melt in your mouth potatoes! Please make sure you don't cut the potatoes too small else they will turn to mush before the chicken is cooked. Cut to the size I specify.",
+  "cuisine": "French",
+  "ingredients": [
+    {
+      "name": "/ 4lb whole chicken",
+      "quantity": 1.8,
+      "unit": "kg",
+      "notes": "Note 1"
+    },
+    {
+      "name": "herbes de Provence",
+      "quantity": 1.5,
+      "unit": "tsp",
+      "notes": "Note 2; buy or make your own"
+    },
+    {
+      "name": "thyme sprigs",
+      "quantity": 3,
+      "unit": "",
+      "notes": "optional"
+    },
+    {
+      "name": "cooking salt / kosher salt",
+      "quantity": 0.75,
+      "unit": "tsp",
+      "notes": "halve for table salt, +50% for flakes"
+    },
+    {
+      "name": "extra virgin olive oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "/ 1 stick unsalted butter",
+      "quantity": 100,
+      "unit": "g",
+      "notes": "softened"
+    },
+    {
+      "name": "garlic cloves",
+      "quantity": 2,
+      "unit": "",
+      "notes": "finely grated"
+    },
+    {
+      "name": "herbes de Provence",
+      "quantity": 3,
+      "unit": "tsp",
+      "notes": "Note 2"
+    },
+    {
+      "name": "cooking salt / kosher salt",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "halve for table salt, +50% for flakes"
+    },
+    {
+      "name": "/ 1.65lb starchy potatoes",
+      "quantity": 750,
+      "unit": "g",
+      "notes": "Aus: Sebga – the dirt brush ones, US: Russet, UK: Maris Piper – Note 3; peeled, cut into 2 cm/0.8\" cubes"
+    },
+    {
+      "name": "garlic cloves",
+      "quantity": 8,
+      "unit": "",
+      "notes": "whole, unpeeled"
+    },
+    {
+      "name": "cooking salt / kosher salt",
+      "quantity": 0.75,
+      "unit": "tsp",
+      "notes": "halve for table salt, +50% for flakes"
+    },
+    {
+      "name": "black pepper",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "extra virgin olive oil",
+      "quantity": 3,
+      "unit": "tbsp"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "/ 4lb whole chicken",
+          "quantity": 1.8,
+          "unit": "kg",
+          "notes": "Note 1"
+        },
+        {
+          "name": "herbes de Provence",
+          "quantity": 1.5,
+          "unit": "tsp",
+          "notes": "Note 2; buy or make your own"
+        },
+        {
+          "name": "thyme sprigs",
+          "quantity": 3,
+          "unit": "",
+          "notes": "optional"
+        },
+        {
+          "name": "cooking salt / kosher salt",
+          "quantity": 0.75,
+          "unit": "tsp",
+          "notes": "halve for table salt, +50% for flakes"
+        },
+        {
+          "name": "extra virgin olive oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        }
+      ]
+    },
+    {
+      "name": "Herbs Butter",
+      "ingredients": [
+        {
+          "name": "/ 1 stick unsalted butter",
+          "quantity": 100,
+          "unit": "g",
+          "notes": "softened"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 2,
+          "unit": "",
+          "notes": "finely grated"
+        },
+        {
+          "name": "herbes de Provence",
+          "quantity": 3,
+          "unit": "tsp",
+          "notes": "Note 2"
+        },
+        {
+          "name": "cooking salt / kosher salt",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "halve for table salt, +50% for flakes"
+        }
+      ]
+    },
+    {
+      "name": "Potatoes",
+      "ingredients": [
+        {
+          "name": "/ 1.65lb starchy potatoes",
+          "quantity": 750,
+          "unit": "g",
+          "notes": "Aus: Sebga – the dirt brush ones, US: Russet, UK: Maris Piper – Note 3; peeled, cut into 2 cm/0.8\" cubes"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 8,
+          "unit": "",
+          "notes": "whole, unpeeled"
+        },
+        {
+          "name": "cooking salt / kosher salt",
+          "quantity": 0.75,
+          "unit": "tsp",
+          "notes": "halve for table salt, +50% for flakes"
+        },
+        {
+          "name": "black pepper",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "extra virgin olive oil",
+          "quantity": 3,
+          "unit": "tbsp"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "ABBREVIATED RECIPE",
+      "isHeader": true
+    },
+    {
+      "text": "Spread Herb Butter under chicken skin. Rub chicken with oil, salt inside and skin. Roast on potatoes and garlic – covered 30 minutes at 210°C / 210°C (190°C fan-forced), then 40 minutes uncovered, basting 3 times, or until the internal temperature reaches 72°C. Rest upright 15 minutes."
+    },
+    {
+      "text": "FULL RECIPE",
+      "isHeader": true
+    },
+    {
+      "text": "Preheat oven to 210°C / 210°C (190°C fan-forced). Place a 28cm cast-iron pot (no lid) in the oven to heat up."
+    },
+    {
+      "text": "Bring chicken to room temp - Remove the chicken from the fridge and its packaging. Place it on a plate and let it sit on the counter while you prepare everything else. (Note 4)"
+    },
+    {
+      "text": "Make herb butter - In a small bowl, mix the softened butter with herbes de Provence, salt and finely grated garlic until well combined. Set aside."
+    },
+    {
+      "text": "Prepare Chicken and Potatoes",
+      "isHeader": true
+    },
+    {
+      "text": "Pat the chicken completely dry with paper towels, including the skin and inside the cavity."
+    },
+    {
+      "text": "Loosen the skin - From the tail end, gently slide an upside down spoon (not too large, dessert size is ideal for this) between the skin and the breast meat using slow sweeping motions to break membrane connecting them. After the breasts, use the same technique for the thighs and drumsticks. (Note 5)"
+    },
+    {
+      "text": "Add butter under the skin - Start with the breast, spoon 2/3 of the butter directly onto the meat under the skin and gently press on the outside of the skin with your hands to flatten and spread it all over evenly. Then divide the remaining butter between the two legs and spread it the same way. (Note 6)"
+    },
+    {
+      "text": "Season and finish the chicken - Season inside the cavity with 1/4 tsp salt, Herbs de Provence and thyme sprigs. Tie the drumsticks tightly together. Rub the whole chicken with olive oil and season the outside evenly with the remaining salt. Tuck the wings under and set aside on the counter."
+    },
+    {
+      "text": "Prepare potatoes - Place potatoes, whole garlic cloves, salt, pepper and olive oil in a mixing bowl. Toss well to coat, then set aside."
+    },
+    {
+      "text": "Roast Chicken",
+      "isHeader": true
+    },
+    {
+      "text": "Roast covered - Carefully remove the hot pot from the oven. Place the potatoes at the bottom, then place the chicken on top. Cover loosely with foil and roast for 30 minutes. (Note 7)"
+    },
+    {
+      "text": "Baste and continue roasting - Remove the pot from the oven and take off the foil. Baste the chicken with the juices in the pot, moving the potatoes aside if needed to access the liquid (a spoon works fine, though a baster is perfect for this). Return to the oven and roast uncovered for 40 minutes, basting twice more until the internal temperature at the thigh joint reaches 72°C / 72°C (if slightly over, don’t stress, this one is very forgiving). (Note 8)"
+    },
+    {
+      "text": "Rest (very important!) - Lift and rest the chicken on its side in the pot, legs up, breast side down. Baste once more with the juices, then rest for 15 minutes. (Note 9)"
+    },
+    {
+      "text": "Serve - Carve the chicken (See video. Don't forget the oysters, the small, very tender pieces of meat on the back near the thigh. There are only two, and they are the best bites. Easy to miss, so don’t forget them!) and serve with the potatoes, all the pan juices and a sprinkle of fresh thyme leaves. Enjoy! (Note 10)"
+    }
+  ],
+  "notes": "Recipe Notes:1. Chicken – In the recipe I use a 1.8 kg (4 lb) chicken, but if your chicken is a little bit smaller or larger, it will be delicious. If it’s larger than 2 kg (4.4 lb), make sure your pot is big enough. 2. Herbs de Provence – Key ingredients here, probably the most used herb blend in France. You can make it yourself (see below for exact quantities for this recipe, or see here to make a jar to keep) though you can sometimes find it at specialty stores. 2 tsp thyme, 1 1/2 tsp rosemary, 3/4 tsp marjoram, 1/4 tsp oregano (all dried herbs) 3. Potatoes – Starchy potatoes are the best here, like dirt brushed Sebago (US: Russet/UK: Maris Piper). They cook soft inside and absorb the butter and chicken flavours better than waxy types of potato. But, as we’re cooking them for a good 70 minutes, you could use any potato and they will still be very good. 4. This takes the chill off the chicken, so it cooks more evenly. 5. Loosening the skin – Take your time and be gentle. Fewer movements reduce the chance of tearing. Some parts can sometimes be a bit stubborn. Use your fingers if that helps. 6. Butter placement – Keep movements minimal when adding butter so it stays in place and spreads evenly. 7. Cover with foil – We cover with foil to trap some moisture and stop the chicken colouring too quickly while still allowing heat to circulate, a lid would trap too much steam, restrain roasting, and often won’t fit over the chicken anyway. 8. No thermometer – A good way to see if a chicken is ready, lift and tilt the bird and if the juice coming out of it is clear it means the chicken is cooked. 9. Resting upside down – Allows juices to settle into the breast. A proper chef trick, it makes a real difference! 10. Carving – A carving board with grooves is very handy here. It catches any juices as you carve and keeps things tidy. Note that if the chicken has rested properly, most of the juices will stay in the meat anyway . Leftovers and storage – Refrigerate leftovers in an airtight container for up to 3 days, keeping the juices to help with reheating. Warm gently (covered) in the oven or microwave. Chicken freezes well (up to 2 months), but potatoes are best eaten fresh. Nutrition per serving. The calorie count may look on the higher side, but it’s based on the whole chicken. In reality, not everything is eaten (for example, some of the skin and fat underneath), so the actual intake is lower. And if you’d like to lighten it slightly, you can reduce the olive oil in the potatoes by 1–2 tablespoons, it won’t affect the result.",
+  "nutrition": {
+    "calories": 931,
+    "protein": 45,
+    "carbs": 37,
+    "fat": 67
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-06T22:16:42.743Z"
+}
