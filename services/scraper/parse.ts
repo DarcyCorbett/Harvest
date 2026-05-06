@@ -237,6 +237,157 @@ function extractAllByTag(html: string, tagName: string): string[] {
   return results;
 }
 
+// ─── Plugin Profile Registry ─────────────────────────────────
+// Most popular WordPress recipe plugins emit consistent CSS class structures
+// for ingredient groups, instruction groups, and notes. JSON-LD covers the
+// scalar fields (title, times, nutrition) but is structurally flat — no
+// ingredient groups, no notes, no per-step images. This registry is the
+// enrichment layer: detect which plugin a page uses, pull richer structure
+// from its DOM. JSON-LD remains the detection gate (no Recipe → throw).
+
+interface SectionProfile {
+  containerClass: string;
+  /** Dedicated group wrapper class (most plugins). */
+  groupClass?: string;
+  /** Class on the group's name element, if the plugin marks it. */
+  groupNameClass?: string;
+  /** Class on individual <li> wrappers; falls back to all <li> if absent. */
+  itemClass?: string;
+  /** Tasty Recipes uses bare <h3>/<h4> separators inside the section, no group class. */
+  headingBasedGroups?: boolean;
+}
+
+interface PluginProfile {
+  /** For logging only. */
+  name: string;
+  /** Detection: presence of this class in the HTML identifies this plugin. */
+  containerClass: string;
+  /** Notes section class, if the plugin has one. */
+  notesClass?: string;
+  ingredients: SectionProfile;
+  instructions: SectionProfile;
+}
+
+const PLUGIN_PROFILES: PluginProfile[] = [
+  {
+    name: 'WPRM',
+    containerClass: 'wprm-recipe-container',
+    notesClass: 'wprm-recipe-notes-container',
+    ingredients: {
+      containerClass: 'wprm-recipe-ingredients-container',
+      groupClass: 'wprm-recipe-ingredient-group',
+      groupNameClass: 'wprm-recipe-ingredient-group-name',
+      itemClass: 'wprm-recipe-ingredient',
+    },
+    instructions: {
+      containerClass: 'wprm-recipe-instructions-container',
+      groupClass: 'wprm-recipe-instruction-group',
+      groupNameClass: 'wprm-recipe-instruction-group-name',
+      itemClass: 'wprm-recipe-instruction',
+    },
+  },
+  {
+    name: 'Tasty Recipes',
+    containerClass: 'tasty-recipes',
+    notesClass: 'tasty-recipes-notes-body',
+    ingredients: {
+      containerClass: 'tasty-recipes-ingredients',
+      headingBasedGroups: true,
+    },
+    instructions: {
+      containerClass: 'tasty-recipes-instructions',
+      headingBasedGroups: true,
+    },
+  },
+  {
+    name: 'Mediavine Create',
+    containerClass: 'mv-create-card',
+    notesClass: 'mv-create-notes',
+    ingredients: {
+      containerClass: 'mv-create-ingredients',
+      groupClass: 'mv-create-ingredients-group',
+      itemClass: 'mv-create-ingredient',
+    },
+    instructions: {
+      containerClass: 'mv-create-instructions',
+      groupClass: 'mv-create-instructions-group',
+      itemClass: 'mv-create-instruction',
+    },
+  },
+  {
+    name: 'WP Delicious',
+    containerClass: 'delicious-recipe',
+    notesClass: 'delicious-recipe-notes',
+    ingredients: {
+      containerClass: 'delicious-recipe-ingredients',
+      groupClass: 'dr-ingredient-group',
+      itemClass: 'delicious-recipe-ingredient',
+    },
+    instructions: {
+      containerClass: 'delicious-recipe-instructions',
+      groupClass: 'dr-instruction-group',
+      itemClass: 'delicious-recipe-instruction',
+    },
+  },
+  {
+    name: 'Cooked',
+    containerClass: 'cooked-recipe-card',
+    notesClass: 'cooked-recipe-notes',
+    ingredients: {
+      containerClass: 'cooked-ingredients',
+      groupClass: 'cooked-ingredient-group',
+      itemClass: 'cooked-ingredient',
+    },
+    instructions: {
+      containerClass: 'cooked-directions',
+      groupClass: 'cooked-direction-group',
+      itemClass: 'cooked-direction',
+    },
+  },
+  {
+    name: 'WPZoom Recipe Card',
+    containerClass: 'wpzoom-recipe-card',
+    notesClass: 'wpzoom-recipe-card-notes',
+    ingredients: {
+      containerClass: 'wpzoom-recipe-card-ingredients',
+      groupClass: 'wpzoom-recipe-card-ingredient-group',
+      itemClass: 'wpzoom-recipe-card-ingredient',
+    },
+    instructions: {
+      containerClass: 'wpzoom-recipe-card-directions',
+      groupClass: 'wpzoom-recipe-card-direction-group',
+      itemClass: 'wpzoom-recipe-card-direction',
+    },
+  },
+  // Mantle (Dotdash Meredith CMS family — Serious Eats, Simply Recipes, Allrecipes).
+  // UNVERIFIED selectors — Serious Eats is Cloudflare-blocked so the class names below
+  // are best-effort guesses based on the BEM-style structure used elsewhere in the family.
+  // Refine when a Mantle site is added to TRUSTED_SITES and a sample page is inspectable.
+  {
+    name: 'Mantle (UNVERIFIED)',
+    containerClass: 'recipe-card',
+    notesClass: 'recipe-card__notes',
+    ingredients: {
+      containerClass: 'recipe-card__ingredients',
+      itemClass: 'recipe-card__ingredient',
+      headingBasedGroups: true,
+    },
+    instructions: {
+      containerClass: 'recipe-card__directions',
+      itemClass: 'recipe-card__direction',
+      headingBasedGroups: true,
+    },
+  },
+];
+
+/** Detect which recipe plugin a page uses. Returns the first matching profile. */
+export function detectPlugin(rawHtml: string): PluginProfile | null {
+  for (const p of PLUGIN_PROFILES) {
+    if (extractByClass(rawHtml, p.containerClass)) return p;
+  }
+  return null;
+}
+
 // ─── WPRM Recipe Parsing ──────────────────────────────────────
 
 /** Map WPRM free-text cuisine to our recognised tag set. */
