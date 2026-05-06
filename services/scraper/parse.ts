@@ -727,6 +727,39 @@ function extractStepImageUrl(img: unknown): string | undefined {
 }
 
 /**
+ * Normalise a video URL to its embed form so any source we extract (Schema.org
+ * embedUrl, YouTube watch-link, Vimeo page-link) ends up in a form a WebView
+ * can render. Conservative: only rewrites when a recognised pattern matches,
+ * leaves everything else untouched so future providers (Wistia, Dailymotion)
+ * pass through. Strips fragment; preserves query string verbatim (Vimeo embeds
+ * need ?dnt=1&app_id=…; YouTube embeds tolerate extra params).
+ */
+function normalizeVideoEmbedUrl(url: string): string {
+  // Drop fragment
+  const hashIdx = url.indexOf('#');
+  const base = hashIdx >= 0 ? url.slice(0, hashIdx) : url;
+  // youtu.be/VIDEO → www.youtube.com/embed/VIDEO  (preserve query)
+  let m = base.match(/^https?:\/\/(?:www\.)?youtu\.be\/([\w-]+)(\?.*)?$/i);
+  if (m) return `https://www.youtube.com/embed/${m[1]}${m[2] ?? ''}`;
+  // youtube.com/watch?v=VIDEO[&...] → www.youtube.com/embed/VIDEO?<rest>
+  m = base.match(/^https?:\/\/(?:www\.)?youtube\.com\/watch\?(.+)$/i);
+  if (m) {
+    const params = new URLSearchParams(m[1]);
+    const id = params.get('v');
+    if (id) {
+      params.delete('v');
+      const rest = params.toString();
+      return `https://www.youtube.com/embed/${id}${rest ? '?' + rest : ''}`;
+    }
+  }
+  // vimeo.com/N → player.vimeo.com/video/N
+  m = base.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)(\?.*)?$/i);
+  if (m) return `https://player.vimeo.com/video/${m[1]}${m[2] ?? ''}`;
+  // Already-embed forms and unknown URLs pass through.
+  return base;
+}
+
+/**
  * Pull video URLs out of a Schema.org VideoObject (or array of them). Returns
  * { embedUrl, thumbnailUrl } where:
  *   - embedUrl is the player URL we feed to <WebView> (preferred for inline rendering)
@@ -752,11 +785,89 @@ function extractStepVideo(video: unknown): { embedUrl?: string; thumbnailUrl?: s
     // Decode so query params parse correctly when the URL is loaded.
     const decode = (s: string): string => s.replace(/&amp;/g, '&').replace(/&#38;/g, '&');
     return {
-      ...(typeof embed === 'string' ? { embedUrl: decode(embed) } : {}),
+      ...(typeof embed === 'string' ? { embedUrl: normalizeVideoEmbedUrl(decode(embed)) } : {}),
       ...(thumb ? { thumbnailUrl: decode(thumb) } : {}),
     };
   }
   return {};
+}
+
+/**
+ * Walk every JSON-LD <script> block; return the first object whose @type is
+ * (or includes) "VideoObject". Same wrapper-handling as findJsonLdRecipe
+ * (root | array | @graph) and the same entity-decode retry on JSON.parse
+ * failure.
+ */
+function findJsonLdVideoObject(html: string): Record<string, unknown> | null {
+  const scriptRe = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = scriptRe.exec(html)) !== null) {
+    const body = match[1];
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      try {
+        parsed = JSON.parse(
+          body
+            .replace(/&quot;/g, '"').replace(/&#34;/g, '"')
+            .replace(/&apos;/g, "'").replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&')
+        );
+      } catch {
+        continue;
+      }
+    }
+    const candidates: unknown[] = [];
+    if (Array.isArray(parsed)) candidates.push(...parsed);
+    else if (parsed && typeof parsed === 'object') {
+      const graph = (parsed as Record<string, unknown>)['@graph'];
+      if (Array.isArray(graph)) candidates.push(...graph);
+      else candidates.push(parsed);
+    }
+    for (const obj of candidates) {
+      if (!obj || typeof obj !== 'object') continue;
+      const o = obj as Record<string, unknown>;
+      const types = Array.isArray(o['@type']) ? o['@type'] : [o['@type']];
+      if (types.includes('VideoObject')) return o;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find a Gutenberg `<figure class="wp-block-embed ... is-type-video ...">`
+ * block and return the iframe URL inside (run through normalizeVideoEmbedUrl).
+ *
+ * Some sites (RecipeTin Eats) lazy-load the iframe via a consent-management
+ * platform: the actual src is `about:blank` and the real URL lives in
+ * `data-cmp-src`. Attribute priority: data-cmp-src → data-src → src (when
+ * not about:blank). Returns null when no usable URL is found.
+ */
+function extractEmbeddedVideoFromHtml(html: string): string | null {
+  // extractAllByClass returns the inner content of each <figure class="wp-block-embed …">.
+  // The is-type-video class is on the figure's outer tag (already gone), so we
+  // require an iframe pointing to a known video host as the actual filter.
+  const figures = extractAllByClass(html, 'wp-block-embed');
+  const VIDEO_HOST_RE = /youtu\.?be|vimeo|wistia|dailymotion/i;
+  for (const figureContent of figures) {
+    const iframeMatch = figureContent.match(/<iframe[^>]*>/i);
+    if (!iframeMatch) continue;
+    const iframeTag = iframeMatch[0];
+    // Attribute priority for the URL: lazy-load attrs first, then real src
+    for (const attr of ['data-cmp-src', 'data-src', 'src']) {
+      const re = new RegExp(`\\b${attr}=["']([^"']+)["']`, 'i');
+      const m = iframeTag.match(re);
+      if (!m) continue;
+      let url = m[1];
+      if (!url || url === 'about:blank') continue;
+      url = url.replace(/&amp;/g, '&').replace(/&#38;/g, '&');
+      if (!VIDEO_HOST_RE.test(url)) continue;
+      return normalizeVideoEmbedUrl(url);
+    }
+  }
+  return null;
 }
 
 /**
@@ -1305,10 +1416,19 @@ function extractRecipeFromJsonLd(
     ? htmlToText(node['description']).trim()
     : '') || undefined;
   const imageUrl = parseRecipeImage(rawHtml) ?? undefined;
-  // Recipe-level overview video (e.g. Cafe Delites). When present the modal
-  // uses this as the banner instead of imageUrl. Reuses the step-level
-  // VideoObject extractor since the schema is identical.
-  const { embedUrl: videoEmbedUrl } = extractStepVideo(node['video']);
+  // Recipe-level overview video — three-tier fallback chain:
+  //   1. Recipe.video on the recipe node itself (Cafe Delites)
+  //   2. Standalone VideoObject in the JSON-LD @graph (Pinch of Yum's Pad Thai)
+  //   3. Gutenberg wp-block-embed iframe in the page HTML (RecipeTin Eats)
+  // When present the modal uses this as the banner instead of imageUrl.
+  let videoEmbedUrl = extractStepVideo(node['video']).embedUrl;
+  if (!videoEmbedUrl) {
+    const vo = findJsonLdVideoObject(rawHtml);
+    if (vo) videoEmbedUrl = extractStepVideo(vo).embedUrl;
+  }
+  if (!videoEmbedUrl) {
+    videoEmbedUrl = extractEmbeddedVideoFromHtml(rawHtml) ?? undefined;
+  }
 
   // ── Times (ISO 8601 → "X min" / "X hr Y min") ─────────────
   const prepMin = parseIso8601Duration(node['prepTime']);

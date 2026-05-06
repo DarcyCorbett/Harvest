@@ -36,6 +36,9 @@ const TARGETS: Target[] = [
   { site: 'pinchofyum-pitas', url: 'https://pinchofyum.com/sheet-pan-chicken-pitas' },
   // Cafe Delites garlic parm wings — top-level Recipe.video (overview clip).
   { site: 'cafedelites-wings', url: 'https://cafedelites.com/easy-crispy-garlic-parmesan-wings/' },
+  // Vegetarian Pad Thai — exercises the @graph standalone VideoObject fallback
+  // (no Recipe.video field, but a sibling VideoObject in the JSON-LD graph).
+  { site: 'pinchofyum-padthai', url: 'https://pinchofyum.com/rainbow-vegetarian-pad-thai-with-peanuts-and-basil' },
 ];
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
