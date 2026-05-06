@@ -190,11 +190,6 @@ function extractAllByClass(html: string, className: string): string[] {
   return results;
 }
 
-/** Get the plain-text content of the first element with the given class. */
-function getFirstText(html: string, className: string): string {
-  const inner = extractByClass(html, className);
-  return inner !== null ? htmlToText(inner) : '';
-}
 
 /**
  * Return the inner HTML of every element of the given tag name.
@@ -430,107 +425,7 @@ function resolveOriginalServings(rawCount: number, unit: string): number {
   return rawCount || 4;
 }
 
-/**
- * Parse all WPRM ingredients.
- * Returns a flat list (for shopping list) and groups (for display).
- * When groups exist, the flat list is the concatenation of all group ingredients.
- */
-function parseWprmIngredients(html: string): {
-  ingredients: Ingredient[];
-  ingredientGroups: IngredientGroup[];
-} {
-  const groupHtmls = extractAllByClass(html, 'wprm-recipe-ingredient-group');
-
-  if (groupHtmls.length > 0) {
-    const ingredientGroups: IngredientGroup[] = [];
-    const allIngredients: Ingredient[] = [];
-
-    for (const groupHtml of groupHtmls) {
-      const groupName = htmlToText(
-        extractByClass(groupHtml, 'wprm-recipe-ingredient-group-name') ?? ''
-      );
-      const liHtmls = extractAllByClass(groupHtml, 'wprm-recipe-ingredient');
-      const groupIngredients = liHtmls
-        .map(parseWprmIngredient)
-        .filter((i) => i.name && i.name !== 'unknown');
-
-      if (groupIngredients.length > 0) {
-        ingredientGroups.push({ name: groupName, ingredients: groupIngredients });
-        allIngredients.push(...groupIngredients);
-      }
-    }
-
-    if (allIngredients.length > 0) {
-      return { ingredients: allIngredients, ingredientGroups };
-    }
-  }
-
-  // No groups — flat list
-  const liHtmls = extractAllByClass(html, 'wprm-recipe-ingredient');
-  const ingredients = liHtmls
-    .map(parseWprmIngredient)
-    .filter((i) => i.name && i.name !== 'unknown');
-  return { ingredients, ingredientGroups: [] };
-}
-
-/** Parse a single WPRM ingredient <li> inner HTML into an Ingredient. */
-function parseWprmIngredient(liHtml: string): Ingredient {
-  const amountRaw = getFirstText(liHtml, 'wprm-recipe-ingredient-amount');
-  const unitRaw = getFirstText(liHtml, 'wprm-recipe-ingredient-unit').trim();
-  const nameText = getFirstText(liHtml, 'wprm-recipe-ingredient-name').trim();
-  const notesRaw = getFirstText(liHtml, 'wprm-recipe-ingredient-notes').trim();
-
-  // Some WPRM sites output dual imperial/metric measurements like "14 oz / 400 g"
-  // or "14 oz (400 g)" inside the amount span. Prefer metric, fall back to raw.
-  const { amount: amountText, unit: unitFromAmount } = splitDualMeasurement(amountRaw);
-
-  let quantity = parseQuantityString(amountText);
-  let unit = normalizeWprmUnit(unitFromAmount || unitRaw);
-
-  // Convert oz/lb to metric
-  const converted = convertIngredientWeight(quantity, unit);
-  quantity = converted.quantity;
-  unit = converted.unit;
-
-  // Strip leading punctuation from notes (WPRM often includes ", minced")
-  // Also strip Budget Bytes–style price annotations e.g. "$0.15"
-  const notes = notesRaw
-    .replace(/^[,;]\s*/, '')
-    .replace(/\$[\d.]+\b/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  return {
-    name: nameText || 'unknown',
-    quantity,
-    unit,
-    ...(notes ? { notes } : {}),
-  };
-}
-
-/**
- * If the amount text carries a dual imperial/metric measurement
- * (e.g. "14 oz / 400 g", "14 oz (400 g)", "400 g / 14 oz"), return the metric
- * half plus its unit. Otherwise return the original amount with no unit override.
- * When both halves are metric or both imperial, prefer the first.
- */
-function splitDualMeasurement(raw: string): { amount: string; unit: string } {
-  const s = raw.trim();
-  if (!s) return { amount: '', unit: '' };
-
-  const metricRe = /(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l|grams?|kilograms?|millilitres?|milliliters?|litres?|liters?)\b/i;
-  const imperialRe = /(\d+(?:[.,]\d+)?)\s*(fl\s*oz|oz|lb|lbs|pounds?|ounces?)\b/i;
-
-  const metric = s.match(metricRe);
-  const imperial = s.match(imperialRe);
-
-  if (metric && imperial) {
-    return { amount: metric[1].replace(',', '.'), unit: metric[2].toLowerCase().replace(/\s+/g, ' ') };
-  }
-  return { amount: raw, unit: '' };
-}
-
-/** Parse a WPRM quantity string, handling fractions and unicode fraction chars. */
+/** Parse a quantity string, handling fractions and unicode fraction chars. */
 function parseQuantityString(s: string): number {
   if (!s.trim()) return 0;
 
