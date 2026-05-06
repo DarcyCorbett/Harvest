@@ -354,10 +354,21 @@ const PLUGIN_PROFILES: PluginProfile[] = [
       itemClass: 'wpzoom-recipe-card-direction',
     },
   },
-  // Mantle (Dotdash Meredith CMS family — Serious Eats, Simply Recipes, Allrecipes).
-  // UNVERIFIED selectors — Serious Eats is Cloudflare-blocked so the class names below
-  // are best-effort guesses based on the BEM-style structure used elsewhere in the family.
-  // Refine when a Mantle site is added to TRUSTED_SITES and a sample page is inspectable.
+  // Mantle (Dotdash Meredith CMS family — Serious Eats, Simply Recipes, Allrecipes,
+  // EatingWell, Food & Wine, Tasting Table). UNVERIFIED — every public Mantle site
+  // is behind Cloudflare bot protection (HTTP 403 on direct fetch), so the selectors
+  // below are best-effort guesses based on the BEM-style `recipe-card__*` convention
+  // commonly seen in that CMS family.
+  //
+  // Safety note: if these selectors are wrong and a non-Mantle site happens to have
+  // a `recipe-card` class (it's a common name), detectPlugin will pick this profile
+  // but every enrichment helper will quickly fall through — extractIngredientGroups
+  // returns null when its sub-classes don't match, notes/step-image helpers iterate
+  // every other plugin's class as fallback, and the orchestrator drops back to the
+  // JSON-LD flat list. The cost of a false positive is one wasted lookup, not a
+  // broken recipe.
+  //
+  // Refine when a Mantle site is added to TRUSTED_SITES and we can inspect real HTML.
   {
     name: 'Mantle (UNVERIFIED)',
     containerClass: 'recipe-card',
