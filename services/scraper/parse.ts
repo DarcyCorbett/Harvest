@@ -1040,22 +1040,37 @@ function parseRecipeYield(value: unknown): { servings: number; unitText: string 
 /**
  * Per-step images aren't always in JSON-LD HowToStep.image — many sites only
  * render them inline in the recipe card HTML. This pulls them out positionally:
- * find the recipe-card instruction list (Tasty Recipes' .tasty-recipes-instructions
- * or WPRM's .wprm-recipe-instructions-container), walk its <li> items in order,
- * and grab the first <img src> inside each. Returned as a parallel array indexed
- * by non-header step position.
+ * walk the detected plugin's instruction container's <li> items in order and
+ * grab the first <img src> inside each. Returned as a parallel array indexed
+ * by non-header step position. Falls back to scanning every known plugin's
+ * instruction-container class when the detected profile doesn't have one.
  */
-function extractStepImagesFromHtml(rawHtml: string): string[] {
-  const container =
-    extractByClass(rawHtml, 'tasty-recipes-instructions') ??
-    extractByClass(rawHtml, 'wprm-recipe-instructions-container') ??
-    null;
-  if (!container) return [];
+function extractStepImagesFromHtml(
+  rawHtml: string,
+  profile?: PluginProfile | null,
+): string[] {
+  const tried = new Set<string>();
+  const tryClass = (cls: string): string[] | null => {
+    if (tried.has(cls)) return null;
+    tried.add(cls);
+    const container = extractByClass(rawHtml, cls);
+    if (!container) return null;
+    return extractAllByTag(container, 'li').map((li) => {
+      const m = li.match(/<img[^>]+src=["']([^"']+)["']/i);
+      return m ? m[1] : '';
+    });
+  };
 
-  return extractAllByTag(container, 'li').map((li) => {
-    const m = li.match(/<img[^>]+src=["']([^"']+)["']/i);
-    return m ? m[1] : '';
-  });
+  // Detected profile first, then fall back to every other known plugin.
+  if (profile?.instructions.containerClass) {
+    const r = tryClass(profile.instructions.containerClass);
+    if (r) return r;
+  }
+  for (const p of PLUGIN_PROFILES) {
+    const r = tryClass(p.instructions.containerClass);
+    if (r) return r;
+  }
+  return [];
 }
 
 /**
@@ -1087,22 +1102,29 @@ function formatMinutes(min: number): string {
 
 /**
  * Recipe notes fall back across plugin-specific HTML selectors since JSON-LD
- * has no notes property. Tries WPRM (wprm-recipe-notes-container), then Tasty
- * Recipes (tasty-recipes-notes-body). Returns "" if neither matches.
+ * has no notes property. Tries the detected plugin's notesClass first, then
+ * iterates every other known plugin as a safety net. Returns "" if no plugin
+ * matches.
  *
- * Numbering behaviour mirrors the legacy WPRM parser: <li> items get numbered
- * "1. ... 2. ...", multi-paragraph text gets numbered, single-paragraph text
- * is returned as-is.
+ * Numbering behaviour: <li> items get numbered "1. ... 2. ...", multi-paragraph
+ * text gets numbered, single-paragraph text is returned as-is.
  */
-function extractNotesFromHtml(rawHtml: string): string {
-  // WPRM notes
-  const wprm = extractByClass(rawHtml, 'wprm-recipe-notes-container');
-  if (wprm) return formatNotesContainer(wprm);
+function extractNotesFromHtml(rawHtml: string, profile?: PluginProfile | null): string {
+  const tried = new Set<string>();
+  const tryClass = (cls: string | undefined): string | null => {
+    if (!cls || tried.has(cls)) return null;
+    tried.add(cls);
+    const inner = extractByClass(rawHtml, cls);
+    return inner ? formatNotesContainer(inner) : null;
+  };
 
-  // Tasty Recipes notes (Pinch of Yum, etc.)
-  const tasty = extractByClass(rawHtml, 'tasty-recipes-notes-body');
-  if (tasty) return formatNotesContainer(tasty);
-
+  // Detected profile first, then every other known notes selector.
+  const fromProfile = tryClass(profile?.notesClass);
+  if (fromProfile !== null) return fromProfile;
+  for (const p of PLUGIN_PROFILES) {
+    const r = tryClass(p.notesClass);
+    if (r !== null) return r;
+  }
   return '';
 }
 
