@@ -886,6 +886,45 @@ function parseRecipeYield(value: unknown): { servings: number; unitText: string 
   return { servings: 4, unitText: '' };
 }
 
+/**
+ * Per-step images aren't always in JSON-LD HowToStep.image — many sites only
+ * render them inline in the recipe card HTML. This pulls them out positionally:
+ * find the recipe-card instruction list (Tasty Recipes' .tasty-recipes-instructions
+ * or WPRM's .wprm-recipe-instructions-container), walk its <li> items in order,
+ * and grab the first <img src> inside each. Returned as a parallel array indexed
+ * by non-header step position.
+ */
+function extractStepImagesFromHtml(rawHtml: string): string[] {
+  const container =
+    extractByClass(rawHtml, 'tasty-recipes-instructions') ??
+    extractByClass(rawHtml, 'wprm-recipe-instructions-container') ??
+    null;
+  if (!container) return [];
+
+  return extractAllByTag(container, 'li').map((li) => {
+    const m = li.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return m ? m[1] : '';
+  });
+}
+
+/**
+ * Mutates `instructions` in-place: for every non-header step that lacks an
+ * imageUrl, fill it from `htmlImages[i]` where i is the step's position
+ * among non-header steps. No-op when htmlImages is empty.
+ */
+function overlayStepImages(instructions: InstructionStep[], htmlImages: string[]): void {
+  if (htmlImages.length === 0) return;
+  let stepIdx = 0;
+  for (let i = 0; i < instructions.length; i++) {
+    const step = instructions[i];
+    if (step.isHeader) continue;
+    if (!step.imageUrl && htmlImages[stepIdx]) {
+      instructions[i] = { ...step, imageUrl: htmlImages[stepIdx] };
+    }
+    stepIdx++;
+  }
+}
+
 /** Format a minute count back to a human-readable "X min" / "X hr Y min" string. */
 function formatMinutes(min: number): string {
   if (!min) return 'N/A';
@@ -1016,6 +1055,11 @@ function extractRecipeFromJsonLd(
   const instructions = parseJsonLdInstructions(node['recipeInstructions'])
     .map((step) => step.isHeader ? step : { ...step, text: convertInstructionUnits(step.text) });
   if (instructions.length === 0) throw new Error('JSON-LD Recipe has no instructions');
+
+  // Many sites (Pinch of Yum / Tasty Recipes, some WPRM recipes) only embed
+  // step photos inline in the recipe card HTML, not in JSON-LD HowToStep.image.
+  // Overlay them positionally onto any step that doesn't already have one.
+  overlayStepImages(instructions, extractStepImagesFromHtml(rawHtml));
 
   // ── Notes / nutrition ─────────────────────────────────────
   const notes = extractNotesFromHtml(rawHtml);
