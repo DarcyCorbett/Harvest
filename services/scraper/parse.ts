@@ -941,6 +941,13 @@ function stripBalancedParens(s: string): { paren: string; rest: string } {
 export function parseIngredientString(raw: string): Ingredient {
   let s = normalizeUnicodeFractions(htmlToText(raw)).trim();
 
+  // 0. Strip leading list-marker glyphs (WPRM uses U+25A2 "white square with
+  //    rounded corners" as a checkbox marker; other plugins use bullets,
+  //    arrows, etc.). Anything from Geometric Shapes (U+25A0-25FF), Misc
+  //    Symbols (U+2600-26FF), or Dingbats (U+2700-27BF) at the start gets
+  //    cleaned up — these never carry quantity meaning.
+  s = s.replace(/^[\s■-◿☀-⛿✀-➿]+/, '').trim();
+
   // 1. Pull out balanced parenthetical as primary notes
   let notes = '';
   const paren = stripBalancedParens(s);
@@ -1178,7 +1185,12 @@ function extractIngredientGroupsForPlugin(
       return ing.name && ing.name !== 'unknown' ? ing : null;
     });
     const groups = ingredientGroupsFromWalker(walked);
-    return groups.length > 0 ? groups : null;
+    // Only meaningful when there are real sub-groups. A single unnamed group
+    // means the recipe is flat — return null so the caller falls back to the
+    // JSON-LD flat list (no synthetic empty group on the resulting Recipe).
+    if (groups.length === 0) return null;
+    if (groups.length === 1 && !groups[0].name) return null;
+    return groups;
   }
 
   // Class-based mode: find each group wrapper, pull its name + items.
@@ -1223,6 +1235,13 @@ function extractItemsForSection(html: string, itemClass: string | undefined): st
  * `coerce` converts the raw <li> text into the per-item type (Ingredient or
  * InstructionStep). Returning null skips that item.
  */
+/** Headings inside a recipe section that name the section itself, not a sub-group. */
+const SECTION_LABEL_RE = /^(?:ingredients?|instructions?|directions?|method|steps?|notes?|tips?)$/i;
+
+function isSectionLabel(text: string): boolean {
+  return SECTION_LABEL_RE.test(text.trim());
+}
+
 function walkHeadingBasedGroups<T>(
   containerHtml: string,
   coerce: (rawText: string) => T | null,
@@ -1234,9 +1253,13 @@ function walkHeadingBasedGroups<T>(
   let m: RegExpExecArray | null;
   while ((m = re.exec(containerHtml)) !== null) {
     if (m[1]) {
-      // Heading match
+      // Heading match — but skip section-label headings ("Ingredients",
+      // "Instructions", etc.) that some plugins emit as the section title
+      // ABOVE the actual content. Those aren't sub-group separators.
       const name = htmlToText(m[2]).trim();
-      if (name) groups.push({ name, items: [] });
+      if (name && !isSectionLabel(name)) {
+        groups.push({ name, items: [] });
+      }
     } else {
       // <li> match
       const text = htmlToText(m[3]).trim();
@@ -1283,6 +1306,8 @@ function extractInstructionGroupsForPlugin(
   if (profile.instructions.headingBasedGroups) {
     const walked = walkHeadingBasedGroups<string>(container, (text) => text || null);
     if (walked.length === 0) return null;
+    // Only meaningful when there are real sub-groups (named separator).
+    if (walked.length === 1 && !walked[0].name) return null;
     const out: InstructionStep[] = [];
     for (const group of walked) {
       if (group.name) out.push({ text: group.name, isHeader: true });
@@ -1364,22 +1389,23 @@ function extractRecipeFromJsonLd(
       ? (node['recipeCuisine'][0] as string).trim()
       : '') || undefined;
 
-  // ── Ingredients: prefer WPRM groups when the page exposes them ────────
-  // JSON-LD recipeIngredient is flat (no group structure). For sites running
-  // WP Recipe Maker we still get the richer grouped structure by parsing the
-  // WPRM container directly. Other sites use the JSON-LD flat list.
+  // ── Plugin detection ──────────────────────────────────────
+  const profile = detectPlugin(rawHtml);
+
+  // ── Ingredients ────────────────────────────────────────────
+  // Groups come from plugin DOM (JSON-LD can't represent them); items are
+  // parsed by parseIngredientString uniformly across all plugins.
   let ingredients: Ingredient[] = [];
   let ingredientGroups: IngredientGroup[] = [];
-
-  const wprmContainer = extractByClass(rawHtml, 'wprm-recipe-container');
-  if (wprmContainer) {
-    const wprm = parseWprmIngredients(wprmContainer);
-    if (wprm.ingredients.length > 0) {
-      ingredients = wprm.ingredients;
-      ingredientGroups = wprm.ingredientGroups;
+  if (profile) {
+    const groups = extractIngredientGroupsForPlugin(profile, rawHtml);
+    if (groups && groups.length > 0) {
+      ingredientGroups = groups;
+      ingredients = groups.flatMap((g) => g.ingredients);
     }
   }
   if (ingredients.length === 0 && Array.isArray(node['recipeIngredient'])) {
+    // No plugin groups — fall back to JSON-LD flat list.
     ingredients = (node['recipeIngredient'] as unknown[])
       .filter((s): s is string => typeof s === 'string')
       .map(parseIngredientString)
@@ -1388,21 +1414,33 @@ function extractRecipeFromJsonLd(
   if (ingredients.length === 0) throw new Error('JSON-LD Recipe has no ingredients');
 
   // ── Instructions ──────────────────────────────────────────
-  const instructions = parseJsonLdInstructions(node['recipeInstructions'])
-    .map((step) => step.isHeader ? step : { ...step, text: convertInstructionUnits(step.text) });
+  // JSON-LD is the spine — handles HowToSection groups and HowToStep.image.
+  // If JSON-LD didn't emit groups but the plugin DOM has heading-based ones
+  // (Tasty, Mantle), prefer the DOM version since it preserves visible structure.
+  let instructions = parseJsonLdInstructions(node['recipeInstructions']);
+  const hasJsonLdGroups = instructions.some((s) => s.isHeader);
+  if (!hasJsonLdGroups && profile) {
+    const fromDom = extractInstructionGroupsForPlugin(profile, rawHtml);
+    if (fromDom && fromDom.some((s) => s.isHeader)) {
+      instructions = fromDom;
+    }
+  }
+  instructions = instructions.map((step) =>
+    step.isHeader ? step : { ...step, text: convertInstructionUnits(step.text) }
+  );
   if (instructions.length === 0) throw new Error('JSON-LD Recipe has no instructions');
 
-  // Many sites (Pinch of Yum / Tasty Recipes, some WPRM recipes) only embed
-  // step photos inline in the recipe card HTML, not in JSON-LD HowToStep.image.
-  // Overlay them positionally onto any step that doesn't already have one.
-  overlayStepImages(instructions, extractStepImagesFromHtml(rawHtml));
+  // Step images: JSON-LD HowToStep.image is already in instructions[i].imageUrl
+  // from parseJsonLdInstructions. Overlay only fills steps that don't have one
+  // (inline <img> in the recipe-card <li> on sites like Pinch of Yum).
+  overlayStepImages(instructions, extractStepImagesFromHtml(rawHtml, profile));
 
   // ── Notes / nutrition ─────────────────────────────────────
-  const notes = extractNotesFromHtml(rawHtml);
+  const notes = extractNotesFromHtml(rawHtml, profile);
   const nutrition = parseJsonLdNutrition(rawHtml) ?? { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
   console.log(
-    `[RecipeScraper] Parsed JSON-LD "${title}" — ${ingredients.length} ingredient(s), ${instructions.length} step(s)${imageUrl ? ' [img]' : ''}${ingredientGroups.length ? ` [${ingredientGroups.length} group(s)]` : ''}`
+    `[RecipeScraper] Parsed JSON-LD "${title}"${profile ? ` (${profile.name})` : ''} — ${ingredients.length} ingredient(s), ${instructions.length} step(s)${imageUrl ? ' [img]' : ''}${ingredientGroups.length ? ` [${ingredientGroups.length} group(s)]` : ''}`
   );
 
   return {
