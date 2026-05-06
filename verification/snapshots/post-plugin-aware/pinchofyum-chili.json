@@ -1,0 +1,128 @@
+{
+  "title": "Slow Cooker Texas Style Chili",
+  "sourceUrl": "https://pinchofyum.com/slow-cooker-texas-style-chili",
+  "imageUrl": "https://pinchofyum.com/tachyon/Slow-Cooker-Texas-Chili_HighRes-012-scaled-Square.jpg?fit=225%2C225",
+  "prepTime": "15 min",
+  "cookTime": "8 hr",
+  "totalTime": "8 hr 15 min",
+  "originalServings": 5,
+  "course": [
+    "Dinner"
+  ],
+  "description": "This shredded beef Texas chili is rich and hearty, made with 8 simple ingredients! Just saucy chunks of tender beef that shreds apart with the lightest pull of a fork!",
+  "cuisine": "American",
+  "ingredients": [
+    {
+      "name": "avocado or vegetable oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "beef chuck roast",
+      "quantity": 1.1,
+      "unit": "kg",
+      "notes": "fat trimmed, cut into 3-inch cubes"
+    },
+    {
+      "name": "salt",
+      "quantity": 2.5,
+      "unit": "tsp",
+      "notes": "1 teaspoon per pound of meat, more to taste"
+    },
+    {
+      "name": "yellow onion",
+      "quantity": 1,
+      "unit": "",
+      "notes": "finely diced"
+    },
+    {
+      "name": "garlic",
+      "quantity": 5,
+      "unit": "clove",
+      "notes": "minced"
+    },
+    {
+      "name": "brown sugar",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "cumin",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "chili powder",
+      "quantity": 0.25,
+      "unit": "cup"
+    },
+    {
+      "name": "two 4.5-ounce cans green chiles",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "one 14-ounce can crushed fire roasted tomatoes",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "Green onions",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "Sour cream",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "Cheddar cheese",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "Chips or cornbread",
+      "quantity": 0,
+      "unit": ""
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Chop, measure, get everything all set up first."
+    },
+    {
+      "text": "Heat the oil in a large Dutch oven over high heat. Toss the cut beef chunks with salt. Add the beef to the pot and let it cook, undisturbed, for a few minutes on each side until it gets nice and browned. You may need to do this batches depending on the size of your pan. Remove beef chunks and transfer to the slow cooker.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-001-scaled.jpg"
+    },
+    {
+      "text": "Add onions and garlic (and a bit more oil if needed); sauté until golden and softened. This process should lift a lot of yummy browned bits from the bottom of the pan.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-002-scaled.jpg"
+    },
+    {
+      "text": "Add the brown sugar and spices; sauté for 3-5 minutes until nice and fragrant.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-003-scaled.jpg"
+    },
+    {
+      "text": "Add green chiles and crushed tomatoes; simmer for 3-5 minutes until bubbly and delicious.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-006-scaled.jpg"
+    },
+    {
+      "text": "Pour tomato mixture into the slow cooker over the beef chunks; gently nudge them around so they are surrounded in the sauce. Cook on high for 4-ish hours or low for 8 hours.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-007-scaled.jpg"
+    },
+    {
+      "text": "Shred the beef into big tender chunks (you should be able to do this directly in the slow cooker) and season with more salt to taste. Serve with sour cream, cheddar, green onions, and cornbread.",
+      "imageUrl": "https://pinchofyum.com/content/uploads/Slow-Cooker-Texas-Chili_HighRes-008-scaled.jpg"
+    }
+  ],
+  "notes": "Chili Powder: Every chili powder tastes a little different as they all use their own unique blend of spices. I like the Simply Organic chili powder, but have enjoyed this with honestly all of the chili powders I’ve used during testing. I think as long as your chili powder smells good and tastes good to you, it’ll be spot on.",
+  "nutrition": {
+    "calories": 336,
+    "protein": 40,
+    "carbs": 16,
+    "fat": 13
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-06T21:43:43.307Z"
+}

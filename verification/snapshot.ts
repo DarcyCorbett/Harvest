@@ -29,6 +29,9 @@ const TARGETS: Target[] = [
   { site: 'cafedelites', url: 'https://cafedelites.com/easy-lamb-curry/' },
   { site: 'skinnytaste', url: 'https://www.skinnytaste.com/sheet-pan-meatballs-with-chickpeas-cauliflower-and-butternut-squash/' },
   { site: 'pinchofyum', url: 'https://pinchofyum.com/chicken-and-potatoes-with-smoky-sauce' },
+  // The Texas chili recipe the user flagged — JSON-LD has no HowToStep.image,
+  // so step images must come from the DOM <img> overlay. Tracks that overlay.
+  { site: 'pinchofyum-chili', url: 'https://pinchofyum.com/slow-cooker-texas-style-chili' },
 ];
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
