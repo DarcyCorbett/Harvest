@@ -34,6 +34,29 @@ import { WebView } from 'react-native-webview';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
 
+/**
+ * Build a WebView source for a video embed URL.
+ *
+ * YouTube embeds loaded as the WebView's top-level URI fail with "Error 153:
+ * Video player configuration error" on Android. The YouTube player JS expects
+ * to be inside an iframe child of a real document, with sane Origin/Referer
+ * headers. We satisfy that by serving the embed inside a tiny HTML wrapper
+ * loaded with baseUrl="https://www.youtube.com" — the WebView then behaves
+ * as though the wrapper page were on youtube.com itself, the iframe inside
+ * is a child context, and the player initialises cleanly.
+ *
+ * Vimeo and other providers don't have this restriction; they get loaded
+ * directly via source.uri (cheaper, simpler).
+ */
+function videoSourceForEmbed(url: string): React.ComponentProps<typeof WebView>['source'] {
+  const isYouTube = /^https?:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\//i.test(url);
+  if (!isYouTube) return { uri: url };
+  return {
+    baseUrl: 'https://www.youtube.com',
+    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><style>html,body{margin:0;padding:0;background:#000;height:100%;width:100%;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><iframe src="${url}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>`,
+  };
+}
+
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -307,12 +330,13 @@ export default function RecipeDetailModal({
           {recipe.videoEmbedUrl ? (
             <View style={styles.heroVideo}>
               <WebView
-                source={{ uri: recipe.videoEmbedUrl }}
+                source={videoSourceForEmbed(recipe.videoEmbedUrl)}
                 style={styles.heroVideoInner}
                 allowsFullscreenVideo
                 allowsInlineMediaPlayback
                 javaScriptEnabled
                 domStorageEnabled
+                originWhitelist={['*']}
               />
             </View>
           ) : recipe.imageUrl ? (
@@ -533,12 +557,13 @@ export default function RecipeDetailModal({
                     {step.videoEmbedUrl ? (
                       <View style={styles.stepImage}>
                         <WebView
-                          source={{ uri: step.videoEmbedUrl }}
+                          source={videoSourceForEmbed(step.videoEmbedUrl)}
                           style={styles.stepVideoInner}
                           allowsFullscreenVideo
                           allowsInlineMediaPlayback
                           javaScriptEnabled
                           domStorageEnabled
+                          originWhitelist={['*']}
                         />
                       </View>
                     ) : step.imageUrl ? (
