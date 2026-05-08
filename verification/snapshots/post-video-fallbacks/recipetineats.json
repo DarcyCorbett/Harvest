@@ -2,7 +2,7 @@
   "title": "Poulet Rôti - French Roast Chicken",
   "sourceUrl": "https://www.recipetineats.com/poulet-roti-french-roast-chicken/",
   "imageUrl": "https://www.recipetineats.com/tachyon/2026/04/Poulet-Roti_6.jpg",
-  "videoEmbedUrl": "https://www.youtube-nocookie.com/embed/8BJK6BtMxo0?version=3&rel=1&showsearch=0&showinfo=1&iv_load_policy=1&fs=1&hl=en-US&autohide=2&wmode=transparent",
+  "videoEmbedUrl": "https://www.youtube.com/embed/8BJK6BtMxo0",
   "prepTime": "40 min",
   "cookTime": "1 hr 10 min",
   "totalTime": "1 hr 50 min",
@@ -259,5 +259,5 @@
     "fat": 67
   },
   "tags": [],
-  "scrapedAt": "2026-05-06T22:44:06.839Z"
+  "scrapedAt": "2026-05-08T18:24:00.725Z"
 }

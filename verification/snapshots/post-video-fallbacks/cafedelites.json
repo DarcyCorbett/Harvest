@@ -2,7 +2,7 @@
   "title": "Easy Lamb Curry Recipe",
   "sourceUrl": "https://cafedelites.com/easy-lamb-curry/",
   "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/04/Lamb-Curry-12.jpg",
-  "videoEmbedUrl": "https://www.youtube.com/embed/ebfE1Vyxb2g?feature=oembed",
+  "videoEmbedUrl": "https://www.youtube.com/embed/ebfE1Vyxb2g",
   "prepTime": "15 min",
   "cookTime": "1 hr",
   "totalTime": "1 hr 15 min",
@@ -262,5 +262,5 @@
   "tags": [
     "Indian"
   ],
-  "scrapedAt": "2026-05-06T22:44:07.375Z"
+  "scrapedAt": "2026-05-08T18:24:01.742Z"
 }

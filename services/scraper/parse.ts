@@ -731,32 +731,49 @@ function extractStepImageUrl(img: unknown): string | undefined {
  * embedUrl, YouTube watch-link, Vimeo page-link) ends up in a form a WebView
  * can render. Conservative: only rewrites when a recognised pattern matches,
  * leaves everything else untouched so future providers (Wistia, Dailymotion)
- * pass through. Strips fragment; preserves query string verbatim (Vimeo embeds
- * need ?dnt=1&app_id=…; YouTube embeds tolerate extra params).
+ * pass through. Strips fragment.
+ *
+ * Provider-specific query handling:
+ * - YouTube: query stripped entirely. Many sites still ship legacy v2/Flash-era
+ *   params (version=3, showsearch=0, showinfo=1, autohide=2, wmode=transparent)
+ *   that the modern player rejects with "Error 153: Video player configuration
+ *   error". Plain /embed/VIDEO_ID with no params is the only universally-safe
+ *   form; we don't need autoplay/start-time/etc. for recipe videos.
+ * - Vimeo: query preserved verbatim (embeds need ?dnt=1&app_id=…).
+ * - Unknown providers: passed through untouched.
  */
 function normalizeVideoEmbedUrl(url: string): string {
   // Drop fragment
   const hashIdx = url.indexOf('#');
   const base = hashIdx >= 0 ? url.slice(0, hashIdx) : url;
-  // youtu.be/VIDEO → www.youtube.com/embed/VIDEO  (preserve query)
-  let m = base.match(/^https?:\/\/(?:www\.)?youtu\.be\/([\w-]+)(\?.*)?$/i);
-  if (m) return `https://www.youtube.com/embed/${m[1]}${m[2] ?? ''}`;
-  // youtube.com/watch?v=VIDEO[&...] → www.youtube.com/embed/VIDEO?<rest>
-  m = base.match(/^https?:\/\/(?:www\.)?youtube\.com\/watch\?(.+)$/i);
-  if (m) {
-    const params = new URLSearchParams(m[1]);
-    const id = params.get('v');
-    if (id) {
-      params.delete('v');
-      const rest = params.toString();
-      return `https://www.youtube.com/embed/${id}${rest ? '?' + rest : ''}`;
-    }
-  }
+
+  // Any YouTube form → canonical www.youtube.com/embed/VIDEO_ID with NO params.
+  const ytId = extractYouTubeVideoId(base);
+  if (ytId) return `https://www.youtube.com/embed/${ytId}`;
+
   // vimeo.com/N → player.vimeo.com/video/N
-  m = base.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)(\?.*)?$/i);
+  const m = base.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)(\?.*)?$/i);
   if (m) return `https://player.vimeo.com/video/${m[1]}${m[2] ?? ''}`;
-  // Already-embed forms and unknown URLs pass through.
+
+  // Already-embed forms (Vimeo player, Wistia, Dailymotion, etc.) and unknown URLs.
   return base;
+}
+
+/** Pull the 11-char YouTube video ID from any common URL form, or null. */
+function extractYouTubeVideoId(url: string): string | null {
+  // youtube.com/embed/X or youtube-nocookie.com/embed/X
+  let m = url.match(/^https?:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\/([\w-]+)/i);
+  if (m) return m[1];
+  // youtu.be/X
+  m = url.match(/^https?:\/\/(?:www\.)?youtu\.be\/([\w-]+)/i);
+  if (m) return m[1];
+  // youtube.com/watch?...&v=X&...
+  m = url.match(/^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([\w-]+)/i);
+  if (m) return m[1];
+  // youtube.com/v/X (very old embed form)
+  m = url.match(/^https?:\/\/(?:www\.)?youtube\.com\/v\/([\w-]+)/i);
+  if (m) return m[1];
+  return null;
 }
 
 /**
