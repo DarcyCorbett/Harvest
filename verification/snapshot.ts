@@ -39,6 +39,12 @@ const TARGETS: Target[] = [
   // Vegetarian Pad Thai — exercises the @graph standalone VideoObject fallback
   // (no Recipe.video field, but a sibling VideoObject in the JSON-LD graph).
   { site: 'pinchofyum-padthai', url: 'https://pinchofyum.com/rainbow-vegetarian-pad-thai-with-peanuts-and-basil' },
+  // Chinese Lemon Chicken — every HowToStep has an inline image; user reported
+  // step images not rendering on this recipe. Diagnostic snapshot.
+  { site: 'cafedelites-lemon', url: 'https://cafedelites.com/chinese-lemon-chicken/' },
+  // Baked Falafel — Recipe.video has a contentUrl direct MP4 (no embedUrl).
+  // Tests MP4 fallback support.
+  { site: 'pinchofyum-falafel', url: 'https://pinchofyum.com/simple-6-ingredient-baked-falafel' },
 ];
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';

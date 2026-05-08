@@ -30,31 +30,119 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import YoutubePlayer from 'react-native-youtube-iframe';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
+const HERO_HEIGHT = 220;
+const STEP_VIDEO_WIDTH = SCREEN_WIDTH - Spacing.xl * 2 - 28 /* badge */ - Spacing.md /* gap */;
+const STEP_VIDEO_HEIGHT = Math.round((STEP_VIDEO_WIDTH * 9) / 16);
 
 /**
- * Build a WebView source for a video embed URL.
+ * Pull the YouTube video ID out of an embed URL, or null if it isn't YouTube.
+ */
+function youtubeIdFromEmbed(url: string): string | null {
+  const m = url.match(/^https?:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\/([\w-]+)/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * VideoOrImage: renders an inline player for the URL, falling back to the
+ * image (when supplied) on unrecoverable playback errors.
  *
- * YouTube embeds loaded as the WebView's top-level URI fail with "Error 153:
- * Video player configuration error" on Android. The YouTube player JS expects
- * to be inside an iframe child of a real document, with sane Origin/Referer
- * headers. We satisfy that by serving the embed inside a tiny HTML wrapper
- * loaded with baseUrl="https://www.youtube.com" — the WebView then behaves
- * as though the wrapper page were on youtube.com itself, the iframe inside
- * is a child context, and the player initialises cleanly.
+ *  - YouTube URLs render via react-native-youtube-iframe, which exposes an
+ *    onError callback for per-video restrictions (Error 152, etc.). On error
+ *    we swap to the image. This is the case the user explicitly asked for —
+ *    keep playback in-app, fall back to the static image when truly unplayable.
+ *  - Direct video files (.mp4/.webm/.mov) render via a WebView with an HTML5
+ *    <video controls> element.
+ *  - Other iframe providers (Vimeo, Wistia) load directly via WebView source.uri.
  *
- * Vimeo and other providers don't have this restriction; they get loaded
- * directly via source.uri (cheaper, simpler).
+ * `width` is required for YoutubePlayer's aspect-ratio calc; `height` controls
+ * the rendered box. `imageStyle` is applied to the fallback Image so callers
+ * can match the same dimensions.
+ */
+function VideoOrImage({
+  videoUrl,
+  imageUrl,
+  height,
+  width,
+  imageStyle,
+}: {
+  videoUrl: string;
+  imageUrl?: string;
+  height: number;
+  width: number;
+  imageStyle: any;
+}) {
+  const [errored, setErrored] = useState(false);
+  const ytId = youtubeIdFromEmbed(videoUrl);
+
+  if (errored && imageUrl) {
+    return <Image source={{ uri: imageUrl }} style={imageStyle} resizeMode="cover" />;
+  }
+
+  if (ytId) {
+    return (
+      <YoutubePlayer
+        videoId={ytId}
+        height={height}
+        width={width}
+        play={false}
+        onError={() => setErrored(true)}
+      />
+    );
+  }
+
+  // Vimeo / MP4 / other
+  return (
+    <WebView
+      source={videoSourceForEmbed(videoUrl)}
+      style={{ flex: 1, backgroundColor: '#000' }}
+      allowsFullscreenVideo
+      allowsInlineMediaPlayback
+      javaScriptEnabled
+      domStorageEnabled
+      originWhitelist={['*']}
+    />
+  );
+}
+
+/**
+ * Build a WebView source for a video embed URL. Three branches:
+ *
+ *  - **YouTube embeds** loaded as the WebView's top-level URI fail with
+ *    "Error 153" on Android — the player JS expects an iframe-child context
+ *    with sane Origin/Referer. We wrap it in a tiny HTML page loaded with
+ *    baseUrl="https://www.youtube.com" so the WebView behaves as though
+ *    the page came from youtube.com.
+ *
+ *  - **Direct video files** (Pinch of Yum's older Pinch-of-Yum-hosted MP4s
+ *    arrive as Recipe.video.contentUrl). Wrap in a tiny HTML5 <video>
+ *    element with controls.
+ *
+ *  - **Other iframe providers** (Vimeo, Wistia, etc.) load directly via
+ *    source.uri. They don't have YouTube's restriction and Vimeo embeds
+ *    are confirmed working.
  */
 function videoSourceForEmbed(url: string): React.ComponentProps<typeof WebView>['source'] {
   const isYouTube = /^https?:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\/embed\//i.test(url);
-  if (!isYouTube) return { uri: url };
-  return {
-    baseUrl: 'https://www.youtube.com',
-    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><style>html,body{margin:0;padding:0;background:#000;height:100%;width:100%;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><iframe src="${url}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>`,
-  };
+  const isVideoFile = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+
+  if (isYouTube) {
+    return {
+      baseUrl: 'https://www.youtube.com',
+      html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><style>html,body{margin:0;padding:0;background:#000;height:100%;width:100%;overflow:hidden}iframe{border:0;width:100%;height:100%;display:block}</style></head><body><iframe src="${url}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></body></html>`,
+    };
+  }
+
+  if (isVideoFile) {
+    return {
+      html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><style>html,body{margin:0;padding:0;background:#000;height:100%;width:100%;overflow:hidden}video{width:100%;height:100%;background:#000;display:block;object-fit:contain}</style></head><body><video controls playsinline preload="metadata"><source src="${url}"></video></body></html>`,
+    };
+  }
+
+  return { uri: url };
 }
 
 type ThemeColors = ReturnType<typeof useTheme>['colors'];
@@ -329,14 +417,12 @@ export default function RecipeDetailModal({
               overview clip from Schema.org Recipe.video). Fallback to imageUrl. */}
           {recipe.videoEmbedUrl ? (
             <View style={styles.heroVideo}>
-              <WebView
-                source={videoSourceForEmbed(recipe.videoEmbedUrl)}
-                style={styles.heroVideoInner}
-                allowsFullscreenVideo
-                allowsInlineMediaPlayback
-                javaScriptEnabled
-                domStorageEnabled
-                originWhitelist={['*']}
+              <VideoOrImage
+                videoUrl={recipe.videoEmbedUrl}
+                imageUrl={recipe.imageUrl}
+                width={SCREEN_WIDTH}
+                height={HERO_HEIGHT}
+                imageStyle={styles.heroImage}
               />
             </View>
           ) : recipe.imageUrl ? (
@@ -556,14 +642,12 @@ export default function RecipeDetailModal({
                     <Text style={styles.stepText}>{step.text}</Text>
                     {step.videoEmbedUrl ? (
                       <View style={styles.stepImage}>
-                        <WebView
-                          source={videoSourceForEmbed(step.videoEmbedUrl)}
-                          style={styles.stepVideoInner}
-                          allowsFullscreenVideo
-                          allowsInlineMediaPlayback
-                          javaScriptEnabled
-                          domStorageEnabled
-                          originWhitelist={['*']}
+                        <VideoOrImage
+                          videoUrl={step.videoEmbedUrl}
+                          imageUrl={step.imageUrl}
+                          width={STEP_VIDEO_WIDTH}
+                          height={STEP_VIDEO_HEIGHT}
+                          imageStyle={styles.stepImage}
                         />
                       </View>
                     ) : step.imageUrl ? (

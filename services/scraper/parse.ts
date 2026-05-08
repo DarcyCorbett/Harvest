@@ -796,7 +796,10 @@ function extractStepVideo(video: unknown): { embedUrl?: string; thumbnailUrl?: s
   }
   if (typeof video === 'object') {
     const o = video as Record<string, unknown>;
-    const embed = o['embedUrl'] ?? o['url'];
+    // URL priority: embedUrl (iframe player) > url > contentUrl (direct video
+    // file like .mp4 — Pinch of Yum's older recipes use JWPlayer-hosted MP4s
+    // here with no embedUrl).
+    const embed = o['embedUrl'] ?? o['url'] ?? o['contentUrl'];
     const thumb = extractStepImageUrl(o['thumbnailUrl']);
     // Some publishers HTML-entity-encode "&" inside JSON-LD URLs (&amp;).
     // Decode so query params parse correctly when the URL is loaded.
