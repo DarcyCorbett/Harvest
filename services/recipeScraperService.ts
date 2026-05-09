@@ -18,7 +18,14 @@
 import { getCachedRecipeByUrl, saveRecipe } from './firestoreService';
 import { fetchRawHtml, fetchRestApiLinks } from './scraper/http';
 import { applyServingScale, parseMinutes, parseRecipe } from './scraper/parse';
-import { buildSearchQuery, SITE_SEARCH_URLS, prioritiseSites } from './scraper/sites';
+import { fetchIndexedCandidates } from './scraper/recipeIndex';
+import {
+  buildQueryTags,
+  buildSearchQuery,
+  INDEXED_SITES,
+  SITE_SEARCH_URLS,
+  prioritiseSites,
+} from './scraper/sites';
 import {
   checkTimeConstraint,
   evaluateRecipeForRequest,
@@ -81,26 +88,36 @@ export function calculateRequiredServings(adults: number, children: number): num
 }
 
 export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult> {
-  const searchQuery = buildSearchQuery({
+  const queryCtx = {
     mealType: request.mealType,
     cuisineStyles: request.cuisineStyles,
     customInstructions: request.customInstructions,
     settings: request.settings,
     forceSeed: request.forceSeed,
-  });
+  };
+  const searchQuery = buildSearchQuery(queryCtx);
+  const queryTags = buildQueryTags(queryCtx);
   console.log(`[RecipeScraper] Search query: "${searchQuery}"`);
+  console.log(`[RecipeScraper] Query tags (for indexed sites): [${queryTags.join(', ')}]`);
 
   const sites = prioritiseSites(request.cuisineStyles, request.settings);
 
   const globalFallbacks: Array<{ recipe: Recipe; recipeUrl: string }> = [];
 
   for (const site of sites.slice(0, MAX_SITES_TO_TRY)) {
-    const searchUrl = SITE_SEARCH_URLS[site]?.(searchQuery);
-    if (!searchUrl) continue;
+    const isIndexed = INDEXED_SITES.includes(site);
+    const searchUrl = isIndexed ? null : SITE_SEARCH_URLS[site]?.(searchQuery);
+    if (!isIndexed && !searchUrl) continue;
 
     try {
-      console.log(`[RecipeScraper] Searching ${site}...`);
-      const candidateUrls = await fetchRestApiLinks(searchUrl);
+      let candidateUrls: string[];
+      if (isIndexed) {
+        console.log(`[RecipeScraper] ${site} uses indexed-pool path`);
+        candidateUrls = await fetchIndexedCandidates(site, queryTags);
+      } else {
+        console.log(`[RecipeScraper] Searching ${site}...`);
+        candidateUrls = await fetchRestApiLinks(searchUrl!);
+      }
 
       console.log(
         `[RecipeScraper] ${candidateUrls.length} candidate(s) on ${site}:`,

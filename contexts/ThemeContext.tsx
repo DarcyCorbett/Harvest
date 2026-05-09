@@ -63,7 +63,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    throw new Error('useTheme must be used inside <ThemeProvider>');
+    // Fallback for expo-router eager route loading (before providers mount)
+    const scheme = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
+    return {
+      mode: 'system',
+      effectiveScheme: scheme,
+      colors: Colors[scheme],
+      setMode: () => {},
+    };
   }
   return ctx;
 }

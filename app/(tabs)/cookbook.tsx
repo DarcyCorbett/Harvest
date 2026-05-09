@@ -270,6 +270,12 @@ export default function CookbookScreen() {
           const entry = entries.find((e) => e.recipeId === previewRecipe.id);
           if (entry) handleStarToggle(entry);
         }}
+        onCourseUpdate={(id, course) =>
+          setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev)
+        }
+        onTagsUpdate={(id, tags) =>
+          setPreviewRecipe((prev) => prev?.id === id ? { ...prev, tags } : prev)
+        }
       />
     </SafeAreaView>
   );

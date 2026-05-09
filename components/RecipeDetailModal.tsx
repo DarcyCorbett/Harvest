@@ -437,7 +437,11 @@ export default function RecipeDetailModal({
           <View style={styles.courseRow}>
             {!editingLabels && (
               <View style={styles.coursePills}>
-                {[...localCourse, ...localTags].map((label, i) => (
+                {Array.from(
+                  new Map(
+                    [...localCourse, ...localTags].map((l) => [l.toLowerCase(), l]),
+                  ).values(),
+                ).map((label, i) => (
                   <View key={i} style={styles.coursePill}>
                     <Text style={styles.coursePillText}>
                       {label.replace(/\b\w/g, (ch) => ch.toUpperCase())}
@@ -484,18 +488,16 @@ export default function RecipeDetailModal({
                     key={tag}
                     style={[styles.courseTagChip, active && styles.courseTagChipActive]}
                     onPress={() => {
-                      if (isCourseTag) {
-                        setLocalCourse((prev) =>
-                          active
-                            ? prev.filter((c) => c.toLowerCase() !== tag.toLowerCase())
-                            : [...prev, tag]
-                        );
+                      if (active) {
+                        // Remove from BOTH arrays — Gemini may have written a course-named
+                        // value (e.g. "Dinner") into tags even when course holds something
+                        // else like "Main Course". Without this the pill would survive.
+                        setLocalCourse((prev) => prev.filter((c) => c.toLowerCase() !== tag.toLowerCase()));
+                        setLocalTags((prev) => prev.filter((t) => t.toLowerCase() !== tag.toLowerCase()));
+                      } else if (isCourseTag) {
+                        setLocalCourse((prev) => [...prev, tag]);
                       } else {
-                        setLocalTags((prev) =>
-                          active
-                            ? prev.filter((t) => t.toLowerCase() !== tag.toLowerCase())
-                            : [...prev, tag]
-                        );
+                        setLocalTags((prev) => [...prev, tag]);
                       }
                     }}
                   >

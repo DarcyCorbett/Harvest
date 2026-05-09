@@ -11,6 +11,7 @@
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
 import {
   addManualItem,
   clearPurchasedItems,
@@ -26,6 +27,7 @@ import type { CookbookEntry, Recipe, ShoppingCategory, ShoppingItem } from '@/se
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
@@ -115,6 +117,7 @@ export default function ShoppingScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { householdId } = useAuth();
+  const { confirm } = useBackgroundJobs();
   const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -387,6 +390,25 @@ export default function ShoppingScreen() {
         </View>
       )}
 
+      {/* ── Building shopping list overlay (background confirm in flight) ── */}
+      {confirm.status === 'running' && (
+        <View
+          pointerEvents="none"
+          style={[
+            s.confirmOverlay,
+            { backgroundColor: colors.background + 'EE' },
+          ]}
+        >
+          <View style={[s.confirmCard, { backgroundColor: colors.surface }, Shadows.lg]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[s.confirmTitle, { color: colors.text }]}>Building your shopping list…</Text>
+            <Text style={[s.confirmSubtitle, { color: colors.textSecondary }]}>
+              We're aggregating ingredients across your meal plan. You can keep using the app — we'll notify you when it's ready.
+            </Text>
+          </View>
+        </View>
+      )}
+
       <QuickAddModal
         visible={showQuickAdd}
         colors={colors}
@@ -416,6 +438,9 @@ export default function ShoppingScreen() {
         }}
         onCourseUpdate={(id, course) =>
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev)
+        }
+        onTagsUpdate={(id, tags) =>
+          setPreviewRecipe((prev) => prev?.id === id ? { ...prev, tags } : prev)
         }
       />
     </SafeAreaView>
@@ -1212,5 +1237,35 @@ const s = StyleSheet.create({
     color: '#fff',
     fontSize: FontSizes.sm,
     fontFamily: Fonts.semibold,
+  },
+  confirmOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.lg,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  confirmTitle: {
+    fontSize: FontSizes.lg,
+    fontFamily: Fonts.semibold,
+    textAlign: 'center',
+  },
+  confirmSubtitle: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.regular,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

@@ -9,15 +9,14 @@ import RecipeDetailModal from '@/components/RecipeDetailModal';
 import SettingsModal from '@/components/SettingsModal';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { addToCookbook, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
 import {
   addDays,
-  confirmMealPlan,
   findMismatchedMeals,
   formatDateDisplay,
   formatDateISO,
-  generateMealPlan,
   getNextMonday,
   regenerateMeals,
   type GenerateConfig,
@@ -25,7 +24,7 @@ import {
 } from '@/services/generatorService';
 import type { CookbookEntry, CuisineStyle, HouseholdSettings, MealType, Recipe } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -112,6 +111,14 @@ type Phase = 'configure' | 'generating' | 'results' | 'saving';
 export default function GenerateScreen() {
   const { householdId } = useAuth();
   const { colors } = useTheme();
+  const {
+    generation,
+    setGenerationMeals,
+    clearGeneration,
+    startGeneration,
+    startConfirm,
+    confirm,
+  } = useBackgroundJobs();
 
   // ── Settings state ──
   const [settings, setSettings] = useState<HouseholdSettings>({ sourceWeights: {}, ingredientWeights: {} });
@@ -140,10 +147,16 @@ export default function GenerateScreen() {
   const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
 
   // ── Flow state ──
+  // `phase` is the LOCAL view phase. It only handles regenerate (a synchronous
+  // partial regen). Initial generation and confirm both run in the background
+  // via BackgroundJobsContext — their progress is read from the context.
   const [phase, setPhase] = useState<Phase>('configure');
   const [loadingMsg, setLoadingMsg] = useState('');
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
-  const [generatedMeals, setGeneratedMeals] = useState<GeneratedMeal[]>([]);
+  // Generated meals live in the context so they survive tab switches while a
+  // background job is in flight. Local read-only mirror for convenience.
+  const generatedMeals: GeneratedMeal[] = generation.status === 'done' ? generation.meals : [];
+  const setGeneratedMeals = setGenerationMeals;
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
@@ -233,33 +246,36 @@ export default function GenerateScreen() {
   };
 
   // ── Generation ──
-  const handleGenerate = useCallback(async () => {
+  // Fires the background job and lets the user navigate away. The screen
+  // re-renders in 'generating' / 'results' mode based on context state.
+  const handleGenerate = useCallback(() => {
     if (!householdId) return;
+    if (generation.status === 'running') {
+      Alert.alert('Already generating', 'A meal plan is already being generated. You\'ll be notified when ready.');
+      return;
+    }
     const config = resolveConfig();
     if (!config) return;
 
-    setPhase('generating');
-    setLoadingMsg('Searching for the perfect recipes…');
-    setLoadingProgress({ current: 0, total: config.numberOfDays * config.mealTypes.length });
-
-    try {
-      const meals = await generateMealPlan(config, householdId, (msg, current, total) => {
-        setLoadingMsg(msg);
-        setLoadingProgress({ current, total });
-      });
-      setGeneratedMeals(meals);
-      setCheckedIndices(new Set(meals.map((_, i) => i)));
-      setGenerateSnapshot({ cuisines, selectedMaterials: new Set(selectedMaterials) });
-      setResultsScreenDirty(false);
-      setPhase('results');
-    } catch (err) {
-      setPhase('configure');
-      Alert.alert(
-        'Generation failed',
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-      );
+    setGenerateSnapshot({ cuisines, selectedMaterials: new Set(selectedMaterials) });
+    setResultsScreenDirty(false);
+    const ok = startGeneration(config, householdId);
+    if (ok) {
+      Alert.alert('Generating your meal plan', "You'll be notified when it's ready. Feel free to keep using the app.");
     }
-  }, [householdId, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials]);
+  }, [householdId, generation.status, startGeneration, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials]);
+
+  // Seed checkedIndices when a generation transitions from running → done.
+  const prevGenStatus = useRef(generation.status);
+  useEffect(() => {
+    if (prevGenStatus.current !== 'done' && generation.status === 'done') {
+      setCheckedIndices(new Set(generation.meals.map((_, i) => i)));
+    }
+    if (generation.status === 'idle') {
+      setCheckedIndices(new Set());
+    }
+    prevGenStatus.current = generation.status;
+  }, [generation]);
 
   // ── Regenerate selected ──
   const handleRegenerate = useCallback(async () => {
@@ -359,24 +375,27 @@ export default function GenerateScreen() {
   }, [householdId, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot]);
 
   // ── Add to calendar ──
+  // Fires the confirm in the background. Calendar entries land quickly; the
+  // shopping-list aggregation may take a few seconds. User gets a toast when
+  // it's all done. Local state is reset immediately so they can keep working.
   const performConfirm = useCallback(
-    async (mode: 'add' | 'replace') => {
+    (mode: 'add' | 'replace') => {
       if (!householdId) return;
-      setLoadingMsg('Adding to calendar…');
-      setLoadingProgress({ current: 0, total: 0 });
-      setPhase('saving');
-      try {
-        await confirmMealPlan(generatedMeals, householdId, mode, { adults, children });
-        setPhase('configure');
-        setGeneratedMeals([]);
-        setCheckedIndices(new Set());
-        Alert.alert('Done!', 'Your meal plan has been added to the calendar and shopping list.');
-      } catch (err) {
-        setPhase('results');
-        Alert.alert('Save failed', err instanceof Error ? err.message : 'Please try again.');
+      if (confirm.status === 'running') {
+        Alert.alert('Already saving', 'A meal plan is already being saved. You\'ll be notified when ready.');
+        return;
       }
+      const ok = startConfirm({ meals: generatedMeals, householdId, mode, adults, children });
+      if (!ok) return;
+      clearGeneration();
+      setCheckedIndices(new Set());
+      setPhase('configure');
+      Alert.alert(
+        'Adding to calendar',
+        "Your shopping list is being built in the background. You'll be notified when it's ready.",
+      );
     },
-    [householdId, generatedMeals]
+    [householdId, generatedMeals, adults, children, confirm.status, startConfirm, clearGeneration],
   );
 
   const handleAddToCalendar = useCallback(async () => {
@@ -404,11 +423,26 @@ export default function GenerateScreen() {
 
   // ─── Render ───────────────────────────────────────────────
 
+  // Background generation in progress — show loading even if the user navigated
+  // away and came back.
+  if (generation.status === 'running') {
+    return (
+      <LoadingScreen
+        colors={colors}
+        message={generation.progress.msg}
+        progress={generation.progress}
+        footer="You can leave this screen — we'll notify you when it's ready."
+      />
+    );
+  }
+
+  // Local synchronous flow (regenerate).
   if (phase === 'generating' || phase === 'saving') {
     return <LoadingScreen colors={colors} message={loadingMsg} progress={loadingProgress} />;
   }
 
-  if (phase === 'results') {
+  // A finished background generation is ready for review.
+  if (generation.status === 'done' || phase === 'results') {
     return (
       <>
         <ResultsScreen
@@ -437,7 +471,7 @@ export default function GenerateScreen() {
           onRegenerate={handleRegenerate}
           onRegenerateMismatched={handleRegenerateMismatched}
           onAddToCalendar={handleAddToCalendar}
-          onBack={() => setPhase('configure')}
+          onBack={() => { clearGeneration(); setPhase('configure'); }}
           effort={effort}
           onEffortChange={onResultsEffortChange}
           modifiers={modifiers}
@@ -735,10 +769,12 @@ function LoadingScreen({
   colors,
   message,
   progress,
+  footer,
 }: {
   colors: (typeof Colors)['light'];
   message: string;
   progress: { current: number; total: number };
+  footer?: string;
 }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
@@ -749,6 +785,11 @@ function LoadingScreen({
           {progress.total > 0 && (
             <Text style={[styles.loadingProgress, { color: colors.textSecondary }]}>
               Recipe {progress.current} of {progress.total}
+            </Text>
+          )}
+          {footer && (
+            <Text style={[styles.loadingProgress, { color: colors.textTertiary, marginTop: Spacing.md, textAlign: 'center' }]}>
+              {footer}
             </Text>
           )}
         </View>

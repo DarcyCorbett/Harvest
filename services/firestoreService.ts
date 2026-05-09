@@ -243,6 +243,12 @@ export async function deleteRecipe(recipeId: string): Promise<void> {
  * Use to force a full re-scrape after a parsing code update.
  * Batches deletes in groups of 400 to stay within Firestore write limits.
  * Returns the number of documents deleted.
+ *
+ * IMPORTANT: This must NEVER touch /recipeIndex/. The discovery index
+ * (built by scripts/buildRecipeIndex.ts and lazily tagged at generation
+ * time by services/scraper/recipeIndex.ts) is permanent infrastructure
+ * — wiping it would force a fresh sitemap walk + a re-tag of every
+ * indexed recipe. Only the user-visible recipe cache is cleared here.
  */
 export async function clearAllCachedRecipes(): Promise<number> {
   const snapshot = await getDocs(collection(db, 'recipes'));

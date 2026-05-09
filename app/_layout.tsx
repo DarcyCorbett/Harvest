@@ -5,7 +5,9 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { BackgroundJobsProvider } from '@/contexts/BackgroundJobsContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import JobToast from '@/components/JobToast';
 
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -49,6 +51,7 @@ function RootNavigator() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
       </Stack>
+      <JobToast />
       <StatusBar style="auto" />
     </>
   );
@@ -75,7 +78,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootNavigator />
+        <BackgroundJobsProvider>
+          <RootNavigator />
+        </BackgroundJobsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

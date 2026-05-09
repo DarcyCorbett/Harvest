@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
+// @ts-ignore - TS doesn't see this export due to web-focused type definitions, but it exists at runtime via Metro
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';

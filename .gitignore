@@ -46,6 +46,12 @@ yarn-error.*
 # Google Play service account key (for `eas submit`)
 pc-api-google-play.json
 
+# Firebase Admin SDK service account key (for scripts/buildRecipeIndex.ts)
+service-account.json
+
+# Daily recipe-index scrape logs (see scripts/SETUP-CRON.md)
+scripts/logs/
+
 # typescript
 *.tsbuildinfo
 

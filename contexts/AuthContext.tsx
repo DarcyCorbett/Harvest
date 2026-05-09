@@ -14,7 +14,7 @@ import {
   isEmailAllowed,
 } from '@/services/firestoreService';
 import type { Household } from '@/services/types';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -26,9 +26,7 @@ import {
 } from 'firebase/auth';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-});
+
 
 // ─── Context Type ──────────────────────────────────────────
 
@@ -187,6 +185,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const signInWithGoogle = useCallback(async () => {
+    // Lazy-load native module — avoids crash in Expo Go where RNGoogleSignin isn't available
+    const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+    GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID });
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();
     if (response.type !== 'success') {

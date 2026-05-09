@@ -19,7 +19,22 @@ export const TRUSTED_SITES = [
   'cafedelites.com',
   'www.skinnytaste.com',
   'pinchofyum.com',
+  'natashaskitchen.com',
+  'www.seriouseats.com',
+  'akispetretzikis.com',
+  'cooking.nytimes.com',
+  'www.americastestkitchen.com',
 ] as const;
+
+// Sites whose URL discovery goes through the offline-built /recipeIndex Firestore
+// pool with lazy Gemini tagging at generation time, instead of the WP REST API.
+// recipeScraperService.scrapeRecipe dispatches to fetchIndexedCandidates for these.
+export const INDEXED_SITES: readonly string[] = [
+  'www.seriouseats.com',
+  'akispetretzikis.com',
+  'cooking.nytimes.com',
+  'www.americastestkitchen.com',
+];
 
 export const SITE_SEARCH_URLS: Record<string, (q: string) => string> = {
   'www.recipetineats.com': (q) =>
@@ -38,6 +53,8 @@ export const SITE_SEARCH_URLS: Record<string, (q: string) => string> = {
     `https://www.skinnytaste.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
   'pinchofyum.com': (q) =>
     `https://pinchofyum.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
+  'natashaskitchen.com': (q) =>
+    `https://natashaskitchen.com/wp-json/wp/v2/posts?search=${encodeURIComponent(q)}&per_page=25&_fields=link`,
 };
 
 // ─── Cuisine Keywords ────────────────────────────────────────
@@ -179,6 +196,32 @@ export function buildSearchQuery(ctx: SearchQueryContext): string {
   }
 
   return parts.join(' ');
+}
+
+/**
+ * Tag form of a search query for the indexed-pool Firestore lookup. Returns
+ * canonical tag strings matching the taxonomy used by `tagRecipesWithGemini`
+ * in services/gemini.ts:
+ *   - Course (Title case):   "Breakfast" | "Lunch" | "Dinner" | "Side" | "Snack" | "Salad"
+ *   - Cuisine:               "Asian" | "Mexican" | "Mediterranean" | "Italian" | "Indian"
+ *   - Modifiers:             "Healthy" | "Vegetarian" | "Kid Friendly"
+ *
+ * `forceSeed` (an ingredient like "chicken") is intentionally NOT a tag —
+ * ingredients aren't in the Gemini taxonomy. Seed-based filtering happens
+ * client-side against the `ingredients` field of the index doc, in
+ * fetchIndexedCandidates after the array-contains-any pull.
+ */
+export function buildQueryTags(ctx: SearchQueryContext): string[] {
+  const tags: string[] = [];
+  // 'Quick & Easy', 'Moderate', and 'Custom' aren't in the Gemini taxonomy.
+  // 'Salad', 'Vegetarian', 'Healthy', 'Kid Friendly', and the cuisines are.
+  const skip = new Set<CuisineStyle>(['Quick & Easy', 'Moderate', 'Custom']);
+  for (const style of ctx.cuisineStyles) {
+    if (!skip.has(style)) tags.push(style);
+  }
+  // mealType is lowercase ('dinner'); tag form is title-case ('Dinner').
+  tags.push(ctx.mealType.charAt(0).toUpperCase() + ctx.mealType.slice(1));
+  return tags;
 }
 
 function getDishPool(cuisineStyles: CuisineStyle[], mealType: MealType): readonly string[] {
