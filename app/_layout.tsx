@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BackgroundJobsProvider } from '@/contexts/BackgroundJobsContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import JobToast from '@/components/JobToast';
+import { useNotifications } from '@/hooks/useNotifications';
 
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -25,6 +26,7 @@ function RootNavigator() {
   const segments = useSegments();
   const router = useRouter();
   const { colors } = useTheme();
+  useNotifications();
 
   useEffect(() => {
     if (loading) return;

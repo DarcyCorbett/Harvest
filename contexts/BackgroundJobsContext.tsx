@@ -16,7 +16,15 @@ import {
   type GenerateConfig,
   type GeneratedMeal,
 } from '@/services/generatorService';
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  clearGenerationResult,
+  loadGenerationResult,
+  saveGenerationResult,
+} from '@/services/firestoreService';
+import { useAuth } from '@/contexts/AuthContext';
+import * as Notifications from 'expo-notifications';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 type GenerationProgress = { msg: string; current: number; total: number };
 
@@ -72,6 +80,7 @@ export function useBackgroundJobs(): BackgroundJobsContextValue {
 }
 
 export function BackgroundJobsProvider({ children }: { children: React.ReactNode }) {
+  const { householdId } = useAuth();
   const [generation, setGeneration] = useState<GenerationJob>({ status: 'idle' });
   const [confirm, setConfirm] = useState<ConfirmJob>({ status: 'idle' });
 
@@ -79,6 +88,23 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
   // overwriting a newer job (e.g. user starts gen 1, dismisses, starts gen 2).
   const generationEpoch = useRef(0);
   const confirmEpoch = useRef(0);
+
+  // ── Rehydrate persisted generation result on startup ──
+  const hasRehydrated = useRef(false);
+  useEffect(() => {
+    if (!householdId || hasRehydrated.current) return;
+    hasRehydrated.current = true;
+    loadGenerationResult(householdId)
+      .then((result) => {
+        if (!result) return;
+        setGeneration((prev) =>
+          prev.status !== 'idle'
+            ? prev
+            : { status: 'done', meals: result.meals, config: result.config, acknowledged: false },
+        );
+      })
+      .catch(console.warn);
+  }, [householdId]);
 
   const startGeneration = useCallback(
     (config: GenerateConfig, householdId: string): boolean => {
@@ -99,6 +125,17 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
         .then((meals) => {
           if (generationEpoch.current !== epoch) return;
           setGeneration({ status: 'done', meals, config, acknowledged: false });
+          if (householdId) saveGenerationResult(householdId, meals, config).catch(console.warn);
+          if (AppState.currentState !== 'active') {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Recipes ready',
+                body: `Your ${meals.length}-meal plan is ready to review`,
+                data: { navigateTo: 'generate' },
+              },
+              trigger: null,
+            }).catch(console.warn);
+          }
         })
         .catch((err: unknown) => {
           if (generationEpoch.current !== epoch) return;
@@ -125,7 +162,8 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
   const clearGeneration = useCallback(() => {
     generationEpoch.current++;
     setGeneration({ status: 'idle' });
-  }, []);
+    if (householdId) clearGenerationResult(householdId).catch(console.warn);
+  }, [householdId]);
 
   const acknowledgeGeneration = useCallback(() => {
     setGeneration((prev) =>
@@ -146,6 +184,16 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
         .then(() => {
           if (confirmEpoch.current !== epoch) return;
           setConfirm({ status: 'done', acknowledged: false });
+          if (AppState.currentState !== 'active') {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Shopping list ready',
+                body: 'Your ingredients have been added to the shopping list',
+                data: { navigateTo: 'shopping' },
+              },
+              trigger: null,
+            }).catch(console.warn);
+          }
         })
         .catch((err: unknown) => {
           if (confirmEpoch.current !== epoch) return;

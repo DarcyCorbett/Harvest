@@ -42,6 +42,8 @@ import {
 } from './shoppingList';
 import type {
   CuisineStyle,
+  GenerateConfig,
+  GeneratedMeal,
   HouseholdSettings,
   MealType,
   Recipe,
@@ -49,28 +51,9 @@ import type {
 } from './types';
 
 // ─── Public Types ─────────────────────────────────────────────
-
-export interface GeneratedMeal {
-  recipe: Recipe;
-  recipeId: string;
-  /** ISO date string: "2025-07-14" */
-  date: string;
-  mealType: MealType;
-  isFromFavourites: boolean;
-  servings: number;
-}
-
-export interface GenerateConfig {
-  /** First day of the plan (should be the next Monday). */
-  startDate: Date;
-  numberOfDays: number;
-  adults: number;
-  children: number;
-  mealTypes: MealType[];
-  cuisineStyles: CuisineStyle[];
-  customInstructions?: string;
-  settings?: HouseholdSettings;
-}
+// GeneratedMeal and GenerateConfig are defined in ./types to avoid a circular
+// dependency with firestoreService (which needs them for persistence).
+export type { GeneratedMeal, GenerateConfig };
 
 export type ProgressCallback = (
   message: string,

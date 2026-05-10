@@ -168,3 +168,27 @@ export interface GeneratorConfig {
   cuisineStyles: CuisineStyle[];
   customInstructions?: string;
 }
+
+/** A single meal in a generated plan (pre-confirmation) */
+export interface GeneratedMeal {
+  recipe: Recipe;
+  recipeId: string;
+  /** ISO date string: "2025-07-14" */
+  date: string;
+  mealType: MealType;
+  isFromFavourites: boolean;
+  servings: number;
+}
+
+/** Configuration for a generation run */
+export interface GenerateConfig {
+  /** First day of the plan (should be the next Monday). */
+  startDate: Date;
+  numberOfDays: number;
+  adults: number;
+  children: number;
+  mealTypes: MealType[];
+  cuisineStyles: CuisineStyle[];
+  customInstructions?: string;
+  settings?: HouseholdSettings;
+}

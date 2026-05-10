@@ -24,6 +24,8 @@ import {
 } from 'firebase/firestore';
 import * as Crypto from 'expo-crypto';
 import type {
+  GenerateConfig,
+  GeneratedMeal,
   Household,
   HouseholdSettings,
   UserProfile,
@@ -483,6 +485,70 @@ export async function toggleStarred(
     doc(db, 'households', householdId, 'cookbook', recipeId),
     { starred }
   );
+}
+
+// ─── Generation Result Persistence ────────────────────────────
+// Stored at households/{householdId}/generationResult/pending so results
+// survive app restarts until the user has visited the results screen.
+
+type StoredMeal = Omit<GeneratedMeal, 'recipe'> & {
+  recipe: Omit<GeneratedMeal['recipe'], 'scrapedAt'> & { scrapedAt: Timestamp };
+};
+
+type StoredGenerationDoc = {
+  meals: StoredMeal[];
+  config: Omit<GenerateConfig, 'startDate' | 'settings'> & { startDate: string };
+  savedAt: ReturnType<typeof serverTimestamp>;
+};
+
+/** Persist a completed generation result so it survives app restarts. */
+export async function saveGenerationResult(
+  householdId: string,
+  meals: GeneratedMeal[],
+  config: GenerateConfig,
+): Promise<void> {
+  const { settings: _settings, startDate, ...restConfig } = config;
+  const storedMeals: StoredMeal[] = meals.map((m) => ({
+    ...m,
+    recipe: {
+      ...m.recipe,
+      scrapedAt: Timestamp.fromDate(m.recipe.scrapedAt || new Date()),
+    },
+  }));
+  await setDoc(
+    doc(db, 'households', householdId, 'generationResult', 'pending'),
+    { meals: storedMeals, config: { ...restConfig, startDate: startDate.toISOString() }, savedAt: serverTimestamp() },
+  );
+}
+
+/** Load a persisted generation result, or null if none exists. */
+export async function loadGenerationResult(
+  householdId: string,
+): Promise<{ meals: GeneratedMeal[]; config: GenerateConfig } | null> {
+  const snap = await getDoc(
+    doc(db, 'households', householdId, 'generationResult', 'pending'),
+  );
+  if (!snap.exists()) return null;
+  const data = snap.data() as StoredGenerationDoc;
+  const meals: GeneratedMeal[] = (data.meals as StoredMeal[]).map((m) => ({
+    ...m,
+    recipe: {
+      ...m.recipe,
+      scrapedAt: m.recipe.scrapedAt?.toDate?.() ?? new Date(),
+    },
+  }));
+  return {
+    meals,
+    config: {
+      ...data.config,
+      startDate: new Date(data.config.startDate),
+    } as GenerateConfig,
+  };
+}
+
+/** Delete the persisted generation result (idempotent). */
+export async function clearGenerationResult(householdId: string): Promise<void> {
+  await deleteDoc(doc(db, 'households', householdId, 'generationResult', 'pending'));
 }
 
 /** Subscribe to cookbook in real time */

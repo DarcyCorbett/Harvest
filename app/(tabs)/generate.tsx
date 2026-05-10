@@ -11,7 +11,7 @@ import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/
 import { useAuth } from '@/contexts/AuthContext';
 import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { addToCookbook, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
+import { addToCookbook, clearGenerationResult, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
 import {
   addDays,
   findMismatchedMeals,
@@ -166,6 +166,17 @@ export default function GenerateScreen() {
     if (!householdId) return;
     return subscribeCookbook(householdId, setCookbook);
   }, [householdId]);
+
+  // Delete the Firestore persisted result as soon as the user sees the results
+  // screen. In-memory state is preserved for interaction; the doc is no longer
+  // needed to survive restarts once the user has visited.
+  const hasDeletedPersisted = useRef(false);
+  useEffect(() => {
+    if (generation.status === 'done' && householdId && !hasDeletedPersisted.current) {
+      hasDeletedPersisted.current = true;
+      clearGenerationResult(householdId).catch(console.warn);
+    }
+  }, [generation.status, householdId]);
 
   // Snapshot of the selections used at the last successful Generate / Regenerate.
   // Regenerate and Auto-fix use this snapshot when the user has not actively

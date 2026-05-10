@@ -41,7 +41,15 @@
       "expo-font",
       "expo-web-browser",
       "./plugins/withAdiRegistration",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff",
+          "defaultChannel": "mealwizard-jobs"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
