@@ -18,11 +18,17 @@ import {
 } from '@/services/generatorService';
 import {
   clearGenerationResult,
+  getHouseholdSettings,
+  getUpcomingMealPlan,
   loadGenerationResult,
   saveGenerationResult,
+  subscribeMealReminderState,
 } from '@/services/firestoreService';
 import { useAuth } from '@/contexts/AuthContext';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearMealReminders, scheduleMealReminders } from '@/services/mealReminders';
+import { STORAGE_KEY_LAST_SCHEDULED_AT } from '@/services/mealRemindersConstants';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -106,6 +112,33 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
       .catch(console.warn);
   }, [householdId]);
 
+  // Per-device meal reminder sync. When ANY household member confirms a plan,
+  // this device sees the bumped `lastConfirmedAt` and reschedules its own copy.
+  useEffect(() => {
+    if (!householdId) return;
+    return subscribeMealReminderState(householdId, async (lastConfirmedAt) => {
+      if (!lastConfirmedAt) return;
+      try {
+        const cachedStr = await AsyncStorage.getItem(STORAGE_KEY_LAST_SCHEDULED_AT(householdId));
+        const cached = cachedStr ? new Date(cachedStr) : null;
+        if (cached && cached >= lastConfirmedAt) return;
+
+        const [{ meals, recipes }, settings] = await Promise.all([
+          getUpcomingMealPlan(householdId),
+          getHouseholdSettings(householdId),
+        ]);
+        await clearMealReminders(householdId);
+        await scheduleMealReminders(householdId, meals, recipes, settings);
+        await AsyncStorage.setItem(
+          STORAGE_KEY_LAST_SCHEDULED_AT(householdId),
+          lastConfirmedAt.toISOString(),
+        );
+      } catch (err) {
+        console.warn('[ReminderSync] failed:', err);
+      }
+    });
+  }, [householdId]);
+
   const startGeneration = useCallback(
     (config: GenerateConfig, householdId: string): boolean => {
       if (generation.status === 'running') return false;
@@ -184,6 +217,31 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
         .then(() => {
           if (confirmEpoch.current !== epoch) return;
           setConfirm({ status: 'done', acknowledged: false });
+          // Schedule meal reminders on the confirming device immediately. Other
+          // household devices will pick this up via the subscribeMealReminderState
+          // listener below.
+          if (householdId) {
+            (async () => {
+              try {
+                const settings = await getHouseholdSettings(householdId);
+                const recipesMap = new Map(args.meals.map((m) => [m.recipeId, m.recipe]));
+                const mealEntries = args.meals.map((m) => ({
+                  recipeId: m.recipeId,
+                  date: m.date,
+                  mealType: m.mealType,
+                  servings: m.servings,
+                }));
+                await clearMealReminders(householdId);
+                await scheduleMealReminders(householdId, mealEntries, recipesMap, settings);
+                await AsyncStorage.setItem(
+                  STORAGE_KEY_LAST_SCHEDULED_AT(householdId),
+                  new Date().toISOString(),
+                );
+              } catch (err) {
+                console.warn('[Confirm] meal reminder scheduling failed:', err);
+              }
+            })();
+          }
           if (AppState.currentState !== 'active') {
             Notifications.scheduleNotificationAsync({
               content: {
@@ -203,7 +261,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
 
       return true;
     },
-    [confirm.status],
+    [confirm.status, householdId],
   );
 
   const acknowledgeConfirm = useCallback(() => {
