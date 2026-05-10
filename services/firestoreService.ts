@@ -580,3 +580,69 @@ export async function getStarredRecipes(householdId: string): Promise<CookbookEn
     addedAt: d.data().addedAt?.toDate?.() || new Date(),
   })) as CookbookEntry[];
 }
+
+// ─── Meal Reminder Helpers ───────────────────────────────────
+
+/** Persist Gemini-detected reminder flags onto the cached recipe doc. */
+export async function updateRecipeFlags(
+  recipeId: string,
+  flags: { needsDefrost?: boolean; needsMarinate?: boolean },
+): Promise<void> {
+  const update: Record<string, boolean> = {};
+  if (typeof flags.needsDefrost === 'boolean') update.needsDefrost = flags.needsDefrost;
+  if (typeof flags.needsMarinate === 'boolean') update.needsMarinate = flags.needsMarinate;
+  if (Object.keys(update).length === 0) return;
+  await updateDoc(doc(db, 'recipes', recipeId), update);
+}
+
+/** Bump the "last confirmed at" marker so every household device knows to re-sync reminders. */
+export async function bumpMealReminderState(householdId: string): Promise<void> {
+  await setDoc(
+    doc(db, 'households', householdId, 'state', 'mealReminders'),
+    { lastConfirmedAt: serverTimestamp() },
+  );
+}
+
+/** Listen for changes to the household's meal-reminder state. Fires `cb` with the
+ *  current `lastConfirmedAt` Date on each snapshot (and immediately if the doc exists). */
+export function subscribeMealReminderState(
+  householdId: string,
+  cb: (lastConfirmedAt: Date | null) => void,
+): () => void {
+  return onSnapshot(
+    doc(db, 'households', householdId, 'state', 'mealReminders'),
+    (snap) => {
+      if (!snap.exists()) {
+        cb(null);
+        return;
+      }
+      const ts = snap.data().lastConfirmedAt as Timestamp | undefined;
+      cb(ts?.toDate?.() ?? null);
+    },
+  );
+}
+
+/** Fetch all upcoming meal plan entries (today onward) plus their recipes. */
+export async function getUpcomingMealPlan(
+  householdId: string,
+): Promise<{ meals: MealPlanEntry[]; recipes: Map<string, Recipe> }> {
+  const now = new Date();
+  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const mealsSnap = await getDocs(
+    query(
+      collection(db, 'households', householdId, 'mealPlan'),
+      where('date', '>=', todayISO),
+    ),
+  );
+  const meals: MealPlanEntry[] = mealsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as MealPlanEntry));
+
+  const recipes = new Map<string, Recipe>();
+  const uniqueIds = Array.from(new Set(meals.map((m) => m.recipeId)));
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      const r = await getRecipe(id);
+      if (r) recipes.set(id, r);
+    }),
+  );
+  return { meals, recipes };
+}
