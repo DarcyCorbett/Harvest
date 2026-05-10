@@ -1,0 +1,68 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-10-meal-reminders.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Schema additions — Recipe flags + HouseholdSettings.mealReminders",
+      "status": "pending",
+      "description": "**Goal:** Extend the Recipe and HouseholdSettings interfaces with the new fields, plus a default-values constant for reminder settings.\n\n**Files:**\n- Modify: services/types.ts\n- Create: services/mealRemindersConstants.ts\n\n**Verify:** npx tsc --noEmit → no output\n\n```json:metadata\n{\"files\": [\"services/types.ts\", \"services/mealRemindersConstants.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"Recipe has needsDefrost/needsMarinate\", \"HouseholdSettings has mealReminders\", \"DEFAULT_MEAL_REMINDERS exported\", \"tsc passes\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Gemini detection — getGeminiReminderFlags",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Add a new batched Gemini call that classifies each recipe with needsDefrost and needsMarinate.\n\n**Files:**\n- Modify: services/gemini.ts\n\n**Verify:** npx tsc --noEmit → no output\n\n```json:metadata\n{\"files\": [\"services/gemini.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"Function signature matches spec\", \"Returns empty map on error\", \"Token-saving input (first 3 instructions)\", \"Strict prompt criteria\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Firestore service — recipe flags, reminder state, upcoming meal plan",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Add updateRecipeFlags, bumpMealReminderState, subscribeMealReminderState, getUpcomingMealPlan to firestoreService.ts.\n\n**Files:**\n- Modify: services/firestoreService.ts\n\n**Verify:** npx tsc --noEmit → no output\n\n```json:metadata\n{\"files\": [\"services/firestoreService.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"4 new functions exported\", \"scrapedAt Date conversion matches existing pattern\", \"tsc passes\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Wire Gemini call + state bump into confirmMealPlan",
+      "status": "pending",
+      "blockedBy": [2, 3],
+      "description": "**Goal:** After the shopping list is written, run Gemini on un-tagged recipes, persist flags, and bump the household reminder state.\n\n**Files:**\n- Modify: services/generatorService.ts\n\n**Verify:** npx tsc --noEmit → no output. Manual: confirm plan, check Firestore.\n\n```json:metadata\n{\"files\": [\"services/generatorService.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"Filters cached recipes\", \"Calls Gemini and persists flags\", \"Bumps state unconditionally\", \"Failures don't fail confirm\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Device-side scheduling module — services/mealReminders.ts",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Per-device module that schedules / cancels local expo-notifications, grouped by (date, type).\n\n**Files:**\n- Create: services/mealReminders.ts\n\n**Verify:** npx tsc --noEmit → no output\n\n```json:metadata\n{\"files\": [\"services/mealReminders.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"scheduleMealReminders returns IDs and persists to AsyncStorage\", \"clearMealReminders cancels all stored IDs\", \"Reminders grouped by (date, type)\", \"Skips past-time reminders\", \"Respects defrostEnabled/marinateEnabled\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: BackgroundJobsContext — wire scheduling + per-device sync",
+      "status": "pending",
+      "blockedBy": [3, 5],
+      "description": "**Goal:** Confirming device schedules immediately. All devices subscribe to lastConfirmedAt and re-sync when it changes.\n\n**Files:**\n- Modify: contexts/BackgroundJobsContext.tsx\n\n**Verify:** npx tsc --noEmit → no output. Manual multi-device test.\n\n```json:metadata\n{\"files\": [\"contexts/BackgroundJobsContext.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"Confirm-side scheduling\", \"Subscription effect\", \"Cached-value comparison\", \"Failures logged not rethrown\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Settings UI — toggles + time inputs in SettingsModal",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Add Meal Reminders section with two toggles and two HH:MM TextInput fields.\n\n**Files:**\n- Modify: components/SettingsModal.tsx\n\n**Verify:** npx tsc --noEmit → no output. Manual: change settings, confirm Firestore persistence.\n\n```json:metadata\n{\"files\": [\"components/SettingsModal.tsx\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"Two Switch toggles\", \"Two HH:MM TextInputs with regex validation\", \"Persists via updateHouseholdSettings\", \"Defaults from DEFAULT_MEAL_REMINDERS\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Notification tap → cookbook navigation",
+      "status": "pending",
+      "blockedBy": [],
+      "description": "**Goal:** Add 'cookbook' branch to useNotifications tap handler.\n\n**Files:**\n- Modify: hooks/useNotifications.ts\n\n**Verify:** npx tsc --noEmit → no output. Manual: tap notification, app routes to Cookbook.\n\n```json:metadata\n{\"files\": [\"hooks/useNotifications.ts\"], \"verifyCommand\": \"npx tsc --noEmit\", \"acceptanceCriteria\": [\"data.navigateTo === 'cookbook' routes to /(tabs)/cookbook\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: Manual end-to-end verification + production build",
+      "status": "pending",
+      "blockedBy": [4, 6, 7, 8],
+      "description": "**Goal:** Run the verification scenarios from the spec on a real device, then publish to Play Console internal track.\n\n**Files:** none (testing + build)\n\n**Verify:** see acceptance criteria.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"eas build --profile production --platform android --non-interactive\", \"acceptanceCriteria\": [\"All scenario checks pass\", \"EAS production build succeeds\", \"AAB submitted to Play Console internal track\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-10T00:00:00Z"
+}
