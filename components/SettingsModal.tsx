@@ -11,6 +11,7 @@ import {
   getHouseholdSettings,
   saveHouseholdSettings,
 } from '@/services/firestoreService';
+import { DEFAULT_MEAL_REMINDERS } from '@/services/mealRemindersConstants';
 import { KID_FRIENDLY_DEFAULTS, SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
 import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,6 +64,13 @@ export default function SettingsModal({
   const [kidFriendly, setKidFriendly] = useState<KidFriendlySettings>({});
   const [newBlockTerm, setNewBlockTerm] = useState('');
 
+  // Meal reminders
+  const [defrostEnabled, setDefrostEnabled] = useState(DEFAULT_MEAL_REMINDERS.defrostEnabled);
+  const [marinateEnabled, setMarinateEnabled] = useState(DEFAULT_MEAL_REMINDERS.marinateEnabled);
+  const [morningTime, setMorningTime] = useState(DEFAULT_MEAL_REMINDERS.morningTime);
+  const [eveningTime, setEveningTime] = useState(DEFAULT_MEAL_REMINDERS.eveningTime);
+  const isValidHHMM = (s: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s);
+
   // Remember the last non-zero weight for each site so toggling off→on restores it
   const [lastNonZeroSource, setLastNonZeroSource] = useState<Record<string, number>>({});
 
@@ -75,6 +83,11 @@ export default function SettingsModal({
         setSourceWeights(s.sourceWeights);
         setIngredientWeights(s.ingredientWeights);
         setKidFriendly(s.kidFriendly ?? {});
+        const mr = s.mealReminders ?? DEFAULT_MEAL_REMINDERS;
+        setDefrostEnabled(mr.defrostEnabled);
+        setMarinateEnabled(mr.marinateEnabled);
+        setMorningTime(mr.morningTime);
+        setEveningTime(mr.eveningTime);
         // Pre-populate lastNonZero from existing weights
         const lnz: Record<string, number> = {};
         TRUSTED_SITES.forEach((site) => {
@@ -162,6 +175,10 @@ export default function SettingsModal({
   // ── Save ──────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
+    if (!isValidHHMM(morningTime) || !isValidHHMM(eveningTime)) {
+      Alert.alert('Invalid time', 'Reminder times must use HH:MM (24-hour) format.');
+      return;
+    }
     setSaving(true);
     try {
       await saveHouseholdSettings(householdId, {
@@ -170,6 +187,12 @@ export default function SettingsModal({
         kidFriendly: (kidFriendly.allowedExceptions?.length || kidFriendly.excludedIngredients?.length)
           ? kidFriendly
           : undefined,
+        mealReminders: {
+          defrostEnabled,
+          marinateEnabled,
+          morningTime,
+          eveningTime,
+        },
       });
       onSaved();
       onClose();
@@ -179,7 +202,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, onSaved, onClose]);
+  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, onSaved, onClose]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -382,6 +405,70 @@ export default function SettingsModal({
                   </TouchableOpacity>
                 ))}
               </View>
+            )}
+
+            <View style={styles.divider} />
+
+            {/* ── Meal Reminders ── */}
+            <Text style={styles.sectionTitle}>Meal Reminders</Text>
+            <Text style={styles.sectionHint}>
+              Get notified the morning of meals using frozen meat or fish, and the evening before meals that need marinating.
+            </Text>
+
+            <View style={styles.reminderRow}>
+              <View style={styles.reminderTextWrap}>
+                <Text style={styles.reminderTitle}>Defrost reminders</Text>
+                <Text style={styles.reminderSubtitle}>Reminds you the morning of a meal that uses frozen meat or fish.</Text>
+              </View>
+              <Switch
+                value={defrostEnabled}
+                onValueChange={setDefrostEnabled}
+                trackColor={{ false: '#D1D5DB', true: colors.primaryLight }}
+                thumbColor={defrostEnabled ? colors.primary : '#9CA3AF'}
+              />
+            </View>
+
+            <View style={styles.reminderRow}>
+              <View style={styles.reminderTextWrap}>
+                <Text style={styles.reminderTitle}>Marinate reminders</Text>
+                <Text style={styles.reminderSubtitle}>Reminds you the evening before a meal that needs marinating.</Text>
+              </View>
+              <Switch
+                value={marinateEnabled}
+                onValueChange={setMarinateEnabled}
+                trackColor={{ false: '#D1D5DB', true: colors.primaryLight }}
+                thumbColor={marinateEnabled ? colors.primary : '#9CA3AF'}
+              />
+            </View>
+
+            <View style={styles.reminderRow}>
+              <Text style={[styles.reminderTitle, { flex: 1 }]}>Morning reminder time</Text>
+              <TextInput
+                value={morningTime}
+                onChangeText={setMorningTime}
+                placeholder="07:30"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                maxLength={5}
+                style={[styles.timeInput, !isValidHHMM(morningTime) && styles.timeInputInvalid]}
+              />
+            </View>
+
+            <View style={styles.reminderRow}>
+              <Text style={[styles.reminderTitle, { flex: 1 }]}>Evening reminder time</Text>
+              <TextInput
+                value={eveningTime}
+                onChangeText={setEveningTime}
+                placeholder="19:30"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                maxLength={5}
+                style={[styles.timeInput, !isValidHHMM(eveningTime) && styles.timeInputInvalid]}
+              />
+            </View>
+
+            {(!isValidHHMM(morningTime) || !isValidHHMM(eveningTime)) && (
+              <Text style={styles.helperError}>Use HH:MM (24-hour)</Text>
             )}
 
             <View style={styles.divider} />
@@ -659,6 +746,51 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     color: colors.text,
     backgroundColor: colors.surface,
   },
+  // Meal reminders
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+    gap: Spacing.md,
+  },
+  reminderTextWrap: {
+    flex: 1,
+  },
+  reminderTitle: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+    color: colors.text,
+  },
+  reminderSubtitle: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  timeInput: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minWidth: 90,
+    textAlign: 'center',
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  timeInputInvalid: {
+    borderColor: colors.error,
+  },
+  helperError: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.regular,
+    color: colors.error,
+    marginTop: Spacing.xs,
+  },
+
   addTermBtn: {
     width: 40,
     height: 40,

@@ -193,6 +193,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     ingredientWeights?: Record<string, number>;
     selectedSeeds?: string[];
     kidFriendly?: { excludedIngredients?: string[]; allowedExceptions?: string[] };
+    mealReminders?: HouseholdSettings['mealReminders'];
   };
   const sourceWeights: Record<string, number> = {};
   Object.entries(raw.sourceWeights ?? {}).forEach(([k, v]) => {
@@ -203,6 +204,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     ingredientWeights: raw.ingredientWeights ?? {},
     selectedSeeds: raw.selectedSeeds ?? [],
     kidFriendly: raw.kidFriendly,
+    mealReminders: raw.mealReminders,
   };
 }
 
@@ -220,6 +222,7 @@ export async function saveHouseholdSettings(
     ingredientWeights: settings.ingredientWeights,
     selectedSeeds: settings.selectedSeeds ?? [],
     ...(settings.kidFriendly ? { kidFriendly: settings.kidFriendly } : {}),
+    ...(settings.mealReminders ? { mealReminders: settings.mealReminders } : {}),
   });
 }
 
