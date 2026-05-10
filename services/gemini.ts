@@ -147,3 +147,66 @@ ${JSON.stringify(input)}`;
     return new Map();
   }
 }
+
+/**
+ * Ask Gemini to flag each recipe with whether it needs a defrost reminder (frozen
+ * protein-heavy) and/or a marinate reminder (≥30 min refrigerated marinade).
+ *
+ * Returns a Map keyed by recipeId. Missing entries = "Gemini didn't return a result";
+ * the caller should leave the recipe's flags unchanged.
+ */
+export async function getGeminiReminderFlags(
+  recipes: { recipeId: string; recipe: Recipe }[],
+): Promise<Map<string, { needsDefrost: boolean; needsMarinate: boolean }>> {
+  if (recipes.length === 0 || !GEMINI_API_KEY) return new Map();
+
+  const input = recipes.map(({ recipeId, recipe }) => ({
+    id: recipeId,
+    title: recipe.title,
+    ingredients: recipe.ingredients.map((i) => i.name),
+    steps: recipe.instructions.slice(0, 3).map((s) => s.text.substring(0, 200)).join(' | '),
+  }));
+
+  const prompt = `You classify recipes for kitchen-prep reminders. Return JSON: { "results": [{ "id": string, "needsDefrost": boolean, "needsMarinate": boolean }] }.
+
+For each recipe:
+
+"needsDefrost" = TRUE only if the recipe's main protein is one typically bought frozen and needing several hours to defrost:
+- INCLUDE: chicken breast/thigh/whole, ground/minced meat (beef/pork/lamb/turkey/chicken), beef cuts (steak, mince, stewing), pork chops, lamb cuts, large fish fillets (salmon, cod, snapper), prawns/shrimp.
+- EXCLUDE (set FALSE): deli ham, sliced cured meats, bacon strips (small/thin defrost fast), smoked salmon, canned tuna/fish, eggs, tofu, paneer, halloumi, vegetarian/vegan dishes.
+
+"needsMarinate" = TRUE only if the instructions clearly call for ≥30 minutes of REFRIGERATED marinating BEFORE cooking (the protein/veg sits in a marinade in the fridge).
+- INCLUDE: "marinate for 30 minutes / overnight / 2 hours in the fridge", "let sit refrigerated in the marinade".
+- EXCLUDE (set FALSE): quick 5–15 min marinades, "marinate while you prep" with no duration, "rest at room temperature", "tenderise" with no liquid, dry-rubs that don't sit in the fridge.
+
+Rules:
+- When uncertain, choose FALSE. False negatives are better than false positives — reminders should feel earned.
+- Every input recipe must appear exactly once in "results", preserving its input "id".
+- Return only the JSON object — no markdown, no explanation.
+
+Recipes:
+${JSON.stringify(input)}`;
+
+  const maxOutputTokens = Math.min(8000, 1024 + recipes.length * 200);
+
+  try {
+    const parsed = await callGemini<{ results?: unknown }>(prompt, maxOutputTokens);
+    if (!parsed || !Array.isArray(parsed.results)) {
+      console.warn('[ReminderFlags] Gemini response missing results array:', parsed);
+      return new Map();
+    }
+
+    const out = new Map<string, { needsDefrost: boolean; needsMarinate: boolean }>();
+    for (const entry of parsed.results as Record<string, unknown>[]) {
+      const id = typeof entry?.id === 'string' ? entry.id : undefined;
+      const needsDefrost = typeof entry?.needsDefrost === 'boolean' ? entry.needsDefrost : false;
+      const needsMarinate = typeof entry?.needsMarinate === 'boolean' ? entry.needsMarinate : false;
+      if (id) out.set(id, { needsDefrost, needsMarinate });
+    }
+    console.log(`[ReminderFlags] Gemini classified ${out.size}/${recipes.length} recipes`);
+    return out;
+  } catch (err) {
+    console.error('[ReminderFlags] Gemini call failed:', err);
+    return new Map();
+  }
+}
