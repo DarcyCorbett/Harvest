@@ -60,7 +60,8 @@ export async function scheduleMealReminders(
   const reminders = settings.mealReminders ?? DEFAULT_MEAL_REMINDERS;
   const morning = parseHHMM(reminders.morningTime) ?? parseHHMM(DEFAULT_MEAL_REMINDERS.morningTime)!;
   const evening = parseHHMM(reminders.eveningTime) ?? parseHHMM(DEFAULT_MEAL_REMINDERS.eveningTime)!;
-  const now = Date.now();
+  // 1s buffer — expo-notifications rejects triggers that are not strictly in the future.
+  const cutoff = Date.now() + 1000;
 
   const slotsByKey = new Map<string, ReminderSlot>();
 
@@ -70,7 +71,7 @@ export async function scheduleMealReminders(
 
     if (recipe.needsDefrost && reminders.defrostEnabled) {
       const triggerDate = buildLocalDate(meal.date, morning);
-      if (triggerDate.getTime() > now) {
+      if (triggerDate.getTime() > cutoff) {
         const key = `${meal.date}|defrost`;
         const slot = slotsByKey.get(key) ?? {
           type: 'defrost' as ReminderType,
@@ -87,7 +88,7 @@ export async function scheduleMealReminders(
     if (recipe.needsMarinate && reminders.marinateEnabled) {
       const eveningDateISO = addDays(meal.date, -1);
       const triggerDate = buildLocalDate(eveningDateISO, evening);
-      if (triggerDate.getTime() > now) {
+      if (triggerDate.getTime() > cutoff) {
         const key = `${eveningDateISO}|marinate`;
         const slot = slotsByKey.get(key) ?? {
           type: 'marinate' as ReminderType,

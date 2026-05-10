@@ -121,6 +121,11 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
       try {
         const cachedStr = await AsyncStorage.getItem(STORAGE_KEY_LAST_SCHEDULED_AT(householdId));
         const cached = cachedStr ? new Date(cachedStr) : null;
+        // Tolerance window: the confirming device writes `lastScheduledAt` from its
+        // client clock, but the snapshot fires with a Firestore serverTimestamp().
+        // Clock skew between client and server is bounded in practice — treat any
+        // pair within 60 s as "already in sync" to avoid a redundant re-schedule.
+        if (cached && Math.abs(cached.getTime() - lastConfirmedAt.getTime()) < 60_000) return;
         if (cached && cached >= lastConfirmedAt) return;
 
         const [{ meals, recipes }, settings] = await Promise.all([
