@@ -14,12 +14,14 @@ import {
   addMealPlanEntry,
   addShoppingItems,
   addToCookbook,
+  bumpMealReminderState,
   clearAllShoppingItems,
   getRecipe,
   getStarredRecipes,
+  updateRecipeFlags,
   updateRecipeTags,
 } from './firestoreService';
-import { tagRecipesWithGemini } from './gemini';
+import { getGeminiReminderFlags, tagRecipesWithGemini } from './gemini';
 import {
   calculateRequiredServings,
   checkTimeConstraint,
@@ -568,4 +570,45 @@ export async function confirmMealPlan(
   }
 
   await addShoppingItems(householdId, items);
+
+  // ── Meal-reminder detection ──
+  // Run Gemini only on recipes that don't already have both flags cached.
+  const recipesNeedingFlags = meals
+    .filter(
+      (m) =>
+        typeof m.recipe.needsDefrost !== 'boolean' ||
+        typeof m.recipe.needsMarinate !== 'boolean',
+    )
+    .map((m) => ({ recipeId: m.recipeId, recipe: m.recipe }));
+
+  if (recipesNeedingFlags.length > 0) {
+    try {
+      const flagMap = await getGeminiReminderFlags(recipesNeedingFlags);
+      await Promise.all(
+        Array.from(flagMap.entries()).map(([recipeId, flags]) =>
+          updateRecipeFlags(recipeId, flags).catch((err) =>
+            console.warn(`[Generator] updateRecipeFlags failed for ${recipeId}:`, err),
+          ),
+        ),
+      );
+      // Mutate the in-memory meals so the caller (BackgroundJobsContext) can
+      // schedule reminders without a re-fetch.
+      for (const meal of meals) {
+        const flags = flagMap.get(meal.recipeId);
+        if (flags) {
+          meal.recipe.needsDefrost = flags.needsDefrost;
+          meal.recipe.needsMarinate = flags.needsMarinate;
+        }
+      }
+    } catch (err) {
+      console.warn('[Generator] Reminder-flag detection failed; skipping:', err);
+    }
+  }
+
+  // Bump the state marker so every household device re-syncs reminders.
+  try {
+    await bumpMealReminderState(householdId);
+  } catch (err) {
+    console.warn('[Generator] bumpMealReminderState failed:', err);
+  }
 }
