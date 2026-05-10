@@ -43,6 +43,7 @@ export function useNotifications() {
       const data = response.notification.request.content.data as Record<string, string>;
       if (data?.navigateTo === 'generate') router.push('/(tabs)/generate');
       else if (data?.navigateTo === 'shopping') router.push('/(tabs)/shopping');
+      else if (data?.navigateTo === 'cookbook') router.push('/(tabs)/cookbook');
     });
     return () => sub.remove();
   }, [router]);
