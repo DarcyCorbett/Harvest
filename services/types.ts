@@ -56,6 +56,10 @@ export interface Recipe {
   instructions: InstructionStep[];
   notes: string;
   nutrition: Nutrition;
+  /** True if recipe's main protein typically needs defrosting (Gemini-detected at confirm time). */
+  needsDefrost?: boolean;
+  /** True if recipe requires ≥30 min refrigerated marinating (Gemini-detected at confirm time). */
+  needsMarinate?: boolean;
   scrapedAt: Date;
 }
 
@@ -156,6 +160,15 @@ export interface HouseholdSettings {
   selectedSeeds?: string[];
   /** Customisations to the Kid Friendly ingredient filter. */
   kidFriendly?: KidFriendlySettings;
+  /** Per-household reminder preferences for defrost / marinate notifications. */
+  mealReminders?: {
+    defrostEnabled: boolean;
+    marinateEnabled: boolean;
+    /** "HH:MM" 24-hour, e.g. "07:30" */
+    morningTime: string;
+    /** "HH:MM" 24-hour, e.g. "19:30" */
+    eveningTime: string;
+  };
 }
 
 /** Generator input configuration */
