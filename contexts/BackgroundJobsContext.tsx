@@ -29,6 +29,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearMealReminders, scheduleMealReminders } from '@/services/mealReminders';
 import { STORAGE_KEY_LAST_SCHEDULED_AT } from '@/services/mealRemindersConstants';
+import { logEvent } from '@/services/devLog';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -109,7 +110,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
             : { status: 'done', meals: result.meals, config: result.config, acknowledged: false },
         );
       })
-      .catch(console.warn);
+      .catch((err) => logEvent('warn', 'rehydration', err));
   }, [householdId]);
 
   // Per-device meal reminder sync. When ANY household member confirms a plan,
@@ -139,7 +140,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
           lastConfirmedAt.toISOString(),
         );
       } catch (err) {
-        console.warn('[ReminderSync] failed:', err);
+        logEvent('warn', 'ReminderSync', 'failed:', err);
       }
     });
   }, [householdId]);
@@ -163,7 +164,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
         .then((meals) => {
           if (generationEpoch.current !== epoch) return;
           setGeneration({ status: 'done', meals, config, acknowledged: false });
-          if (householdId) saveGenerationResult(householdId, meals, config).catch(console.warn);
+          if (householdId) saveGenerationResult(householdId, meals, config).catch((err) => logEvent('warn', 'saveGenerationResult', err));
           if (AppState.currentState !== 'active') {
             Notifications.scheduleNotificationAsync({
               content: {
@@ -172,11 +173,12 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
                 data: { navigateTo: 'generate' },
               },
               trigger: null,
-            }).catch(console.warn);
+            }).catch((err) => logEvent('warn', 'scheduleNotificationAsync(generate)', err));
           }
         })
         .catch((err: unknown) => {
           if (generationEpoch.current !== epoch) return;
+          logEvent('error', 'generateMealPlan', err);
           const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
           setGeneration({ status: 'error', error: msg, config, acknowledged: false });
         });
@@ -200,7 +202,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
   const clearGeneration = useCallback(() => {
     generationEpoch.current++;
     setGeneration({ status: 'idle' });
-    if (householdId) clearGenerationResult(householdId).catch(console.warn);
+    if (householdId) clearGenerationResult(householdId).catch((err) => logEvent('warn', 'clearGenerationResult', err));
   }, [householdId]);
 
   const acknowledgeGeneration = useCallback(() => {
@@ -243,7 +245,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
                   new Date().toISOString(),
                 );
               } catch (err) {
-                console.warn('[Confirm] meal reminder scheduling failed:', err);
+                logEvent('warn', 'Confirm', 'meal reminder scheduling failed:', err);
               }
             })();
           }
@@ -255,11 +257,12 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
                 data: { navigateTo: 'shopping' },
               },
               trigger: null,
-            }).catch(console.warn);
+            }).catch((err) => logEvent('warn', 'scheduleNotificationAsync(shopping)', err));
           }
         })
         .catch((err: unknown) => {
           if (confirmEpoch.current !== epoch) return;
+          logEvent('error', 'confirmMealPlan', err);
           const msg = err instanceof Error ? err.message : 'Please try again.';
           setConfirm({ status: 'error', error: msg, acknowledged: false });
         });

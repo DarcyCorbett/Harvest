@@ -22,6 +22,7 @@ import {
   updateRecipeTags,
 } from './firestoreService';
 import { getGeminiReminderFlags, tagRecipesWithGemini } from './gemini';
+import { logEvent } from './devLog';
 import {
   calculateRequiredServings,
   checkTimeConstraint,
@@ -212,7 +213,7 @@ async function applyGeminiTagsToFreshMeals(
       await updateRecipeTags(meal.recipeId, merged);
       meal.recipe.tags = merged;
     } catch (err) {
-      console.warn('[Tagger] Firestore tag update failed (non-fatal):', err);
+      logEvent('warn', 'Tagger', 'Firestore tag update failed (non-fatal):', err);
     }
   }
 }
@@ -557,7 +558,7 @@ export async function confirmMealPlan(
     );
     console.log(`[ShoppingList] Total: ${items.length} items\n`);
   } catch (err) {
-    console.warn('[Generator] Gemini grouping failed — falling back to programmatic aggregation:', err);
+    logEvent('warn', 'Generator', 'Gemini grouping failed — falling back to programmatic aggregation:', err);
     items = aggregateIngredients(
       meals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe, servings: m.servings }))
     );
@@ -587,7 +588,7 @@ export async function confirmMealPlan(
       await Promise.all(
         Array.from(flagMap.entries()).map(([recipeId, flags]) =>
           updateRecipeFlags(recipeId, flags).catch((err) =>
-            console.warn(`[Generator] updateRecipeFlags failed for ${recipeId}:`, err),
+            logEvent('warn', 'Generator', `updateRecipeFlags failed for ${recipeId}:`, err),
           ),
         ),
       );
@@ -601,7 +602,7 @@ export async function confirmMealPlan(
         }
       }
     } catch (err) {
-      console.warn('[Generator] Reminder-flag detection failed; skipping:', err);
+      logEvent('warn', 'Generator', 'Reminder-flag detection failed; skipping:', err);
     }
   }
 
@@ -609,6 +610,6 @@ export async function confirmMealPlan(
   try {
     await bumpMealReminderState(householdId);
   } catch (err) {
-    console.warn('[Generator] bumpMealReminderState failed:', err);
+    logEvent('warn', 'Generator', 'bumpMealReminderState failed:', err);
   }
 }

@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 // @ts-ignore - TS doesn't see this export due to web-focused type definitions, but it exists at runtime via Metro
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -22,7 +22,18 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
-// Initialize Firestore
-const db = getFirestore(app);
+// Initialize Firestore.
+// `initializeFirestore` is used (instead of getFirestore) so we can set
+// ignoreUndefinedProperties — without it, any document write containing an
+// `undefined` field value throws synchronously, which is fragile when new
+// optional fields get added to typed entities (e.g. Recipe.needsDefrost).
+// If init has already happened in this JS context, fall back to the existing
+// instance to avoid the "Firestore has already been started" error.
+let db: Firestore;
+try {
+  db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+} catch {
+  db = getFirestore(app);
+}
 
 export { app, auth, db };

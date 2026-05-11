@@ -23,6 +23,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import * as Crypto from 'expo-crypto';
+import { logEvent } from './devLog';
 import type {
   GenerateConfig,
   GeneratedMeal,
@@ -36,6 +37,21 @@ import type {
 } from './types';
 
 // ─── Helpers ───────────────────────────────────────────────
+
+/**
+ * Race a Firestore promise against a timeout. If the inner Promise doesn't
+ * settle by `ms` milliseconds, the wrapper rejects with a "<label> timeout"
+ * error so the surrounding try/catch can react (e.g. move on to the next
+ * candidate URL during scraping) instead of stalling forever.
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms),
+    ),
+  ]);
+}
 
 /** Generate a short uppercase invite code */
 function generateInviteCode(): string {
@@ -143,16 +159,16 @@ export async function saveRecipe(recipe: Recipe): Promise<string> {
     scrapedAt: Timestamp.fromDate(recipe.scrapedAt || new Date()),
   };
   if (recipe.id) {
-    await setDoc(doc(db, 'recipes', recipe.id), recipeData);
+    await withTimeout(setDoc(doc(db, 'recipes', recipe.id), recipeData), 15000, 'saveRecipe');
     return recipe.id;
   }
-  const docRef = await addDoc(collection(db, 'recipes'), recipeData);
+  const docRef = await withTimeout(addDoc(collection(db, 'recipes'), recipeData), 15000, 'saveRecipe');
   return docRef.id;
 }
 
 /** Get a recipe by ID */
 export async function getRecipe(recipeId: string): Promise<Recipe | null> {
-  const snap = await getDoc(doc(db, 'recipes', recipeId));
+  const snap = await withTimeout(getDoc(doc(db, 'recipes', recipeId)), 10000, 'getRecipe');
   if (!snap.exists()) return null;
   const data = snap.data();
   return {
@@ -165,7 +181,7 @@ export async function getRecipe(recipeId: string): Promise<Recipe | null> {
 /** Check if a recipe with this source URL already exists (cache check) */
 export async function getCachedRecipeByUrl(url: string): Promise<Recipe | null> {
   const q = query(collection(db, 'recipes'), where('sourceUrl', '==', url));
-  const snapshot = await getDocs(q);
+  const snapshot = await withTimeout(getDocs(q), 10000, 'getCachedRecipeByUrl');
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
   const data = docSnap.data();
@@ -518,9 +534,13 @@ export async function saveGenerationResult(
       scrapedAt: Timestamp.fromDate(m.recipe.scrapedAt || new Date()),
     },
   }));
-  await setDoc(
-    doc(db, 'households', householdId, 'generationResult', 'pending'),
-    { meals: storedMeals, config: { ...restConfig, startDate: startDate.toISOString() }, savedAt: serverTimestamp() },
+  await withTimeout(
+    setDoc(
+      doc(db, 'households', householdId, 'generationResult', 'pending'),
+      { meals: storedMeals, config: { ...restConfig, startDate: startDate.toISOString() }, savedAt: serverTimestamp() },
+    ),
+    15000,
+    'saveGenerationResult',
   );
 }
 
@@ -528,8 +548,10 @@ export async function saveGenerationResult(
 export async function loadGenerationResult(
   householdId: string,
 ): Promise<{ meals: GeneratedMeal[]; config: GenerateConfig } | null> {
-  const snap = await getDoc(
-    doc(db, 'households', householdId, 'generationResult', 'pending'),
+  const snap = await withTimeout(
+    getDoc(doc(db, 'households', householdId, 'generationResult', 'pending')),
+    10000,
+    'loadGenerationResult',
   );
   if (!snap.exists()) return null;
   const data = snap.data() as StoredGenerationDoc;
@@ -551,7 +573,11 @@ export async function loadGenerationResult(
 
 /** Delete the persisted generation result (idempotent). */
 export async function clearGenerationResult(householdId: string): Promise<void> {
-  await deleteDoc(doc(db, 'households', householdId, 'generationResult', 'pending'));
+  await withTimeout(
+    deleteDoc(doc(db, 'households', householdId, 'generationResult', 'pending')),
+    10000,
+    'clearGenerationResult',
+  );
 }
 
 /** Subscribe to cookbook in real time */
@@ -595,19 +621,24 @@ export async function updateRecipeFlags(
   if (typeof flags.needsDefrost === 'boolean') update.needsDefrost = flags.needsDefrost;
   if (typeof flags.needsMarinate === 'boolean') update.needsMarinate = flags.needsMarinate;
   if (Object.keys(update).length === 0) return;
-  await updateDoc(doc(db, 'recipes', recipeId), update);
+  await withTimeout(updateDoc(doc(db, 'recipes', recipeId), update), 10000, 'updateRecipeFlags');
 }
 
 /** Bump the "last confirmed at" marker so every household device knows to re-sync reminders. */
 export async function bumpMealReminderState(householdId: string): Promise<void> {
-  await setDoc(
-    doc(db, 'households', householdId, 'state', 'mealReminders'),
-    { lastConfirmedAt: serverTimestamp() },
+  await withTimeout(
+    setDoc(
+      doc(db, 'households', householdId, 'state', 'mealReminders'),
+      { lastConfirmedAt: serverTimestamp() },
+    ),
+    10000,
+    'bumpMealReminderState',
   );
 }
 
 /** Listen for changes to the household's meal-reminder state. Fires `cb` with the
- *  current `lastConfirmedAt` Date on each snapshot (and immediately if the doc exists). */
+ *  current `lastConfirmedAt` Date on each snapshot (and immediately if the doc exists).
+ *  Listener errors are logged via devLog so they don't disappear silently. */
 export function subscribeMealReminderState(
   householdId: string,
   cb: (lastConfirmedAt: Date | null) => void,
@@ -622,6 +653,9 @@ export function subscribeMealReminderState(
       const ts = snap.data().lastConfirmedAt as Timestamp | undefined;
       cb(ts?.toDate?.() ?? null);
     },
+    (err) => {
+      logEvent('warn', 'subscribeMealReminderState', 'listener error', (err as { code?: string }).code, err.message);
+    },
   );
 }
 
@@ -631,11 +665,10 @@ export async function getUpcomingMealPlan(
 ): Promise<{ meals: MealPlanEntry[]; recipes: Map<string, Recipe> }> {
   const now = new Date();
   const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const mealsSnap = await getDocs(
-    query(
-      collection(db, 'households', householdId, 'mealPlan'),
-      where('date', '>=', todayISO),
-    ),
+  const mealsSnap = await withTimeout(
+    getDocs(query(collection(db, 'households', householdId, 'mealPlan'), where('date', '>=', todayISO))),
+    10000,
+    'getUpcomingMealPlan',
   );
   const meals: MealPlanEntry[] = mealsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as MealPlanEntry));
 

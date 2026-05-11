@@ -12,6 +12,8 @@ import {
   saveHouseholdSettings,
 } from '@/services/firestoreService';
 import { DEFAULT_MEAL_REMINDERS } from '@/services/mealRemindersConstants';
+import { clearDevLog, formatDevLog, getDevLog, type DevLogEntry } from '@/services/devLog';
+import * as Clipboard from 'expo-clipboard';
 import { KID_FRIENDLY_DEFAULTS, SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
 import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,6 +72,30 @@ export default function SettingsModal({
   const [morningTime, setMorningTime] = useState(DEFAULT_MEAL_REMINDERS.morningTime);
   const [eveningTime, setEveningTime] = useState(DEFAULT_MEAL_REMINDERS.eveningTime);
   const isValidHHMM = (s: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s);
+
+  // ── Hidden debug-log viewer (tap version footer 5x to reveal) ──
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const [debugLogVisible, setDebugLogVisible] = useState(false);
+  const [debugLogEntries, setDebugLogEntries] = useState<DevLogEntry[]>([]);
+  const onVersionTap = useCallback(async () => {
+    const next = debugTapCount + 1;
+    if (next >= 5) {
+      setDebugTapCount(0);
+      const entries = await getDevLog();
+      setDebugLogEntries(entries);
+      setDebugLogVisible(true);
+    } else {
+      setDebugTapCount(next);
+    }
+  }, [debugTapCount]);
+  const onCopyLog = useCallback(async () => {
+    await Clipboard.setStringAsync(formatDevLog(debugLogEntries));
+    Alert.alert('Copied', `${debugLogEntries.length} log entries copied to clipboard.`);
+  }, [debugLogEntries]);
+  const onClearLog = useCallback(async () => {
+    await clearDevLog();
+    setDebugLogEntries([]);
+  }, []);
 
   // Remember the last non-zero weight for each site so toggling off→on restores it
   const [lastNonZeroSource, setLastNonZeroSource] = useState<Record<string, number>>({});
@@ -507,9 +533,56 @@ export default function SettingsModal({
               <Text style={styles.clearCacheText}>Clear Recipe Cache</Text>
             </TouchableOpacity>
 
+            {/* Hidden debug-log opener — tap 5x */}
+            <TouchableOpacity
+              onPress={onVersionTap}
+              activeOpacity={1}
+              style={{ paddingVertical: Spacing.lg, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: FontSizes.xs, color: colors.textSecondary }}>
+                Harvest · v1.0.0
+              </Text>
+            </TouchableOpacity>
+
           </ScrollView>
         )}
       </SafeAreaView>
+
+      {/* Hidden debug-log viewer */}
+      <Modal visible={debugLogVisible} animationType="slide" onRequestClose={() => setDebugLogVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: Spacing.md, gap: Spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <TouchableOpacity onPress={() => setDebugLogVisible(false)}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, fontSize: FontSizes.md, fontFamily: Fonts.medium, color: colors.text }}>
+              Debug log ({debugLogEntries.length})
+            </Text>
+            <TouchableOpacity onPress={onCopyLog} style={{ paddingHorizontal: Spacing.sm }}>
+              <Text style={{ color: colors.primary, fontFamily: Fonts.medium }}>Copy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClearLog} style={{ paddingHorizontal: Spacing.sm }}>
+              <Text style={{ color: colors.error, fontFamily: Fonts.medium }}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1, padding: Spacing.md }}>
+            {debugLogEntries.length === 0 ? (
+              <Text style={{ color: colors.textSecondary, fontSize: FontSizes.sm }}>No log entries.</Text>
+            ) : (
+              debugLogEntries.map((e, i) => (
+                <View key={i} style={{ marginBottom: Spacing.sm, paddingBottom: Spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                  <Text style={{ fontSize: FontSizes.xs, color: colors.textSecondary }}>
+                    {new Date(e.ts).toLocaleTimeString()} · {e.level.toUpperCase()} · {e.tag}
+                  </Text>
+                  <Text selectable style={{ fontSize: FontSizes.xs, color: colors.text, fontFamily: Fonts.regular, marginTop: 2 }}>
+                    {e.msg}
+                  </Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </Modal>
   );
 }
