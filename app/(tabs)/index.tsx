@@ -405,9 +405,25 @@ export default function CalendarScreen() {
                                 {recipe?.title ?? '…'}
                               </Text>
                               {recipe && (
-                                <Text style={[s.cardMealMeta, { color: colors.textTertiary }]}>
-                                  {recipe.prepTime} prep · {recipe.cookTime} cook
-                                </Text>
+                                <View style={s.cardMealMetaRow}>
+                                  <Text style={[s.cardMealMeta, { color: colors.textTertiary }]}>
+                                    {recipe.prepTime} prep · {recipe.cookTime} cook
+                                  </Text>
+                                  {(recipe.needsDefrost || recipe.needsMarinate) && (
+                                    <View style={s.reminderChips}>
+                                      {recipe.needsDefrost && (
+                                        <View style={[s.reminderChip, { backgroundColor: colors.carbsBadge }]}>
+                                          <Ionicons name="snow-outline" size={10} color={colors.carbsText} />
+                                        </View>
+                                      )}
+                                      {recipe.needsMarinate && (
+                                        <View style={[s.reminderChip, { backgroundColor: colors.accentLight }]}>
+                                          <Ionicons name="timer-outline" size={10} color={colors.accent} />
+                                        </View>
+                                      )}
+                                    </View>
+                                  )}
+                                </View>
                               )}
                             </View>
                             {recipe?.imageUrl && (
@@ -681,7 +697,16 @@ const s = StyleSheet.create({
   },
   cardMealInfo: { flex: 1 },
   cardMealTitle: { fontSize: FontSizes.md, fontFamily: Fonts.semibold, lineHeight: 20 },
-  cardMealMeta: { fontSize: FontSizes.xs, fontFamily: Fonts.regular, marginTop: 2 },
+  cardMealMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: 2 },
+  cardMealMeta: { fontSize: FontSizes.xs, fontFamily: Fonts.regular },
+  reminderChips: { flexDirection: 'row', gap: 4 },
+  reminderChip: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
   mealRowThumb: { width: 44, height: 44, borderRadius: Radius.md, flexShrink: 0 },
 
   mealBadge: {
