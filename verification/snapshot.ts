@@ -45,6 +45,25 @@ const TARGETS: Target[] = [
   // Baked Falafel — Recipe.video has a contentUrl direct MP4 (no embedUrl).
   // Tests MP4 fallback support.
   { site: 'pinchofyum-falafel', url: 'https://pinchofyum.com/simple-6-ingredient-baked-falafel' },
+  // Natasha's Kitchen — WPRM site, full WP REST API search. New trusted site.
+  { site: 'natashaskitchen-korma', url: 'https://natashaskitchen.com/chicken-korma/' },
+  // Serious Eats — Mantle CMS, @type: ["Recipe","NewsArticle"] multi-type array.
+  // Indexed-pool site (no JSON search API). Verifies multi-type @type handling.
+  { site: 'seriouseats-baked-ziti', url: 'https://www.seriouseats.com/baked-ziti-with-leeks-swiss-chard-and-sun-dried-tomatoes-11969711' },
+  // Akis Petretzikis — custom Next.js app, standalone JSON-LD with numeric
+  // recipeCategory. Indexed-pool site. Verifies graceful numeric recipeCategory.
+  { site: 'akispetretzikis-pilafi', url: 'https://akispetretzikis.com/en/recipe/9624/pilafi-ntolmadakia' },
+  // NYT Cooking — paywall site, full Recipe JSON-LD in SSR HTML.
+  // HowToStep with extra @context field. Indexed-pool site.
+  { site: 'nytcooking-cookies', url: 'https://cooking.nytimes.com/recipes/1015819-chocolate-chip-cookies' },
+  // America's Test Kitchen — paywall site, full Recipe JSON-LD in SSR HTML.
+  // Top-level JSON-LD is an array of [WebPage, Recipe]; tests array-rooted
+  // candidate handling in findJsonLdRecipe. Indexed-pool site.
+  { site: 'atk-broccoli-caesar', url: 'https://www.americastestkitchen.com/recipes/17148-charred-broccoli-caesar-salad-with-chicken' },
+  // The user reported "400 chickens" for this recipe's ingredients
+  { site: 'recipetineats-chow-mein', url: 'https://www.recipetineats.com/chow-mein-ramen-noodles-recipe/' },
+  // The user reported missing coconut milk in the shopping list
+  { site: 'skinnytaste-coconut-bowl', url: 'https://www.skinnytaste.com/coconut-chicken-rice-bowl' },
 ];
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';

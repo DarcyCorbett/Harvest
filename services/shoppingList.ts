@@ -3,7 +3,7 @@
 // categorises them, and optionally uses Gemini for semantic grouping.
 // ============================================================
 
-import { callGemini } from './gemini';
+import { callGemini, GEMINI_AGGREGATION_MODEL } from './gemini';
 import type { Recipe, ShoppingCategory, ShoppingItem } from './types';
 
 // ─── Public Types ─────────────────────────────────────────────
@@ -299,11 +299,15 @@ function collapseGroupToItem(
   members: CollapseMember[],
   sources: { id: string; title: string; servings?: number }[]
 ): Omit<ShoppingItem, 'id'> | null {
-  const families = members.map((m) => getUnitFamily(normalizeUnit(m.unit)));
+  // Ignore zero-quantity members for family voting — they contribute nothing
+  // to the total and can mislead the target selector (e.g. "more coconut milk"
+  // parsed as qty 0 count should not override a real 1.25 cup volume member).
+  const votingMembers = members.filter((m) => m.quantity > 0);
+  const families = votingMembers.map((m) => getUnitFamily(normalizeUnit(m.unit)));
   const hasWeightMember = families.some((f) => f === 'weight');
   const hasVolumeMember = families.some((f) => f === 'volume');
   const hasCountMember = families.some((f) => f === 'other');
-  const hasMetricVolume = members.some((m) => {
+  const hasMetricVolume = votingMembers.some((m) => {
     const n = normalizeUnit(m.unit);
     return n === 'ml' || n === 'l';
   });
@@ -517,7 +521,7 @@ ${JSON.stringify(rawIngredients.map(({ id, name, quantity, unit }) => ({ id, nam
   // (maxOutputTokens is a truncation cap, not a billing amount — Gemini bills
   // only for tokens actually produced.)
   const maxOutputTokens = Math.min(65536, 4096 + rawIngredients.length * 200);
-  const parsed = await callGemini<unknown>(prompt, maxOutputTokens);
+  const parsed = await callGemini<unknown>(prompt, maxOutputTokens, GEMINI_AGGREGATION_MODEL);
 
   if (!Array.isArray(parsed)) throw new Error('Gemini response is not an array');
 

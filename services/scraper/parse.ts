@@ -1057,6 +1057,26 @@ export function parseIngredientString(raw: string): Ingredient {
     if (KNOWN_UNITS_ONE_WORD.has(oneWord)) {
       unit = normalizeWprmUnit(oneWord);
       s = tokens.slice(1).join(' ');
+    } else if (oneWord.includes('/')) {
+      const parts = oneWord.split('/');
+      const matches: { unitStr: string; normalized: string; isMetric: boolean }[] = [];
+      for (const p of parts) {
+        const cleanP = p.replace(/^[\d.]+/, '');
+        if (KNOWN_UNITS_ONE_WORD.has(cleanP)) {
+          const norm = normalizeWprmUnit(cleanP);
+          const isMetric = ['g', 'kg', 'ml', 'l'].includes(norm);
+          matches.push({ unitStr: p, normalized: norm, isMetric });
+        }
+      }
+      if (matches.length > 0) {
+        const best = matches.find((m) => m.isMetric) || matches[0];
+        unit = best.normalized;
+        const prefixMatch = best.unitStr.match(/^([\d.]+)/);
+        if (prefixMatch) {
+          quantity = parseFloat(prefixMatch[1]);
+        }
+        s = tokens.slice(1).join(' ');
+      }
     }
   }
 
