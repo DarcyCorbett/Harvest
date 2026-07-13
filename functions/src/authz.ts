@@ -40,6 +40,9 @@ export async function authorizeHouseholdMember(
   if (!auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
+  if (auth.token.email_verified !== true) {
+    throw new HttpsError('permission-denied', 'Permission denied.');
+  }
 
   const email = typeof auth.token.email === 'string'
     ? auth.token.email.trim().toLowerCase()

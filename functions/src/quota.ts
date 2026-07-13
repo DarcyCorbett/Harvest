@@ -65,11 +65,18 @@ export async function reserveQuota(
   if (!Number.isFinite(units) || !Number.isInteger(units) || units <= 0) {
     throw new HttpsError('invalid-argument', 'Invalid quota units.');
   }
+  if (
+    !Object.hasOwn(DAILY_LIMITS, endpoint)
+    || !Number.isFinite(DAILY_LIMITS[endpoint])
+  ) {
+    throw new HttpsError('invalid-argument', 'Invalid quota endpoint.');
+  }
+  const limit = DAILY_LIMITS[endpoint];
 
   const used = await store.incrementIfAllowed(
     quotaDocumentId(uid, endpoint, now),
     units,
-    DAILY_LIMITS[endpoint],
+    limit,
   );
   if (used === null) {
     logger.info('ai_quota', { uid, endpoint, units, outcome: 'rejected' });

@@ -165,6 +165,23 @@ describe('reserveQuota', () => {
       expect(store.incrementIfAllowed).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects an unsupported runtime endpoint before store access or logging', async () => {
+    const store: QuotaStore = {
+      incrementIfAllowed: vi.fn(),
+    };
+    const logSpy = vi.mocked(logger.info);
+    const endpoint = 'unsupportedEndpoint' as AiEndpoint;
+
+    await expect(
+      reserveQuota(store, 'u1', endpoint, 1, NOW),
+    ).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: 'Invalid quota endpoint.',
+    });
+    expect(store.incrementIfAllowed).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('firestoreQuotaStore', () => {
@@ -241,6 +258,49 @@ describe('firestoreQuotaStore', () => {
     ).resolves.toBeNull();
     expect(firestore.set).not.toHaveBeenCalled();
     expect(firestore.serverTimestamp).not.toHaveBeenCalled();
+  });
+
+  it('recomputes from the latest usage when Firestore retries after a conflict', async () => {
+    let committedUnits = 38;
+    const reads: number[] = [];
+    const abandonedSet = vi.fn();
+    const finalSet = vi.fn();
+    const firstGet = vi.fn(async () => ({
+      exists: true,
+      get: () => {
+        reads.push(committedUnits);
+        return committedUnits;
+      },
+    }));
+    const retryGet = vi.fn(async () => ({
+      exists: true,
+      get: () => {
+        reads.push(committedUnits);
+        return committedUnits;
+      },
+    }));
+    firestore.runTransaction.mockImplementationOnce(async (callback) => {
+      const abandonedResult = await callback({ get: firstGet, set: abandonedSet });
+      expect(abandonedResult).toBe(40);
+
+      committedUnits = 39;
+      return callback({ get: retryGet, set: finalSet });
+    });
+    const store = firestoreQuotaStore();
+
+    await expect(
+      store.incrementIfAllowed('2026-07-13_u1_shoppingGroups', 2, 40),
+    ).resolves.toBeNull();
+    expect(reads).toEqual([38, 39]);
+    expect(firstGet).toHaveBeenCalledWith(firestore.docRef);
+    expect(retryGet).toHaveBeenCalledWith(firestore.docRef);
+    expect(abandonedSet).toHaveBeenCalledWith(
+      firestore.docRef,
+      { units: 40, updatedAt: 'server-timestamp' },
+      { merge: true },
+    );
+    expect(finalSet).not.toHaveBeenCalled();
+    expect(committedUnits).toBe(39);
   });
 
   it.each([Number.NaN, Infinity, -1, '39', null, undefined])(

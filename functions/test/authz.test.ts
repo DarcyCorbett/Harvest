@@ -20,9 +20,18 @@ import {
 } from '../src/authz.js';
 
 type AuthData = CallableRequest<unknown>['auth'];
+const MISSING_EMAIL_VERIFICATION = Symbol('missing-email-verification');
 
-function auth(uid: string, email: unknown): AuthData {
-  return { uid, token: { email } } as unknown as AuthData;
+function auth(
+  uid: string,
+  email: unknown,
+  emailVerified: unknown = true,
+): AuthData {
+  const token: Record<string, unknown> = { email };
+  if (emailVerified !== MISSING_EMAIL_VERIFICATION) {
+    token.email_verified = emailVerified;
+  }
+  return { uid, token } as unknown as AuthData;
 }
 
 function lookups(overrides: Partial<AuthzLookups> = {}): AuthzLookups {
@@ -101,6 +110,30 @@ describe('authorizeHouseholdMember', () => {
     expect(injected.isAllowlisted).not.toHaveBeenCalled();
     expect(injected.getMembers).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['missing', MISSING_EMAIL_VERIFICATION],
+    ['false', false],
+    ['non-boolean', 'true'],
+  ])(
+    'rejects a %s email_verified claim before any lookup',
+    async (_name, emailVerified) => {
+      const injected = lookups();
+
+      await expect(
+        authorizeHouseholdMember(
+          auth('user-1', 'member@example.com', emailVerified),
+          'household-1',
+          injected,
+        ),
+      ).rejects.toMatchObject({
+        code: 'permission-denied',
+        message: 'Permission denied.',
+      });
+      expect(injected.isAllowlisted).not.toHaveBeenCalled();
+      expect(injected.getMembers).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a non-allowlisted normalized email before membership lookup', async () => {
     const injected = lookups({
