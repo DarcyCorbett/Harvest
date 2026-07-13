@@ -10,6 +10,7 @@ node_modules/
 # Dev scratch files
 scratch*.js
 fix*.js
+.worktrees/
 
 # Expo
 .expo/
