@@ -165,30 +165,42 @@ describe('requestGeminiJson', () => {
     expect(logSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects hostile usage metadata before anything is logged', async () => {
-    const hostileTokenCount = `tokens-${API_KEY}`;
+  it.each([
+    [
+      'a credential-bearing string token count',
+      JSON.stringify(`tokens-${API_KEY}`),
+      `tokens-${API_KEY}`,
+    ],
+    ['a negative numeric token count', '-1', '-1'],
+    ['a non-finite token count', '1e999', '1e999'],
+  ])('rejects %s before anything is logged', async (_name, tokenJson, forbidden) => {
     const logSpy = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
-        JSON.stringify({
-          candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }],
-          usageMetadata: {
-            promptTokenCount: hostileTokenCount,
-            candidatesTokenCount: -1,
-            totalTokenCount: 6,
-          },
-        }),
+        `{"candidates":[{"content":{"parts":[{"text":"{\\"answer\\":\\"ok\\"}"}]}}],` +
+          `"usageMetadata":{"promptTokenCount":${tokenJson},` +
+          `"candidatesTokenCount":2,"totalTokenCount":6}}`,
         { status: 200 },
       ),
     );
 
-    await expect(callProvider(fetchImpl)).rejects.toMatchObject({
+    let thrown: unknown;
+    try {
+      await callProvider(fetchImpl);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(GeminiProviderError);
+    expect(thrown).toMatchObject({
+      name: 'GeminiProviderError',
       code: 'provider-invalid-response',
       message: 'provider-invalid-response',
     });
+    expect(JSON.stringify(thrown)).not.toContain(forbidden);
+    expect(JSON.stringify(thrown)).not.toContain(API_KEY);
+    expect(Object.hasOwn(thrown as object, 'cause')).toBe(false);
     expect(logSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(logSpy.mock.calls)).not.toContain(hostileTokenCount);
-    expect(JSON.stringify(logSpy.mock.calls)).not.toContain(API_KEY);
   });
 
   it('maps malformed outer JSON to a bounded response error', async () => {
