@@ -7,6 +7,25 @@ const recipeId = z.string().trim().min(1).max(160);
 const recipeStep = z.string().trim().min(1).max(300);
 const ingredientUnit = z.string().trim().max(40);
 
+function requireUniqueIdentifiers<T, Identifier extends string | number>(
+  values: T[],
+  identifierOf: (value: T) => Identifier,
+  context: z.RefinementCtx,
+): void {
+  const seen = new Set<Identifier>();
+  for (const value of values) {
+    const identifier = identifierOf(value);
+    if (seen.has(identifier)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Duplicate request identifiers.',
+      });
+      return;
+    }
+    seen.add(identifier);
+  }
+}
+
 export const recipeInput = z
   .object({
     recipeId,
@@ -25,7 +44,12 @@ export const householdRequest = z
   .strict();
 
 export const tagRecipesRequest = householdRequest.extend({
-  recipes: z.array(recipeInput).min(1).max(25),
+  recipes: z
+    .array(recipeInput)
+    .min(1)
+    .max(25)
+    .superRefine((recipes, context) =>
+      requireUniqueIdentifiers(recipes, ({ recipeId }) => recipeId, context)),
 });
 
 const reminderRecipeInput = recipeInput.pick({
@@ -36,7 +60,12 @@ const reminderRecipeInput = recipeInput.pick({
 });
 
 export const reminderFlagsRequest = householdRequest.extend({
-  recipes: z.array(reminderRecipeInput).min(1).max(25),
+  recipes: z
+    .array(reminderRecipeInput)
+    .min(1)
+    .max(25)
+    .superRefine((recipes, context) =>
+      requireUniqueIdentifiers(recipes, ({ recipeId }) => recipeId, context)),
 });
 
 export const rawIngredientSchema = z
@@ -49,7 +78,12 @@ export const rawIngredientSchema = z
   .strict();
 
 export const shoppingGroupsRequest = householdRequest.extend({
-  ingredients: z.array(rawIngredientSchema).min(1).max(500),
+  ingredients: z
+    .array(rawIngredientSchema)
+    .min(1)
+    .max(500)
+    .superRefine((ingredients, context) =>
+      requireUniqueIdentifiers(ingredients, ({ id }) => id, context)),
 });
 
 export const substitutionsRequest = householdRequest.extend({

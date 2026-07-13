@@ -316,7 +316,10 @@ const substitutionsResult = (count = 3, overrides: Overrides = {}) => ({
 
 const requestBoundaries: Boundary[] = [
   ['household id', tagRecipesRequest, (n) => tagRequest({ householdId: 'h'.repeat(n) }), 128],
-  ['tag recipes', tagRecipesRequest, (n) => tagRequest({ recipes: Array.from({ length: n }, recipe) }), 25],
+  ['tag recipes', tagRecipesRequest, (n) => tagRequest({
+    recipes: Array.from({ length: n }, (_, index) =>
+      recipe({ recipeId: `recipe-${index}` })),
+  }), 25],
   ['recipe id', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ recipeId: 'r'.repeat(n) })] }), 160],
   ['recipe title', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ title: 't'.repeat(n) })] }), 200],
   ['total minutes', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ totalMinutes: n })] }), 10_080],
@@ -326,7 +329,10 @@ const requestBoundaries: Boundary[] = [
   ['recipe step text', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ steps: ['s'.repeat(n)] })] }), 300],
   ['existing tags', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ existingTags: Array(n).fill('Dinner') })] }), 30],
   ['existing tag text', tagRecipesRequest, (n) => tagRequest({ recipes: [recipe({ existingTags: ['t'.repeat(n)] })] }), 200],
-  ['reminder recipes', reminderFlagsRequest, (n) => reminderRequest({ recipes: Array.from({ length: n }, reminderRecipe) }), 25],
+  ['reminder recipes', reminderFlagsRequest, (n) => reminderRequest({
+    recipes: Array.from({ length: n }, (_, index) =>
+      reminderRecipe({ recipeId: `recipe-${index}` })),
+  }), 25],
   ['shopping ingredients', shoppingGroupsRequest, (n) => shoppingRequest({ ingredients: Array.from({ length: n }, (_, id) => rawIngredient({ id })) }), 500],
   ['raw ingredient id', shoppingGroupsRequest, (n) => shoppingRequest({ ingredients: [rawIngredient({ id: n })] }), 9_999],
   ['raw ingredient quantity', shoppingGroupsRequest, (n) => shoppingRequest({ ingredients: [rawIngredient({ quantity: n })] }), 1_000_000],
@@ -369,6 +375,53 @@ describe('AI request contracts', () => {
     ['substitutions', substitutionsRequest, substitutionsRequestValue({ allIngredients: [] })],
   ])('%s rejects its required empty collection', (_name, schema, value) => {
     expect(schema.safeParse(value).success).toBe(false);
+  });
+
+  it.each([
+    [
+      'tagRecipes',
+      tagRecipesRequest,
+      tagRequest({
+        recipes: [
+          recipe({ recipeId: 'private-duplicate-id-never-expose' }),
+          recipe({ recipeId: 'private-duplicate-id-never-expose' }),
+        ],
+      }),
+      'private-duplicate-id-never-expose',
+    ],
+    [
+      'reminderFlags',
+      reminderFlagsRequest,
+      reminderRequest({
+        recipes: [
+          reminderRecipe({ recipeId: 'private-duplicate-id-never-expose' }),
+          reminderRecipe({ recipeId: 'private-duplicate-id-never-expose' }),
+        ],
+      }),
+      'private-duplicate-id-never-expose',
+    ],
+    [
+      'shoppingGroups',
+      shoppingGroupsRequest,
+      shoppingRequest({
+        ingredients: [rawIngredient({ id: 7_777 }), rawIngredient({ id: 7_777 })],
+      }),
+      '7777',
+    ],
+  ])('%s rejects duplicate input ids with a bounded issue', (
+    _name,
+    schema,
+    value,
+    forbidden,
+  ) => {
+    const parsed = schema.safeParse(value);
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('expected duplicate ids to be rejected');
+    expect(parsed.error.issues).toEqual([
+      expect.objectContaining({ message: 'Duplicate request identifiers.' }),
+    ]);
+    expect(JSON.stringify(parsed.error.issues)).not.toContain(forbidden);
   });
 
   it.each([

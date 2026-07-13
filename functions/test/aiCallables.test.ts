@@ -238,6 +238,49 @@ describe('createAiHandlers', () => {
     },
   );
 
+  it.each([
+    {
+      endpoint: 'tagRecipes' as const,
+      input: {
+        ...tagInput,
+        recipes: [tagInput.recipes[0], { ...tagInput.recipes[0] }],
+      },
+    },
+    {
+      endpoint: 'reminderFlags' as const,
+      input: {
+        ...reminderInput,
+        recipes: [reminderInput.recipes[0], { ...reminderInput.recipes[0] }],
+      },
+    },
+    {
+      endpoint: 'shoppingGroups' as const,
+      input: {
+        ...shoppingInput,
+        ingredients: [
+          shoppingInput.ingredients[0],
+          { ...shoppingInput.ingredients[0] },
+        ],
+      },
+    },
+  ])(
+    '$endpoint rejects duplicate ids before authorization, quota, service, or logs',
+    async ({ endpoint, input }) => {
+      const injected = dependencies();
+
+      await expect(
+        createAiHandlers(injected)[endpoint](request(input)),
+      ).rejects.toMatchObject({ code: 'invalid-argument' });
+
+      expect(injected.authorize).not.toHaveBeenCalled();
+      expect(injected.reserve).not.toHaveBeenCalled();
+      for (const method of Object.values(injected.service)) {
+        expect(method).not.toHaveBeenCalled();
+      }
+      expect(logger.info).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(endpointCases)(
     '$endpoint authorizes, reserves its fixed quota, and calls only its fixed service method',
     async ({ endpoint, input, serviceArgument, output }) => {

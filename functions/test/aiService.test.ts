@@ -230,12 +230,12 @@ describe('createAiService', () => {
     {
       name: 'tagging',
       invoke: (provider: JsonRequester) => createAiService(provider).tagRecipes([
-        tagRecipe('left|middle'),
+        tagRecipe('__proto__|middle'),
         tagRecipe('right'),
       ]),
       response: {
         results: [
-          { id: 'left', tags: ['Lunch'] },
+          { id: '__proto__', tags: ['Lunch'] },
           { id: 'middle|right', tags: ['Dinner'] },
         ],
       },
@@ -243,13 +243,13 @@ describe('createAiService', () => {
     {
       name: 'reminders',
       invoke: (provider: JsonRequester) => createAiService(provider).reminderFlags([
-        reminderRecipe('duplicate'),
-        reminderRecipe('duplicate'),
+        reminderRecipe('expected-one'),
+        reminderRecipe('expected-two'),
       ]),
       response: {
         results: [
-          { id: 'duplicate', needsDefrost: false, needsMarinate: false },
-          { id: 'extra', needsDefrost: false, needsMarinate: false },
+          { id: 'expected-one', needsDefrost: false, needsMarinate: false },
+          { id: 'expected-one', needsDefrost: false, needsMarinate: false },
         ],
       },
     },
@@ -257,8 +257,8 @@ describe('createAiService', () => {
       name: 'shopping',
       invoke: (provider: JsonRequester) => createAiService(provider).shoppingGroups([
         rawIngredient(1),
-        rawIngredient(1),
         rawIngredient(2),
+        rawIngredient(3),
       ]),
       response: [
         { canonicalName: 'One', category: 'Other', sourceIds: [1] },
@@ -274,20 +274,37 @@ describe('createAiService', () => {
     });
   });
 
-  it('accepts exact duplicate-id multisets when the input contains duplicates', async () => {
-    const response = {
-      results: [
-        { id: 'same', tags: ['Lunch'] },
-        { id: 'same', tags: ['Dinner'] },
-      ],
-    };
-
-    await expect(
-      createAiService(requester(response)).tagRecipes([
-        tagRecipe('same'),
-        tagRecipe('same'),
+  it.each([
+    {
+      name: 'tagging',
+      invoke: (provider: JsonRequester) => createAiService(provider).tagRecipes([
+        tagRecipe('private-duplicate-id-never-expose'),
+        tagRecipe('private-duplicate-id-never-expose'),
       ]),
-    ).resolves.toEqual(response);
+    },
+    {
+      name: 'reminders',
+      invoke: (provider: JsonRequester) => createAiService(provider).reminderFlags([
+        reminderRecipe('private-duplicate-id-never-expose'),
+        reminderRecipe('private-duplicate-id-never-expose'),
+      ]),
+    },
+    {
+      name: 'shopping',
+      invoke: (provider: JsonRequester) => createAiService(provider).shoppingGroups([
+        rawIngredient(7),
+        rawIngredient(7),
+      ]),
+    },
+  ])('rejects duplicate $name input ids before calling the provider', async ({
+    invoke,
+  }) => {
+    const provider = requester({});
+
+    await expect(invoke(provider)).rejects.toMatchObject({
+      message: 'request-id-duplicates',
+    });
+    expect(provider.requestJson).not.toHaveBeenCalled();
   });
 
   it.each([

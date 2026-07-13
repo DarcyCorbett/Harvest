@@ -29,7 +29,12 @@ export interface JsonRequester {
 }
 
 class AiServiceError extends Error {
-  constructor(code: 'provider-output-invalid' | 'provider-id-coverage-mismatch') {
+  constructor(
+    code:
+      | 'provider-output-invalid'
+      | 'provider-id-coverage-mismatch'
+      | 'request-id-duplicates',
+  ) {
     super(code);
     this.name = 'AiServiceError';
   }
@@ -76,9 +81,24 @@ function requireExactCoverage<T extends string | number>(
   }
 }
 
+function requireUniqueInputIds<T, Identifier extends string | number>(
+  values: readonly T[],
+  identifierOf: (value: T) => Identifier,
+): void {
+  const seen = new Set<Identifier>();
+  for (const value of values) {
+    const identifier = identifierOf(value);
+    if (seen.has(identifier)) {
+      throw new AiServiceError('request-id-duplicates');
+    }
+    seen.add(identifier);
+  }
+}
+
 export function createAiService(provider: JsonRequester) {
   return {
     async tagRecipes(recipes: TagRecipesInput['recipes']) {
+      requireUniqueInputIds(recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
         FLASH_LITE_MODEL,
         buildTagRecipesPrompt(recipes),
@@ -93,6 +113,7 @@ export function createAiService(provider: JsonRequester) {
     },
 
     async reminderFlags(recipes: ReminderFlagsInput['recipes']) {
+      requireUniqueInputIds(recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
         FLASH_LITE_MODEL,
         buildReminderFlagsPrompt(recipes),
@@ -107,6 +128,7 @@ export function createAiService(provider: JsonRequester) {
     },
 
     async shoppingGroups(ingredients: ShoppingGroupsInput['ingredients']) {
+      requireUniqueInputIds(ingredients, ({ id }) => id);
       const output = await provider.requestJson(
         FLASH_MODEL,
         buildShoppingGroupsPrompt(ingredients),
