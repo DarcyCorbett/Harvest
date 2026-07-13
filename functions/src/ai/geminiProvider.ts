@@ -1,4 +1,5 @@
 import { logger } from 'firebase-functions';
+import { z } from 'zod';
 
 const GEMINI_API_BASE =
   'https://generativelanguage.googleapis.com/v1beta/models';
@@ -13,21 +14,42 @@ interface GeminiRequest {
   fetchImpl?: typeof fetch;
 }
 
-interface GeminiUsageMetadata {
-  promptTokenCount?: number;
-  candidatesTokenCount?: number;
-  totalTokenCount?: number;
-}
-
-interface GeminiResponseEnvelope {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string }>;
-    };
-    finishReason?: string;
-  }>;
-  usageMetadata?: GeminiUsageMetadata;
-}
+const tokenCount = z.number().finite().nonnegative().optional();
+const geminiResponseEnvelope = z
+  .object({
+    candidates: z
+      .array(
+        z
+          .object({
+            content: z
+              .object({
+                parts: z
+                  .array(
+                    z
+                      .object({
+                        text: z.string().optional(),
+                      })
+                      .passthrough(),
+                  )
+                  .optional(),
+              })
+              .passthrough()
+              .optional(),
+            finishReason: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+    usageMetadata: z
+      .object({
+        promptTokenCount: tokenCount,
+        candidatesTokenCount: tokenCount,
+        totalTokenCount: tokenCount,
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
 
 export class GeminiProviderError extends Error {
   constructor(public readonly code: string) {
@@ -49,38 +71,58 @@ export async function requestGeminiJson<T>({
   }
 
   const url = `${GEMINI_API_BASE}/${encodeURIComponent(model)}:generateContent`;
-  const response = await fetchImpl(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens,
-        responseMimeType: 'application/json',
+  const signal = AbortSignal.timeout(timeoutMs);
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
       },
-    }),
-  });
+      signal,
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
+  } catch (error) {
+    const errorName =
+      typeof error === 'object' && error !== null && 'name' in error
+        ? (error as { name?: unknown }).name
+        : undefined;
+    const isTimeout =
+      signal.aborted || errorName === 'AbortError' || errorName === 'TimeoutError';
+    throw new GeminiProviderError(
+      isTimeout ? 'provider-timeout' : 'provider-network',
+    );
+  }
 
   if (!response.ok) {
     throw new GeminiProviderError(`provider-http-${response.status}`);
   }
 
-  let envelope: GeminiResponseEnvelope;
+  let rawEnvelope: unknown;
   try {
-    envelope = (await response.json()) as GeminiResponseEnvelope;
+    rawEnvelope = await response.json();
   } catch {
     throw new GeminiProviderError('provider-invalid-response');
   }
+
+  const parsedEnvelope = geminiResponseEnvelope.safeParse(rawEnvelope);
+  if (!parsedEnvelope.success) {
+    throw new GeminiProviderError('provider-invalid-response');
+  }
+  const envelope = parsedEnvelope.data;
 
   logger.info('gemini_usage', {
     model,
