@@ -9,7 +9,7 @@
 
 import { gunzipSync } from 'node:zlib';
 
-async function fetchWithPlaywright(url: string, ua: string): Promise<string> {
+export async function fetchWithPlaywright(url: string, ua: string): Promise<string> {
   // Dynamic import so Playwright isn't required unless Cloudflare blocks us
   let pw;
   try {

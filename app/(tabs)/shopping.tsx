@@ -9,6 +9,7 @@
 // ============================================================
 
 import RecipeDetailModal from '@/components/RecipeDetailModal';
+import IngredientSubstitutionSheet from '@/components/IngredientSubstitutionSheet';
 import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
@@ -24,6 +25,7 @@ import {
   updateShoppingItemQuantity,
 } from '@/services/firestoreService';
 import type { CookbookEntry, Recipe, ShoppingCategory, ShoppingItem } from '@/services/types';
+import type { Ingredient } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -130,6 +132,26 @@ export default function ShoppingScreen() {
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Substitution sheet
+  const [subIngredient, setSubIngredient] = useState<Ingredient | null>(null);
+  const [subSheetVisible, setSubSheetVisible] = useState(false);
+
+  const handleIngredientLongPress = useCallback((item: ShoppingItem) => {
+    const ing: Ingredient = {
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+    };
+    const recipeTitle =
+      item.sources && item.sources.length > 0
+        ? item.sources.map((s) => s.title).join(', ')
+        : 'shopping list';
+    // Store recipe title on the ingredient object so the sheet can use it
+    (ing as any).__recipeTitle = recipeTitle;
+    setSubIngredient(ing);
+    setSubSheetVisible(true);
+  }, []);
 
   useEffect(() => {
     if (!householdId) return;
@@ -334,7 +356,7 @@ export default function ShoppingScreen() {
                 selectionMode={selectionMode}
                 selected={selectedIds.has(row.left.id ?? '')}
                 onToggle={() => selectionMode ? toggleSelectItem(row.left.id ?? '') : handleToggle(row.left)}
-                onLongPress={() => { setSelectionMode(true); toggleSelectItem(row.left.id ?? ''); }}
+                onLongPress={() => selectionMode ? null : handleIngredientLongPress(row.left)}
                 onRecipePress={handleRecipePress}
               />
               {row.right ? (
@@ -344,7 +366,7 @@ export default function ShoppingScreen() {
                   selectionMode={selectionMode}
                   selected={selectedIds.has(row.right.id ?? '')}
                   onToggle={() => selectionMode ? toggleSelectItem(row.right!.id ?? '') : handleToggle(row.right!)}
-                  onLongPress={() => { setSelectionMode(true); toggleSelectItem(row.right!.id ?? ''); }}
+                  onLongPress={() => selectionMode ? null : handleIngredientLongPress(row.right!)}
                   onRecipePress={handleRecipePress}
                 />
               ) : (
@@ -384,8 +406,8 @@ export default function ShoppingScreen() {
             onPress={() => setShowQuickAdd(true)}
             activeOpacity={0.85}
           >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={s.fabPrimaryText}>Add Item</Text>
+            <Ionicons name="add" size={20} color={colors.textInverse} />
+            <Text style={[s.fabPrimaryText, { color: colors.textInverse }]}>Add Item</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -443,6 +465,14 @@ export default function ShoppingScreen() {
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, tags } : prev)
         }
       />
+
+      <IngredientSubstitutionSheet
+        ingredient={subIngredient}
+        recipeTitle={(subIngredient as any)?.__recipeTitle ?? 'shopping list'}
+        allIngredients={items.filter((i) => !i.checked).map((i) => `${i.quantity > 0 ? i.quantity : ''} ${i.unit} ${i.name}`.trim())}
+        visible={subSheetVisible}
+        onClose={() => { setSubSheetVisible(false); setSubIngredient(null); }}
+      />
     </SafeAreaView>
   );
 }
@@ -491,7 +521,7 @@ function CompactShoppingItem({
                 selected && { backgroundColor: colors.primary },
               ]}
             >
-              {selected && <Ionicons name="checkmark" size={11} color="#fff" />}
+              {selected && <Ionicons name="checkmark" size={11} color={colors.textInverse} />}
             </View>
           ) : (
             <View
@@ -718,9 +748,9 @@ function QuickAddModal({
                       activeOpacity={0.75}
                     >
                       {isAdded && (
-                        <Ionicons name="checkmark" size={12} color="#fff" style={{ marginRight: 2 }} />
+                        <Ionicons name="checkmark" size={12} color={colors.textInverse} style={{ marginRight: 2 }} />
                       )}
-                      <Text style={[s.qaPillText, { color: isAdded ? '#fff' : colors.primary }]}>
+                      <Text style={[s.qaPillText, { color: isAdded ? colors.textInverse : colors.primary }]}>
                         {item}
                       </Text>
                     </TouchableOpacity>
@@ -748,8 +778,8 @@ function QuickAddModal({
               onPress={handleUpdate}
               activeOpacity={0.8}
             >
-              <Ionicons name="checkmark" size={16} color="#fff" />
-              <Text style={s.qaUpdateText}>Update</Text>
+              <Ionicons name="checkmark" size={16} color={colors.textInverse} />
+              <Text style={[s.qaUpdateText, { color: colors.textInverse }]}>Update</Text>
             </TouchableOpacity>
           </View>
         )}

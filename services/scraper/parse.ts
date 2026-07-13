@@ -463,15 +463,15 @@ function parseQuantityString(s: string): number {
 function normalizeWprmUnit(unit: string): string {
   const u = unit.toLowerCase().trim();
   const MAP: Record<string, string> = {
-    tablespoon: 'tbsp', tablespoons: 'tbsp',
-    teaspoon: 'tsp', teaspoons: 'tsp',
+    tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
+    teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
     cup: 'cup', cups: 'cup',
     gram: 'g', grams: 'g',
     kilogram: 'kg', kilograms: 'kg',
     milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
     liter: 'l', liters: 'l', litre: 'l', litres: 'l',
-    ounce: 'oz', ounces: 'oz',
-    pound: 'lb', pounds: 'lb',
+    ounce: 'oz', ounces: 'oz', ozs: 'oz',
+    pound: 'lb', pounds: 'lb', lbs: 'lb',
     'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz',
     clove: 'clove', cloves: 'clove',
     slice: 'slice', slices: 'slice',
@@ -487,6 +487,8 @@ function normalizeWprmUnit(unit: string): string {
     handful: 'handful', handfuls: 'handful',
     pint: 'pint', pints: 'pint',
     quart: 'quart', quarts: 'quart',
+    stick: 'stick', sticks: 'stick',
+    head: 'head', heads: 'head',
   };
   return MAP[u] ?? u;
 }

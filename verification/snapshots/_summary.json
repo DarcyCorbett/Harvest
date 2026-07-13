@@ -1,0 +1,67 @@
+{
+  "recipetineats": {
+    "ok": true
+  },
+  "budgetbytes": {
+    "ok": true
+  },
+  "thewoksoflife": {
+    "ok": true
+  },
+  "themediterraneandish": {
+    "ok": true
+  },
+  "spendwithpennies": {
+    "ok": true
+  },
+  "cafedelites": {
+    "ok": true
+  },
+  "skinnytaste": {
+    "ok": true
+  },
+  "pinchofyum": {
+    "ok": true
+  },
+  "pinchofyum-chili": {
+    "ok": true
+  },
+  "pinchofyum-pitas": {
+    "ok": true
+  },
+  "cafedelites-wings": {
+    "ok": true
+  },
+  "pinchofyum-padthai": {
+    "ok": true
+  },
+  "cafedelites-lemon": {
+    "ok": true
+  },
+  "pinchofyum-falafel": {
+    "ok": true
+  },
+  "natashaskitchen-korma": {
+    "ok": true
+  },
+  "seriouseats-baked-ziti": {
+    "ok": false,
+    "error": "HTTP 402"
+  },
+  "akispetretzikis-pilafi": {
+    "ok": false,
+    "error": "HTTP 403"
+  },
+  "nytcooking-cookies": {
+    "ok": true
+  },
+  "atk-broccoli-caesar": {
+    "ok": true
+  },
+  "recipetineats-chow-mein": {
+    "ok": true
+  },
+  "skinnytaste-coconut-bowl": {
+    "ok": true
+  }
+}

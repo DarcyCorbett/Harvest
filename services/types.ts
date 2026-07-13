@@ -169,6 +169,12 @@ export interface HouseholdSettings {
     /** "HH:MM" 24-hour, e.g. "19:30" */
     eveningTime: string;
   };
+  /** Preselected number of adults when launching generate tab. Default 2. */
+  defaultAdults?: number;
+  /** Preselected number of children when launching generate tab. Default 2. */
+  defaultChildren?: number;
+  /** Automatically regenerate mismatched meals until all criteria are met. Default true. */
+  strictMatching?: boolean;
 }
 
 /** Generator input configuration */

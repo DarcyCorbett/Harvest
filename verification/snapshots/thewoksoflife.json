@@ -1,0 +1,333 @@
+{
+  "title": "Beef Chow Mein",
+  "sourceUrl": "https://thewoksoflife.com/beef-chow-mein/",
+  "imageUrl": "https://thewoksoflife.com/wp-content/uploads/2026/04/beef-chow-mein-10.jpg",
+  "prepTime": "25 min",
+  "cookTime": "20 min",
+  "totalTime": "45 min",
+  "originalServings": 4,
+  "course": [
+    "Noodles"
+  ],
+  "description": "Beef chow mein is a delicious Chinese dish with thin, chewy noodles, seared flank steak, and crisp-tender vegetables.",
+  "cuisine": "Chinese",
+  "ingredients": [
+    {
+      "name": "fresh thin Hong-Kong-Style Pan-fried Noodles",
+      "quantity": 227,
+      "unit": "g",
+      "notes": "or 4 ounces dried"
+    },
+    {
+      "name": "neutral oil",
+      "quantity": 4,
+      "unit": "tbsp",
+      "notes": "such as canola, vegetable, or avocado oil; divided"
+    },
+    {
+      "name": "white button mushrooms",
+      "quantity": 0.75,
+      "unit": "cup",
+      "notes": "or fresh shiitake mushroom, sliced"
+    },
+    {
+      "name": "thinly sliced carrot",
+      "quantity": 0.75,
+      "unit": "cup",
+      "notes": "about 1 small carrot"
+    },
+    {
+      "name": "snow peas",
+      "quantity": 1,
+      "unit": "cup",
+      "notes": "ends trimmed, fibrous string removed"
+    },
+    {
+      "name": "mung bean sprouts",
+      "quantity": 1,
+      "unit": "cup"
+    },
+    {
+      "name": "scallions",
+      "quantity": 2,
+      "unit": "",
+      "notes": "sliced on an angle into 2-inch/5cm pieces"
+    },
+    {
+      "name": "garlic",
+      "quantity": 1,
+      "unit": "clove",
+      "notes": "chopped"
+    },
+    {
+      "name": "beef flank steak",
+      "quantity": 340,
+      "unit": "g",
+      "notes": "sliced into thin strips"
+    },
+    {
+      "name": "water",
+      "quantity": 5.5,
+      "unit": "tbsp"
+    },
+    {
+      "name": "baking soda",
+      "quantity": 0.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "oyster sauce",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "cornstarch",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "neutral oil",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "dark soy sauce",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "such as Lee Kum Kee Premium Dark Soy Sauce"
+    },
+    {
+      "name": "Shaoxing wine",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "or dry sherry"
+    },
+    {
+      "name": "hot water",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "sugar",
+      "quantity": 0.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "Shaoxing wine",
+      "quantity": 2,
+      "unit": "tbsp",
+      "notes": "divided"
+    },
+    {
+      "name": "soy sauce",
+      "quantity": 1,
+      "unit": "tbsp",
+      "notes": "such as Lee Kum Kee Premium Light Soy Sauce—no preservatives added"
+    },
+    {
+      "name": "oyster sauce",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "dark soy sauce",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": "such as Lee Kum Kee Premium Dark Soy Sauce"
+    },
+    {
+      "name": "sesame oil",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "white pepper",
+      "quantity": 0.125,
+      "unit": "tsp"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "fresh thin Hong-Kong-Style Pan-fried Noodles",
+          "quantity": 227,
+          "unit": "g",
+          "notes": "or 4 ounces dried"
+        },
+        {
+          "name": "neutral oil",
+          "quantity": 4,
+          "unit": "tbsp",
+          "notes": "such as canola, vegetable, or avocado oil; divided"
+        },
+        {
+          "name": "white button mushrooms",
+          "quantity": 0.75,
+          "unit": "cup",
+          "notes": "or fresh shiitake mushroom, sliced"
+        },
+        {
+          "name": "thinly sliced carrot",
+          "quantity": 0.75,
+          "unit": "cup",
+          "notes": "about 1 small carrot"
+        },
+        {
+          "name": "snow peas",
+          "quantity": 1,
+          "unit": "cup",
+          "notes": "ends trimmed, fibrous string removed"
+        },
+        {
+          "name": "mung bean sprouts",
+          "quantity": 1,
+          "unit": "cup"
+        },
+        {
+          "name": "scallions",
+          "quantity": 2,
+          "unit": "",
+          "notes": "sliced on an angle into 2-inch/5cm pieces"
+        },
+        {
+          "name": "garlic",
+          "quantity": 1,
+          "unit": "clove",
+          "notes": "chopped"
+        }
+      ]
+    },
+    {
+      "name": "For the beef & marinade:",
+      "ingredients": [
+        {
+          "name": "beef flank steak",
+          "quantity": 340,
+          "unit": "g",
+          "notes": "sliced into thin strips"
+        },
+        {
+          "name": "water",
+          "quantity": 5.5,
+          "unit": "tbsp"
+        },
+        {
+          "name": "baking soda",
+          "quantity": 0.25,
+          "unit": "tsp"
+        },
+        {
+          "name": "oyster sauce",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "cornstarch",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "neutral oil",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "dark soy sauce",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "such as Lee Kum Kee Premium Dark Soy Sauce"
+        },
+        {
+          "name": "Shaoxing wine",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "or dry sherry"
+        }
+      ]
+    },
+    {
+      "name": "For the sauce:",
+      "ingredients": [
+        {
+          "name": "hot water",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "sugar",
+          "quantity": 0.25,
+          "unit": "tsp"
+        },
+        {
+          "name": "Shaoxing wine",
+          "quantity": 2,
+          "unit": "tbsp",
+          "notes": "divided"
+        },
+        {
+          "name": "soy sauce",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": "such as Lee Kum Kee Premium Light Soy Sauce—no preservatives added"
+        },
+        {
+          "name": "oyster sauce",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "dark soy sauce",
+          "quantity": 2,
+          "unit": "tsp",
+          "notes": "such as Lee Kum Kee Premium Dark Soy Sauce"
+        },
+        {
+          "name": "sesame oil",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "white pepper",
+          "quantity": 0.125,
+          "unit": "tsp"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Bring 2 quarts of water to a boil, and cook the noodles for 30-60 seconds. Drain, rinse in cold water, and spread the noodles out to drain further."
+    },
+    {
+      "text": "Velvet the beef by combining the beef strips with water, baking soda, oyster sauce, cornstarch, oil, dark soy sauce, and Shaoxing wine. Massage the beef to coat it uniformly until it absorbs all the liquid."
+    },
+    {
+      "text": "Make the sauce in a small bowl by mixing the hot water and sugar until the sugar dissolves. Then add the Shaoxing wine, soy sauce, oyster sauce, dark soy sauce, sesame oil, and white pepper."
+    },
+    {
+      "text": "Heat your wok over medium-high heat until it is just starting to smoke. Add 1½ tablespoons of oil and swirl to coat the wok. Reduce the heat to medium, and spread the noodles in a thin layer, tilting the wok in a circular motion to distribute the oil and crisp the bottom layer of the noodles evenly. Let the noodles cook for 1 to 2 minutes until lightly browned, adjusting the heat as needed to prevent burning. Flip the noodles and repeat on the other side. Remove from the wok."
+    },
+    {
+      "text": "Heat wok over high heat until the wok is just smoking, and add 1 tablespoon of oil around the perimeter. Add the beef in one layer, and sear for 30 seconds. Flip and sear for another 30 seconds. Stir-fry the beef for another 20 seconds, and remove the beef from the wok."
+    },
+    {
+      "text": "Add the remaining ½ tablespoon of oil, along with the garlic, mushrooms, carrots, and half the scallions (more of the white parts than the green parts). Stir-fry for 1 minute."
+    },
+    {
+      "text": "Still over high heat, add the noodles and beef (with any juices). Pour the sauce mixture over the top and turn the heat to the highest setting. Stir-fry the noodles with a lift-and-shake motion until the sauce is well-incorporated, about 30-45 seconds. Add the snow peas, bean sprouts, and the remaining scallions. Stir-fry everything for another 1-2 minutes. Serve!"
+    }
+  ],
+  "notes": "",
+  "nutrition": {
+    "calories": 463,
+    "protein": 27,
+    "carbs": 41,
+    "fat": 21
+  },
+  "tags": [
+    "Asian"
+  ],
+  "scrapedAt": "2026-06-07T07:36:23.988Z"
+}

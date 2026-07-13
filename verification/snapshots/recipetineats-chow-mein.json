@@ -1,0 +1,221 @@
+{
+  "title": "Chow Mein Ramen Noodles",
+  "sourceUrl": "https://www.recipetineats.com/chow-mein-ramen-noodles-recipe/",
+  "imageUrl": "https://www.recipetineats.com/tachyon/2019/06/Chow-Mein-Ramen_3.jpg",
+  "videoEmbedUrl": "https://www.youtube.com/embed/V6F0CGtb470",
+  "prepTime": "7 min",
+  "cookTime": "8 min",
+  "totalTime": "15 min",
+  "originalServings": 2,
+  "course": [
+    "Mains"
+  ],
+  "description": "Recipe video above. The fastest, easiest Chow Mein recipe ever! Made using a couple of cheeky shortcuts - ramen noodles, a Coleslaw mix, with the noodles cooked in the same skillet. It's a quicker version of real Chow Mein - 99% of the flavour, but FASTER!",
+  "cuisine": "Asian",
+  "ingredients": [
+    {
+      "name": "oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "chicken",
+      "quantity": 200,
+      "unit": "g",
+      "notes": "thigh, breast; sliced"
+    },
+    {
+      "name": "garlic cloves",
+      "quantity": 2,
+      "unit": "",
+      "notes": "minced"
+    },
+    {
+      "name": "ramen or instant noodle cakes",
+      "quantity": 2,
+      "unit": "",
+      "notes": "Note 1; discard seasoning"
+    },
+    {
+      "name": "pre shedded Coleslaw mix",
+      "quantity": 200,
+      "unit": "g",
+      "notes": "Note 2; cabbage and carrot"
+    },
+    {
+      "name": "green onion stems",
+      "quantity": 3,
+      "unit": "",
+      "notes": "cut into 5cm/2″ lengths"
+    },
+    {
+      "name": "heaped cup beansprouts",
+      "quantity": 1,
+      "unit": ""
+    },
+    {
+      "name": "water",
+      "quantity": 1,
+      "unit": "cup",
+      "notes": "250 ml"
+    },
+    {
+      "name": "light soy sauce",
+      "quantity": 1.5,
+      "unit": "tbsp",
+      "notes": "Note 3"
+    },
+    {
+      "name": "Oyster Sauce",
+      "quantity": 1.5,
+      "unit": "tbsp",
+      "notes": "Note 4"
+    },
+    {
+      "name": "Chinese Cooking Wine or Mirin",
+      "quantity": 1,
+      "unit": "tbsp",
+      "notes": "Note 5"
+    },
+    {
+      "name": "sesame oil",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": "Note 6; toasted"
+    },
+    {
+      "name": "white sugar",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "SKIP if using Mirin"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "chicken",
+          "quantity": 200,
+          "unit": "g",
+          "notes": "thigh, breast; sliced"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 2,
+          "unit": "",
+          "notes": "minced"
+        },
+        {
+          "name": "ramen or instant noodle cakes",
+          "quantity": 2,
+          "unit": "",
+          "notes": "Note 1; discard seasoning"
+        },
+        {
+          "name": "pre shedded Coleslaw mix",
+          "quantity": 200,
+          "unit": "g",
+          "notes": "Note 2; cabbage and carrot"
+        },
+        {
+          "name": "green onion stems",
+          "quantity": 3,
+          "unit": "",
+          "notes": "cut into 5cm/2″ lengths"
+        },
+        {
+          "name": "heaped cup beansprouts",
+          "quantity": 1,
+          "unit": ""
+        },
+        {
+          "name": "water",
+          "quantity": 1,
+          "unit": "cup",
+          "notes": "250 ml"
+        }
+      ]
+    },
+    {
+      "name": "Chow Mein Sauce:",
+      "ingredients": [
+        {
+          "name": "light soy sauce",
+          "quantity": 1.5,
+          "unit": "tbsp",
+          "notes": "Note 3"
+        },
+        {
+          "name": "Oyster Sauce",
+          "quantity": 1.5,
+          "unit": "tbsp",
+          "notes": "Note 4"
+        },
+        {
+          "name": "Chinese Cooking Wine or Mirin",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": "Note 5"
+        },
+        {
+          "name": "sesame oil",
+          "quantity": 2,
+          "unit": "tsp",
+          "notes": "Note 6; toasted"
+        },
+        {
+          "name": "white sugar",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "SKIP if using Mirin"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Mix Sauce in a bowl."
+    },
+    {
+      "text": "Heat oil in a large skillet over high heat. Add garlic, cook 10 seconds."
+    },
+    {
+      "text": "Add chicken and cook until mostly changes from pink to white, then add Sauce."
+    },
+    {
+      "text": "Cook for 1 minute, then add Coleslaw mix and white part of green onions."
+    },
+    {
+      "text": "Cook for 1 1/2 minutes until cabbage wilts, then push everything to the side to make room for the ramen (see video & photos in post)."
+    },
+    {
+      "text": "Add water then squidge the ramen cakes in side by side."
+    },
+    {
+      "text": "When water simmers, leave for 45 seconds. Flip, then leave for 30 seconds."
+    },
+    {
+      "text": "Loosen noodles, add bean sprouts and green onion, then toss energetically for 1 1/2 - 2 minutes until sauce reduces and coats noodles. (Note 7)"
+    },
+    {
+      "text": "Serve immediately!"
+    }
+  ],
+  "notes": "Recipe Notes:1. Instant noodles/ramen – any brand will work here as long as both the noodle cakes will fit in your skillet! Discard the seasoning packets – we’re making our own sauce. 2. Pre shredded Coleslaw mix used for convenience! Green cabbage, carrot and a tiny bit of red cabbage. Can also finely slice your own – 2 cups green cabbage, 1 cup carrot. 3. Soy Sauce – use light or all purpose soy sauce. Do not use dark soy sauce or sweet soy sauce. 4. Oyster Sauce – sub with Hoisin sauce. You’ll get a hint of five spice flavour which makes it different to Oyster Sauce, but it’s lovely! 5. Mirin – a Japanese sweet cooking wine. Chinese cooking wine also great, otherwise use dry sherry. Non alcoholic sub – use LOW SODIUM soy sauce and sub all water with LOW SODIUM chicken stock. 6. Sesame oil – use toasted sesame oil if you can because it has a stronger flavour. Otherwise use untoasted. (Toasted is dark brown, untested sesame oil is yellow) 7. Noodles doneness – the beauty of instant noodles is that they’re basically foolproof. So if the noodles are not tender enough, just add more water and toss more. If the noodles get too thick, add touch of water to loosen! 8. Nutrition per serving. Reduce sodium by 250 mg per serving (500 mg in total) by using LOW SODIUM soy sauce.",
+  "nutrition": {
+    "calories": 624,
+    "protein": 22,
+    "carbs": 55,
+    "fat": 26
+  },
+  "tags": [
+    "Asian"
+  ],
+  "scrapedAt": "2026-06-07T07:36:27.656Z"
+}

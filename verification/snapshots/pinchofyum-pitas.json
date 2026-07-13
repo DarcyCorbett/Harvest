@@ -1,0 +1,174 @@
+{
+  "title": "Sheet Pan Chicken Pitas with Tzatziki",
+  "sourceUrl": "https://pinchofyum.com/sheet-pan-chicken-pitas",
+  "imageUrl": "https://pinchofyum.com/tachyon/Family-Style-Pitas-4-Square.jpg?fit=225%2C225",
+  "videoEmbedUrl": "https://content.jwplatform.com/videos/FIL7MpUU.mp4",
+  "prepTime": "30 min",
+  "cookTime": "15 min",
+  "totalTime": "45 min",
+  "originalServings": 4,
+  "course": [
+    "Dinner"
+  ],
+  "description": "Sheet Pan Chicken Pitas that are salty-briney-crunchy in all the right ways! Marinated chicken, roasted peppers, fresh cucumber, kalamata olives, feta cheese, and an easy homemade tzatziki.",
+  "cuisine": "Mediterranean",
+  "ingredients": [
+    {
+      "name": "boneless skinless chicken breasts",
+      "quantity": 454,
+      "unit": "g",
+      "notes": "cut into thin strips"
+    },
+    {
+      "name": "garlic",
+      "quantity": 3,
+      "unit": "clove",
+      "notes": "grated"
+    },
+    {
+      "name": "olive oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "lemon juice",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "cumin",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "smoked paprika",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "curry powder",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "black pepper to taste",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "bell peppers",
+      "quantity": 2,
+      "unit": "",
+      "notes": "sliced"
+    },
+    {
+      "name": "olive oil and salt",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "full-fat plain Greek yogurt",
+      "quantity": 0.75,
+      "unit": "cup"
+    },
+    {
+      "name": "grated cucumber",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "give them a quick squeeze over the sink to get rid of extra water"
+    },
+    {
+      "name": "lemon juice",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "olive oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "small clove garlic",
+      "quantity": 1,
+      "unit": "",
+      "notes": "grated"
+    },
+    {
+      "name": "dried dill",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "pepper to taste",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "diced cucumber",
+      "quantity": 1,
+      "unit": ""
+    },
+    {
+      "name": "diced red onion",
+      "quantity": 0.5,
+      "unit": ""
+    },
+    {
+      "name": "kalamata olives",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "feta cheese",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "of some kind of flatbread",
+      "quantity": 6,
+      "unit": "piece",
+      "notes": "pita, naan, socca"
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Preheat the oven to 425 degrees. Mix chicken ingredients in a bowl. Marinate for 30 minutes.",
+      "imageUrl": "https://i.vimeocdn.com/video/848831668-0b975153681aa87b40112ee1526d632d930b85c9b4b99d7d2fbd8d3faa9c26be-d_295x166?region=us",
+      "videoEmbedUrl": "https://player.vimeo.com/video/386334822?dnt=1&app_id=122963"
+    },
+    {
+      "text": "Mix all tzatziki ingredients.",
+      "imageUrl": "https://i.vimeocdn.com/video/848831921-570cf8ac78502df4099b362e092d2a75b12abd2e09c960fe16b9126595e57351-d_295x166?region=us",
+      "videoEmbedUrl": "https://player.vimeo.com/video/386334961?dnt=1&app_id=122963"
+    },
+    {
+      "text": "On a sheet pan, toss the peppers with olive oil and salt. Bake for 20 minutes, stir them and move to one side, place chicken on the other side of the sheet pan. Bake both together for another 10 minutes."
+    },
+    {
+      "text": "Serve chicken, peppers, sauce, and all the other fixings on a big platter (or just a sheet pan, really) and everyone can build their own pitas / bowls / salads. So much salty-briney-crunchy goodness.",
+      "imageUrl": "https://i.vimeocdn.com/video/848833471-8e1d028a47e893990d8681db19d60b40adeda3b6044b4b92213e240d26b217e8-d_295x166?region=us",
+      "videoEmbedUrl": "https://player.vimeo.com/video/386335346?dnt=1&app_id=122963"
+    }
+  ],
+  "notes": "Store-bought tzatziki also works great in this recipe to save you a few steps!",
+  "nutrition": {
+    "calories": 529,
+    "protein": 32,
+    "carbs": 56,
+    "fat": 20
+  },
+  "tags": [
+    "Mediterranean"
+  ],
+  "scrapedAt": "2026-06-07T07:36:25.326Z"
+}

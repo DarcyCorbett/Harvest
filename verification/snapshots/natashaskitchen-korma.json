@@ -1,0 +1,266 @@
+{
+  "title": "Chicken Korma Recipe",
+  "sourceUrl": "https://natashaskitchen.com/chicken-korma/",
+  "imageUrl": "https://natashaskitchen.com/wp-content/uploads/2025/02/Chicken-Korma-8.jpg",
+  "videoEmbedUrl": "https://www.youtube.com/embed/dC16hRSRLWA",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "totalTime": "30 min",
+  "originalServings": 6,
+  "course": [
+    "Chicken",
+    "Dinner"
+  ],
+  "description": "My Chicken Korma recipe has a sauce that is creamy and rich, bursting with warm aromatic spices. It is an easy yet impressive dish that brings the flavors of India straight to your kitchen. Serve it over fluffy white rice and top with chopped cilantro, and enjoy a meal that’s both comforting and delicious!",
+  "cuisine": "Indian",
+  "ingredients": [
+    {
+      "name": "light olive oil",
+      "quantity": 2,
+      "unit": "tbsp",
+      "notes": "or vegetable oil"
+    },
+    {
+      "name": "large yellow onion",
+      "quantity": 1,
+      "unit": "",
+      "notes": "finely chopped"
+    },
+    {
+      "name": "chicken breast",
+      "quantity": 0.7,
+      "unit": "kg",
+      "notes": "tenderloin, or trimmed thighs, cut into bite-size pieces"
+    },
+    {
+      "name": "garlic cloves",
+      "quantity": 4,
+      "unit": "",
+      "notes": "minced"
+    },
+    {
+      "name": "minced ginger",
+      "quantity": 2,
+      "unit": "tsp",
+      "notes": "about 1-inch piece of ginger"
+    },
+    {
+      "name": "garam masala",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground cumin",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground coriander",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "chili powder",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground turmeric",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "fine sea salt",
+      "quantity": 0.5,
+      "unit": "tsp",
+      "notes": "plus more to taste"
+    },
+    {
+      "name": "freshly ground black pepper",
+      "quantity": 0.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "tomato paste",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "plain greek yogurt",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "preferably full-fat"
+    },
+    {
+      "name": "canned coconut milk",
+      "quantity": 0.5,
+      "unit": "cup",
+      "notes": "preferably the cream on top*"
+    },
+    {
+      "name": "almond flour",
+      "quantity": 0.25,
+      "unit": "cup",
+      "notes": "or 2 Tbsp almond butter or cashew butter, optional"
+    },
+    {
+      "name": "granulated sugar",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "heavy whipping cream",
+      "quantity": 0.25,
+      "unit": "cup"
+    },
+    {
+      "name": "fresh cilantro",
+      "quantity": 0.25,
+      "unit": "cup",
+      "notes": "chopped, for garnish"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "light olive oil",
+          "quantity": 2,
+          "unit": "tbsp",
+          "notes": "or vegetable oil"
+        },
+        {
+          "name": "large yellow onion",
+          "quantity": 1,
+          "unit": "",
+          "notes": "finely chopped"
+        },
+        {
+          "name": "chicken breast",
+          "quantity": 0.7,
+          "unit": "kg",
+          "notes": "tenderloin, or trimmed thighs, cut into bite-size pieces"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 4,
+          "unit": "",
+          "notes": "minced"
+        },
+        {
+          "name": "minced ginger",
+          "quantity": 2,
+          "unit": "tsp",
+          "notes": "about 1-inch piece of ginger"
+        },
+        {
+          "name": "garam masala",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground cumin",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground coriander",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "chili powder",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground turmeric",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "fine sea salt",
+          "quantity": 0.5,
+          "unit": "tsp",
+          "notes": "plus more to taste"
+        },
+        {
+          "name": "freshly ground black pepper",
+          "quantity": 0.25,
+          "unit": "tsp"
+        },
+        {
+          "name": "tomato paste",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "plain greek yogurt",
+          "quantity": 0.5,
+          "unit": "cup",
+          "notes": "preferably full-fat"
+        },
+        {
+          "name": "canned coconut milk",
+          "quantity": 0.5,
+          "unit": "cup",
+          "notes": "preferably the cream on top*"
+        },
+        {
+          "name": "almond flour",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "or 2 Tbsp almond butter or cashew butter, optional"
+        },
+        {
+          "name": "granulated sugar",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "heavy whipping cream",
+          "quantity": 0.25,
+          "unit": "cup"
+        },
+        {
+          "name": "fresh cilantro",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "chopped, for garnish"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Saute Onions - Set a large skillet over medium heat and add 2 Tbsp oil. Add onions and sauté until softened and golden, about 5 minutes."
+    },
+    {
+      "text": "Add the chicken and sauté until the chicken is no longer pink on the outside, about 5 minutes. You don’t have to cook it through at this point."
+    },
+    {
+      "text": "Build Flavor - Add minced garlic, ginger, cumin, coriander, garam masala, chili powder, turmeric, salt, pepper, and tomato paste. Cook for another 2 minutes, stirring constantly until the chicken is coated and the mixture is fragrant."
+    },
+    {
+      "text": "Make the Sauce - Add yogurt, coconut cream, almond flour, and sugar and stir to combine. Bring to a light boil, then reduce the heat and simmer uncovered for 8-10 minutes, stirring occasionally, until the chicken is cooked through and the sauce is reduced to your desired thickness."
+    },
+    {
+      "text": "Stir in the heavy cream and return to a simmer, then remove from heat. Season to taste with salt (I added an extra ¼ tsp salt)."
+    },
+    {
+      "text": "Serve over white rice if desired and garnish with cilantro."
+    }
+  ],
+  "notes": "Notes*Do not shake the coconut milk can – this will make it easier to scoop off the rich cream portion at the top of the can for the sauce.",
+  "nutrition": {
+    "calories": 310,
+    "protein": 28,
+    "carbs": 8,
+    "fat": 19
+  },
+  "tags": [
+    "Indian"
+  ],
+  "scrapedAt": "2026-06-07T07:36:25.950Z"
+}

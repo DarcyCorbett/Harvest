@@ -1,0 +1,259 @@
+{
+  "title": "Chinese Lemon Chicken",
+  "sourceUrl": "https://cafedelites.com/chinese-lemon-chicken/",
+  "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/Chinese-Lemon-Chicken-IMAGE-42.jpg",
+  "videoEmbedUrl": "https://www.youtube.com/embed/tEwqWhGs2M4",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "totalTime": "30 min",
+  "originalServings": 4,
+  "course": [
+    "Dinner"
+  ],
+  "description": "Easy Chinese Lemon Chicken with a sticky honey, lemon and garlic sauce. Better than takeout in less than 30 minutes!",
+  "cuisine": "Asian",
+  "ingredients": [
+    {
+      "name": "chicken tenderloins cut into 1-inch pieces",
+      "quantity": 595,
+      "unit": "g"
+    },
+    {
+      "name": "small egg",
+      "quantity": 1,
+      "unit": ""
+    },
+    {
+      "name": "soy sauce",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "Chinese shaoxing wine or mirin",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "corn starch",
+      "quantity": 0.75,
+      "unit": "cup"
+    },
+    {
+      "name": "vegetable oil or canola oil",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "garlic minced",
+      "quantity": 3,
+      "unit": "tsp"
+    },
+    {
+      "name": "ginger ginger or finely grated",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "chicken stock or broth",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "soy sauce",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "lemon juice of one lemon",
+      "quantity": 4,
+      "unit": "tbsp",
+      "notes": "about 3-4 tablespoons"
+    },
+    {
+      "name": "sugar",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "honey",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "salt to taste",
+      "quantity": 1,
+      "unit": "pinch"
+    },
+    {
+      "name": "corn starch dissolved in 1 tablespoons water",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "sesame seeds to garnish",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "green onions thinly sliced to garnish",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "lemon slices to serve",
+      "quantity": 5,
+      "unit": "",
+      "notes": "optional"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "CHICKEN:",
+      "ingredients": [
+        {
+          "name": "chicken tenderloins cut into 1-inch pieces",
+          "quantity": 595,
+          "unit": "g"
+        },
+        {
+          "name": "small egg",
+          "quantity": 1,
+          "unit": ""
+        },
+        {
+          "name": "soy sauce",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "Chinese shaoxing wine or mirin",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "corn starch",
+          "quantity": 0.75,
+          "unit": "cup"
+        },
+        {
+          "name": "vegetable oil or canola oil",
+          "quantity": 0.5,
+          "unit": "cup"
+        }
+      ]
+    },
+    {
+      "name": "LEMON SAUCE:",
+      "ingredients": [
+        {
+          "name": "oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "garlic minced",
+          "quantity": 3,
+          "unit": "tsp"
+        },
+        {
+          "name": "ginger ginger or finely grated",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "chicken stock or broth",
+          "quantity": 0.5,
+          "unit": "cup"
+        },
+        {
+          "name": "soy sauce",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "lemon juice of one lemon",
+          "quantity": 4,
+          "unit": "tbsp",
+          "notes": "about 3-4 tablespoons"
+        },
+        {
+          "name": "sugar",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "honey",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "salt to taste",
+          "quantity": 1,
+          "unit": "pinch"
+        },
+        {
+          "name": "corn starch dissolved in 1 tablespoons water",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "sesame seeds to garnish",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "green onions thinly sliced to garnish",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "lemon slices to serve",
+          "quantity": 5,
+          "unit": "",
+          "notes": "optional"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "In a large shallow bowl whisk egg, soy sauce and wine. Add in chicken, mix well and allow to marinate for 20 minutes, covered.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/STEP-1-1.jpg"
+    },
+    {
+      "text": "Place corn starch into a large baking tray. Pour chicken and marinade into the corn starch and coat chicken pieces evenly, lightly pressing the corn starch around the chicken.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/STEP-2-1.jpg"
+    },
+    {
+      "text": "Heat oil in a large wok, pan or skillet over medium-high heat on the stove top. When oil is hot (163°C | 165°C), shake off excess corn starch and fry chicken in batches in a single layer for about 5-6 minutes, turning half way during cooking, until golden and cooked through. Transfer to a plate lined with paper towel.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/STEP-3-1.jpg"
+    },
+    {
+      "text": "Discard oil and wipe wok/pan over with paper towel. Heat a little oil over medium-high heat and sauté the garlic and ginger until fragrant (about 30 seconds). Add stock, soy sauce, lemon juice, sugar, honey, and a pinch of salt. Whisk and bring to a simmer until the sugar dissolves.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/STEP-4-1.jpg"
+    },
+    {
+      "text": "Whisk corn starch mixture into the simmering sauce and stir until thickened. Add the fried chicken and toss until evenly coated in the sticky lemon sauce.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2019/01/STEP-5-1.jpg"
+    },
+    {
+      "text": "Garnish with sesame seeds, green onions and lemon slices. Serve immediately for the crispiest texture."
+    }
+  ],
+  "notes": "1. Fry the chicken in batches so the coating stays crispy instead of steaming.\n2. If the sauce thickens too much, whisk in a splash of hot chicken stock or water\n3. Taste your lemons before making the sauce. Some are sweeter, while others can be VERY sour.\n4. Keep the chicken and sauce separate if making ahead, then toss together right before serving.",
+  "nutrition": {
+    "calories": 660,
+    "protein": 38,
+    "carbs": 47,
+    "fat": 37
+  },
+  "tags": [
+    "Asian"
+  ],
+  "scrapedAt": "2026-05-09T06:32:05.364Z"
+}

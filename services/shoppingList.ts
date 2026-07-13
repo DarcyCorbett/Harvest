@@ -488,7 +488,7 @@ export function aggregateByGeminiGroups(
  * Ask Gemini to semantically group raw ingredients. Returns `[{canonicalName, category, sourceIds[]}]`
  * with every raw id placed into exactly one group.
  */
-export async function getGeminiGroupings(rawIngredients: RawIngredient[]): Promise<GeminiGroup[]> {
+export async function getGeminiGroupings(rawIngredients: RawIngredient[], modelOverride?: string): Promise<GeminiGroup[]> {
   const prompt = `You are given a list of recipe ingredients as JSON. Group them into shopping list items.
 
 Rules:
@@ -521,7 +521,7 @@ ${JSON.stringify(rawIngredients.map(({ id, name, quantity, unit }) => ({ id, nam
   // (maxOutputTokens is a truncation cap, not a billing amount — Gemini bills
   // only for tokens actually produced.)
   const maxOutputTokens = Math.min(65536, 4096 + rawIngredients.length * 200);
-  const parsed = await callGemini<unknown>(prompt, maxOutputTokens, GEMINI_AGGREGATION_MODEL);
+  const parsed = await callGemini<unknown>(prompt, maxOutputTokens, modelOverride || GEMINI_AGGREGATION_MODEL);
 
   if (!Array.isArray(parsed)) throw new Error('Gemini response is not an array');
 

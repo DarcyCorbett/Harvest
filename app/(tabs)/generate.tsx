@@ -11,6 +11,8 @@ import { Colors, FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/
 import { useAuth } from '@/contexts/AuthContext';
 import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
+import { DevLogTerminal } from '@/components/DevLogTerminal';
 import { addToCookbook, clearGenerationResult, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
 import {
   addDays,
@@ -60,7 +62,7 @@ const MAT_OPTIONS = [
   { id: 'Pasta', emoji: '🍝', bg: BADGE.caloriesBadge },
   { id: 'Rice', emoji: '🍚', bg: BADGE.carbsBadge },
   { id: 'Potato', emoji: '🥔', bg: BADGE.fatBadge },
-  { id: 'Carrot', emoji: '🥕', bg: BADGE.caloriesBadge },
+  { id: 'Omelette', emoji: '🍳', bg: BADGE.caloriesBadge },
   { id: 'Cheese', emoji: '🧀', bg: BADGE.caloriesBadge },
   { id: 'Lettuce', emoji: '🥬', bg: BADGE.proteinBadge },
 ];
@@ -106,18 +108,21 @@ const MEAL_LABELS: Record<MealType, string> = {
 
 // ─── Main Screen ──────────────────────────────────────────────
 
-type Phase = 'configure' | 'generating' | 'results' | 'saving';
+type Phase = 'configure' | 'generating' | 'results' | 'saving' | 'confirming';
 
 export default function GenerateScreen() {
   const { householdId } = useAuth();
   const { colors } = useTheme();
+  const { developerMode, clearLogs } = useDeveloperMode();
   const {
     generation,
     setGenerationMeals,
     clearGeneration,
     startGeneration,
+    cancelGeneration,
     startConfirm,
     confirm,
+    clearConfirm,
   } = useBackgroundJobs();
 
   // ── Settings state ──
@@ -134,6 +139,21 @@ export default function GenerateScreen() {
   const [startDate, setStartDate] = useState<Date>(getNextMonday);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(2);
+
+  const hasInitializedDefaults = useRef(false);
+  useEffect(() => {
+    if (settings && !hasInitializedDefaults.current) {
+      if (settings.defaultAdults !== undefined) {
+        setAdults(settings.defaultAdults);
+      }
+      if (settings.defaultChildren !== undefined) {
+        setChildren(settings.defaultChildren);
+      }
+      if (settings.defaultAdults !== undefined || settings.defaultChildren !== undefined) {
+        hasInitializedDefaults.current = true;
+      }
+    }
+  }, [settings]);
   const [mealTypes, setMealTypes] = useState<MealType[]>(['dinner']);
   const [effort, setEffort] = useState<EffortValue>('Moderate');
   const [modifiers, setModifiers] = useState<Set<CuisineStyle>>(new Set());
@@ -268,13 +288,13 @@ export default function GenerateScreen() {
     const config = resolveConfig();
     if (!config) return;
 
+    if (developerMode) {
+      clearLogs();
+    }
     setGenerateSnapshot({ cuisines, selectedMaterials: new Set(selectedMaterials) });
     setResultsScreenDirty(false);
-    const ok = startGeneration(config, householdId);
-    if (ok) {
-      Alert.alert('Generating your meal plan', "You'll be notified when it's ready. Feel free to keep using the app.");
-    }
-  }, [householdId, generation.status, startGeneration, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials]);
+    startGeneration(config, householdId);
+  }, [householdId, generation.status, startGeneration, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials, developerMode, clearLogs]);
 
   // Seed checkedIndices when a generation transitions from running → done.
   const prevGenStatus = useRef(generation.status);
@@ -301,6 +321,9 @@ export default function GenerateScreen() {
     const seeds = Array.from(activeMaterials).map((m) => m.toLowerCase());
     const activeSettings = seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings;
 
+    if (developerMode) {
+      clearLogs();
+    }
     setPhase('generating');
     setLoadingMsg('Regenerating selected recipes…');
     setLoadingProgress({ current: 0, total: indices.length });
@@ -322,7 +345,7 @@ export default function GenerateScreen() {
         }
       );
       setGeneratedMeals(updated);
-      setCheckedIndices(new Set());
+      setCheckedIndices(new Set(indices));
       setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
       setResultsScreenDirty(false);
       setPhase('results');
@@ -330,7 +353,7 @@ export default function GenerateScreen() {
       setPhase('results');
       Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, checkedIndices, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot]);
+  }, [householdId, checkedIndices, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
 
   // ── Regenerate mismatched ──
   const handleRegenerateMismatched = useCallback(async () => {
@@ -353,6 +376,9 @@ export default function GenerateScreen() {
       console.log(`[AutoFix] Slot ${m.index} (${generatedMeals[m.index].mealType} — "${generatedMeals[m.index].recipe.title}"): ${m.reasons.join('; ')}`);
     });
 
+    if (developerMode) {
+      clearLogs();
+    }
     setPhase('generating');
     setLoadingMsg(`Regenerating ${mismatchedIndices.length} mismatched recipe${mismatchedIndices.length !== 1 ? 's' : ''}…`);
     setLoadingProgress({ current: 0, total: mismatchedIndices.length });
@@ -375,7 +401,7 @@ export default function GenerateScreen() {
         }
       );
       setGeneratedMeals(updated);
-      setCheckedIndices(new Set());
+      setCheckedIndices(new Set(mismatchedIndices));
       setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
       setResultsScreenDirty(false);
       setPhase('results');
@@ -383,7 +409,7 @@ export default function GenerateScreen() {
       setPhase('results');
       Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot]);
+  }, [householdId, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
 
   // ── Add to calendar ──
   // Fires the confirm in the background. Calendar entries land quickly; the
@@ -396,18 +422,63 @@ export default function GenerateScreen() {
         Alert.alert('Already saving', 'A meal plan is already being saved. You\'ll be notified when ready.');
         return;
       }
+      if (developerMode) {
+        clearLogs();
+      }
       const ok = startConfirm({ meals: generatedMeals, householdId, mode, adults, children });
       if (!ok) return;
-      clearGeneration();
-      setCheckedIndices(new Set());
-      setPhase('configure');
-      Alert.alert(
-        'Adding to calendar',
-        "Your shopping list is being built in the background. You'll be notified when it's ready.",
-      );
+
+      if (developerMode) {
+        setPhase('confirming');
+      } else {
+        clearGeneration();
+        setCheckedIndices(new Set());
+        setPhase('configure');
+        Alert.alert(
+          'Adding to calendar',
+          "Your shopping list is being built in the background. You'll be notified when it's ready.",
+        );
+      }
     },
-    [householdId, generatedMeals, adults, children, confirm.status, startConfirm, clearGeneration],
+    [householdId, generatedMeals, adults, children, confirm.status, startConfirm, clearGeneration, developerMode, clearLogs],
   );
+
+  // Monitor confirm job status when in 'confirming' phase (Developer Mode)
+  useEffect(() => {
+    if (phase !== 'confirming') return;
+
+    if (confirm.status === 'done') {
+      Alert.alert(
+        'Meal plan saved!',
+        'Your meal plan is saved to the calendar and the shopping list has been successfully compiled.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              clearGeneration();
+              clearConfirm();
+              setCheckedIndices(new Set());
+              setPhase('configure');
+            },
+          },
+        ]
+      );
+    } else if (confirm.status === 'error') {
+      Alert.alert(
+        'Saving failed',
+        confirm.error || 'An error occurred while compiling your shopping list.',
+        [
+          {
+            text: 'Back',
+            onPress: () => {
+              clearConfirm();
+              setPhase('results');
+            },
+          },
+        ]
+      );
+    }
+  }, [phase, confirm, clearGeneration, clearConfirm]);
 
   const handleAddToCalendar = useCallback(async () => {
     if (!householdId) return;
@@ -443,17 +514,33 @@ export default function GenerateScreen() {
         message={generation.progress.msg}
         progress={generation.progress}
         footer="You can leave this screen — we'll notify you when it's ready."
+        showDevLogs={developerMode}
+        onCancel={developerMode ? cancelGeneration : undefined}
+      />
+    );
+  }
+
+  // Confirming meal plan saving / list compilation flow (Developer Mode)
+  if (phase === 'confirming' && confirm.status === 'running') {
+    return (
+      <LoadingScreen
+        colors={colors}
+        message="Compiling your shopping list..."
+        progress={{ current: 0, total: 0 }}
+        showDevLogs={developerMode}
       />
     );
   }
 
   // Local synchronous flow (regenerate).
   if (phase === 'generating' || phase === 'saving') {
-    return <LoadingScreen colors={colors} message={loadingMsg} progress={loadingProgress} />;
+    return <LoadingScreen colors={colors} message={loadingMsg} progress={loadingProgress} showDevLogs={developerMode} />;
   }
 
   // A finished background generation is ready for review.
   if (generation.status === 'done' || phase === 'results') {
+    const activeCuisinesForMismatch = resultsScreenDirty ? cuisines : (generateSnapshot?.cuisines ?? cuisines);
+    const hasMismatches = findMismatchedMeals(generatedMeals, activeCuisinesForMismatch).length > 0;
     return (
       <>
         <ResultsScreen
@@ -481,6 +568,7 @@ export default function GenerateScreen() {
           }}
           onRegenerate={handleRegenerate}
           onRegenerateMismatched={handleRegenerateMismatched}
+          hasMismatches={hasMismatches}
           onAddToCalendar={handleAddToCalendar}
           onBack={() => { clearGeneration(); setPhase('configure'); }}
           effort={effort}
@@ -546,7 +634,7 @@ export default function GenerateScreen() {
           >
             <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={[styles.topLabel, { color: colors.textSecondary }]}>Let's Start…</Text>
+          <Text style={[styles.topLabel, { color: colors.textSecondary }]}>Let&rsquo;s Start…</Text>
           <Text style={[styles.title, { color: colors.text }]}>What style of{'\n'}meal do you want?</Text>
         </View>
 
@@ -564,7 +652,7 @@ export default function GenerateScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={styles.effortEmoji}>{emoji}</Text>
-                  <Text style={[styles.effortLabel, { color: active ? '#fff' : colors.text }]}>{label}</Text>
+                  <Text style={[styles.effortLabel, { color: active ? colors.textInverse : colors.text }]}>{label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -690,7 +778,7 @@ export default function GenerateScreen() {
                     active && { backgroundColor: colors.primary },
                   ]}
                 >
-                  {active && <Ionicons name="checkmark" size={12} color="#fff" />}
+                  {active && <Ionicons name="checkmark" size={12} color={colors.textInverse} />}
                 </View>
                 <Ionicons name={icon as any} size={18} color={active ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.checkLabel, { color: active ? colors.text : colors.textSecondary }]}>
@@ -755,8 +843,8 @@ export default function GenerateScreen() {
           onPress={handleGenerate}
           activeOpacity={0.85}
         >
-          <Ionicons name="sparkles-outline" size={20} color="#fff" />
-          <Text style={styles.generateBtnText}>Generate</Text>
+          <Ionicons name="sparkles-outline" size={20} color={colors.textInverse} />
+          <Text style={[styles.generateBtnText, { color: colors.textInverse }]}>Generate</Text>
         </TouchableOpacity>
       </View>
 
@@ -781,15 +869,19 @@ function LoadingScreen({
   message,
   progress,
   footer,
+  showDevLogs = false,
+  onCancel,
 }: {
   colors: (typeof Colors)['light'];
   message: string;
   progress: { current: number; total: number };
   footer?: string;
+  showDevLogs?: boolean;
+  onCancel?: () => void;
 }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
-      <View style={styles.loadingCenter}>
+      <View style={showDevLogs ? styles.loadingDevLayout : styles.loadingCenter}>
         <View style={[styles.loadingCard, { backgroundColor: colors.surface }, Shadows.lg]}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingMsg, { color: colors.text }]}>{message}</Text>
@@ -798,12 +890,29 @@ function LoadingScreen({
               Recipe {progress.current} of {progress.total}
             </Text>
           )}
-          {footer && (
+          {footer && !showDevLogs && (
             <Text style={[styles.loadingProgress, { color: colors.textTertiary, marginTop: Spacing.md, textAlign: 'center' }]}>
               {footer}
             </Text>
           )}
+
+          {onCancel && (
+            <TouchableOpacity
+              style={[styles.cancelBtn, { borderColor: colors.error }]}
+              onPress={onCancel}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="close-circle-outline" size={15} color={colors.error} />
+              <Text style={[styles.cancelBtnText, { color: colors.error }]}>Cancel Generation</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {showDevLogs && (
+          <View style={styles.terminalContainer}>
+            <DevLogTerminal maxHeight={400} />
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -819,6 +928,7 @@ const ResultsScreen = React.memo(function ResultsScreen({
   onPreview,
   onRegenerate,
   onRegenerateMismatched,
+  hasMismatches,
   onAddToCalendar,
   onBack,
   effort,
@@ -837,6 +947,7 @@ const ResultsScreen = React.memo(function ResultsScreen({
   onPreview: (r: Recipe) => void;
   onRegenerate: () => void;
   onRegenerateMismatched: () => void;
+  hasMismatches: boolean;
   onAddToCalendar: () => void;
   onBack: () => void;
   effort: EffortValue;
@@ -909,7 +1020,7 @@ const ResultsScreen = React.memo(function ResultsScreen({
                         activeOpacity={0.75}
                       >
                         <Text style={styles.effortEmoji}>{emoji}</Text>
-                        <Text style={[styles.effortLabel, { color: active ? '#fff' : colors.text }]}>{label}</Text>
+                        <Text style={[styles.effortLabel, { color: active ? colors.textInverse : colors.text }]}>{label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -971,21 +1082,23 @@ const ResultsScreen = React.memo(function ResultsScreen({
 
         {/* TOP ROW: Auto-fix & Regen */}
         <View style={styles.floatingCtaRow}>
-          <TouchableOpacity
-            style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border, flex: 1 }, Shadows.md]}
-            onPress={onRegenerateMismatched}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="warning-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.secondaryBtnText, {
-              color: colors.textSecondary,
-              flexShrink: 1, // Allows the text to wrap instead of overflowing
-              textAlign: 'center', // Centers the wrapped text nicely
-              marginLeft: 4 // Optional: Adds breathing room between the icon and text
-            }]}>
-              Auto Fix
-            </Text>
-          </TouchableOpacity>
+          {hasMismatches && (
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { backgroundColor: colors.surface, borderColor: colors.border, flex: 1 }, Shadows.md]}
+              onPress={onRegenerateMismatched}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="warning-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.secondaryBtnText, {
+                color: colors.textSecondary,
+                flexShrink: 1,
+                textAlign: 'center',
+                marginLeft: 4
+              }]}>
+                Auto Fix
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[
@@ -1016,8 +1129,8 @@ const ResultsScreen = React.memo(function ResultsScreen({
           onPress={onAddToCalendar}
           activeOpacity={0.85}
         >
-          <Ionicons name="calendar" size={20} color="#fff" />
-          <Text style={styles.generateBtnText}>Add to Calendar</Text>
+          <Ionicons name="calendar" size={20} color={colors.textInverse} />
+          <Text style={[styles.generateBtnText, { color: colors.textInverse }]}>Add to Calendar</Text>
         </TouchableOpacity>
 
       </View>
@@ -1053,7 +1166,7 @@ const MealResultCard = React.memo(function MealResultCard({
         onPress={onToggle}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+        {checked && <Ionicons name="checkmark" size={14} color={colors.textInverse} />}
       </TouchableOpacity>
 
       <View style={styles.resultContent}>
@@ -1150,7 +1263,7 @@ function Chip({
       onPress={onPress}
       activeOpacity={0.75}
     >
-      <Text style={[styles.chipText, { color: selected ? '#fff' : colors.textSecondary }]}>
+      <Text style={[styles.chipText, { color: selected ? colors.textInverse : colors.textSecondary }]}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -1411,6 +1524,8 @@ const styles = StyleSheet.create({
   },
   // Loading
   loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
+  loadingDevLayout: { flex: 1, padding: Spacing.xl, paddingTop: Spacing.xl, justifyContent: 'flex-start', alignItems: 'center', gap: Spacing.md },
+  terminalContainer: { flex: 1, width: '100%' },
   loadingCard: {
     borderRadius: Radius.xxl,
     padding: Spacing.xxxl,
@@ -1425,6 +1540,21 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   loadingProgress: { fontSize: FontSizes.sm },
+  cancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1.5,
+    marginTop: Spacing.sm,
+  },
+  cancelBtnText: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+  },
 
   // Regen options header (shown at top of results list)
   regenOptions: {

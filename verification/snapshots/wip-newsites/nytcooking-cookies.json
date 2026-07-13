@@ -1,0 +1,101 @@
+{
+  "title": "Best Chocolate Chip Cookies",
+  "sourceUrl": "https://cooking.nytimes.com/recipes/1015819-chocolate-chip-cookies",
+  "imageUrl": "https://static01.nyt.com/images/2022/02/12/dining/JT-Chocolate-Chip-Cookies/JT-Chocolate-Chip-Cookies-videoSixteenByNineJumbo1600.jpg",
+  "videoEmbedUrl": "https://www.nytimes.com/video/embedded/dining/100000007420657/chocolate-chip-cookies.html",
+  "prepTime": "N/A",
+  "cookTime": "N/A",
+  "totalTime": "45 min",
+  "originalServings": 1,
+  "course": [
+    "dessert"
+  ],
+  "description": "You may have memorized the foolproof gem on the back of the Toll House bag, given to the world by Ruth Graves Wakefield in the 1930s. But this may become your new favorite chocolate chip cookie recipe. It’s a little more complicated, and you’ll have to plan ahead: After assembling the dough, you must chill it for at least 24 hours before baking it, and preferably up to 36. This allows the dry ingredients time to soak up the wet ones, which results in a firmer dough. It leads to a marvelously chewy, chocolate-rich cookie. Don’t skimp on good chocolate, and the sea salt is not an option — it’s the beacon at the top of this gorgeous treat. (You can certainly put this recipe together by hand, but a stand mixer makes it easy work. If you’re in the market for one, our colleagues at The Wirecutter have tested quite a few, and they've put together an excellent guide to the best.)",
+  "ingredients": [
+    {
+      "name": "minus 2 tablespoons cake flour",
+      "quantity": 2,
+      "unit": "cup",
+      "notes": "8 1/2 ounces"
+    },
+    {
+      "name": "bread flour",
+      "quantity": 1.6666666666666665,
+      "unit": "cup",
+      "notes": "8 1/2 ounces"
+    },
+    {
+      "name": "baking soda",
+      "quantity": 1.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "baking powder",
+      "quantity": 1.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "coarse sea salt",
+      "quantity": 1.5,
+      "unit": "tsp",
+      "notes": "plus more for sprinkling"
+    },
+    {
+      "name": "unsalted butter",
+      "quantity": 1.25,
+      "unit": "cup",
+      "notes": "2 1/2 sticks"
+    },
+    {
+      "name": "light brown sugar",
+      "quantity": 1.25,
+      "unit": "cup",
+      "notes": "10 ounces"
+    },
+    {
+      "name": "plus 2 tablespoons granulated sugar",
+      "quantity": 1,
+      "unit": "cup",
+      "notes": "8 ounces"
+    },
+    {
+      "name": "large eggs",
+      "quantity": 2,
+      "unit": ""
+    },
+    {
+      "name": "natural vanilla extract",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "bittersweet chocolate disks or fèves",
+      "quantity": 0.6,
+      "unit": "kg",
+      "notes": "see note; at least 60 percent cacao content"
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Sift flours, baking soda, baking powder and salt into a bowl. Set aside."
+    },
+    {
+      "text": "Using a mixer fitted with paddle attachment, cream butter and sugars together until very light, about 5 minutes. Add eggs, one at a time, mixing well after each addition. Stir in the vanilla. Reduce speed to low, add dry ingredients and mix until just combined, 5 to 10 seconds. Drop chocolate pieces in and incorporate them without breaking them. Press plastic wrap against dough and refrigerate for 24 to 36 hours. Dough may be used in batches, and can be refrigerated for up to 72 hours."
+    },
+    {
+      "text": "When ready to bake, preheat oven to 350 degrees. Line a baking sheet with parchment paper or a nonstick baking mat. Set aside."
+    },
+    {
+      "text": "Scoop 6 3 1/2-ounce mounds of dough (the size of generous golf balls) onto baking sheet, making sure to turn horizontally any chocolate pieces that are poking up; it will make for a more attractive cookie. Sprinkle lightly with salt and bake until golden brown but still soft, 18 to 20 minutes. Transfer sheet to a wire rack for 10 minutes, then slip cookies onto another rack to cool a bit more. Repeat with remaining dough, or reserve dough, refrigerated, for baking remaining batches the next day. Eat warm, with a big napkin."
+    }
+  ],
+  "notes": "",
+  "nutrition": {
+    "calories": 399,
+    "protein": 10,
+    "carbs": 67,
+    "fat": 18
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-09T06:32:08.903Z"
+}

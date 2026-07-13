@@ -1,0 +1,211 @@
+{
+  "title": "Coconut Chicken Rice Bowl",
+  "sourceUrl": "https://www.skinnytaste.com/coconut-chicken-rice-bowl",
+  "imageUrl": "https://www.skinnytaste.com/wp-content/uploads/2024/05/Coconut-Chicken-Rice-Bowls-10.jpg",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "totalTime": "30 min",
+  "originalServings": 4,
+  "course": [
+    "Dinner",
+    "main dish",
+    "Meal Prep"
+  ],
+  "description": "Quick and easy high-protein Coconut Chicken Rice Bowls are perfect for my gluten-free, dairy-free friends!",
+  "ingredients": [
+    {
+      "name": "diced chicken breast",
+      "quantity": 0.7,
+      "unit": "kg"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "smoked paprika",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "dried oregano or dried herbs",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "onion",
+      "quantity": 0.5,
+      "unit": "",
+      "notes": "minced"
+    },
+    {
+      "name": "of garlic",
+      "quantity": 3,
+      "unit": "clove"
+    },
+    {
+      "name": "fresh grated ginger",
+      "quantity": 1,
+      "unit": "tsp",
+      "notes": "I added 1 tablespoon; or more if you like it extra gingery"
+    },
+    {
+      "name": "chicken broth",
+      "quantity": 0.25,
+      "unit": "cup"
+    },
+    {
+      "name": "canned light coconut milk",
+      "quantity": 1.25,
+      "unit": "cup",
+      "notes": "from 1 can"
+    },
+    {
+      "name": "of tomato paste",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "fresh cilantro",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "cooked jasmine rice or basmati",
+      "quantity": 3,
+      "unit": "cup"
+    },
+    {
+      "name": "more coconut milk",
+      "quantity": 0,
+      "unit": "",
+      "notes": "optional for topping"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "diced chicken breast",
+          "quantity": 0.7,
+          "unit": "kg"
+        },
+        {
+          "name": "kosher salt",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "smoked paprika",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "dried oregano or dried herbs",
+          "quantity": 1,
+          "unit": "tsp"
+        }
+      ]
+    },
+    {
+      "name": "Sauce ingredients",
+      "ingredients": [
+        {
+          "name": "onion",
+          "quantity": 0.5,
+          "unit": "",
+          "notes": "minced"
+        },
+        {
+          "name": "of garlic",
+          "quantity": 3,
+          "unit": "clove"
+        },
+        {
+          "name": "fresh grated ginger",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "I added 1 tablespoon; or more if you like it extra gingery"
+        },
+        {
+          "name": "chicken broth",
+          "quantity": 0.25,
+          "unit": "cup"
+        },
+        {
+          "name": "canned light coconut milk",
+          "quantity": 1.25,
+          "unit": "cup",
+          "notes": "from 1 can"
+        },
+        {
+          "name": "of tomato paste",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "kosher salt",
+          "quantity": 0.5,
+          "unit": "tsp"
+        }
+      ]
+    },
+    {
+      "name": "For the bowls:",
+      "ingredients": [
+        {
+          "name": "fresh cilantro",
+          "quantity": 0,
+          "unit": ""
+        },
+        {
+          "name": "cooked jasmine rice or basmati",
+          "quantity": 3,
+          "unit": "cup"
+        },
+        {
+          "name": "more coconut milk",
+          "quantity": 0,
+          "unit": "",
+          "notes": "optional for topping"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Season the chicken with salt, paprika and dried herbs."
+    },
+    {
+      "text": "Preheat a large skillet over high and spray with oil then brown the chicken in an even layer, 3-5 minutes."
+    },
+    {
+      "text": "Once browned, remove the chicken, reduce heat and spray with more oil. Add the onion, garlic, ginger, and cook 1 minute, then add the broth to deglaze the pan."
+    },
+    {
+      "text": "Simmer about 1 minute then add in the tomato paste, coconut milk, and 1/2 teaspoon salt."
+    },
+    {
+      "text": "Bring the sauce to a simmer for a few minutes to thicken, add the chicken back along with any juices and cook on medium heat 3 to 4 minutes."
+    },
+    {
+      "text": "Serve over jasmine rice and garnish with cilantro and drizzle with more coconut milk, if desired."
+    }
+  ],
+  "notes": "1. Chicken: Swap chicken breasts with thighs.\n2. Protein: Try with tofu or shrimp, adjusting cooking time as needed.\n3. Vegetarian Coconut Rice Bowls: Omit the chicken, replace the chicken broth with vegetable broth, and add some tofu, and veggies like broccoli, bell pepper, and snap peas.\n4. Curry: Add red curry paste for a coconut curry.\n5. Don’t like cilantro? Skip it or swap it with scallions.\n6. Grains: Serve the coconut chicken over another type of grain, like quinoa or brown rice.",
+  "nutrition": {
+    "calories": 429,
+    "protein": 40,
+    "carbs": 40,
+    "fat": 10
+  },
+  "tags": [],
+  "scrapedAt": "2026-06-07T07:36:28.001Z"
+}

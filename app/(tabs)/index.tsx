@@ -260,7 +260,7 @@ export default function CalendarScreen() {
               style={[s.toggleBtn, viewMode === mode && { backgroundColor: colors.primary }]}
               onPress={() => setViewMode(mode)}
             >
-              <Text style={[s.toggleText, { color: viewMode === mode ? '#fff' : colors.textSecondary }]}>
+              <Text style={[s.toggleText, { color: viewMode === mode ? colors.textInverse : colors.textSecondary }]}>
                 {mode === 'week' ? 'Week' : 'Month'}
               </Text>
             </TouchableOpacity>
@@ -362,7 +362,7 @@ export default function CalendarScreen() {
                     </View>
                     {isToday && (
                       <View style={[s.todayPill, { backgroundColor: colors.primary }]}>
-                        <Text style={s.todayPillText}>Today</Text>
+                        <Text style={[s.todayPillText, { color: colors.textInverse }]}>Today</Text>
                       </View>
                     )}
                   </View>

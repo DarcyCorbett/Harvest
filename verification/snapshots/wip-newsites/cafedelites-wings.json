@@ -1,0 +1,231 @@
+{
+  "title": "Garlic Parmesan Wings Recipe",
+  "sourceUrl": "https://cafedelites.com/easy-crispy-garlic-parmesan-wings/",
+  "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-10.jpg",
+  "videoEmbedUrl": "https://www.youtube.com/embed/IEJ-R80NHQg",
+  "prepTime": "10 min",
+  "cookTime": "30 min",
+  "totalTime": "40 min",
+  "originalServings": 6,
+  "course": [
+    "Appetizer",
+    "Dinner",
+    "Snack"
+  ],
+  "description": "Crispy garlic parmesan chicken wings made in the oven or air fryer with simple ingredients and easy steps. No frying needed.",
+  "cuisine": "American",
+  "ingredients": [
+    {
+      "name": "garlic powder",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "onion powder",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "chicken bouillon powder",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "smoked paprika",
+      "quantity": 0.5,
+      "unit": "tbsp"
+    },
+    {
+      "name": "cayenne pepper",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "chicken wings",
+      "quantity": 4,
+      "unit": "lbs"
+    },
+    {
+      "name": "Seasoning mix above",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "baking powder",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "butter",
+      "quantity": 1,
+      "unit": "cup"
+    },
+    {
+      "name": "garlic powder",
+      "quantity": 2,
+      "unit": "tsp"
+    },
+    {
+      "name": "garlic cloves grated",
+      "quantity": 8,
+      "unit": ""
+    },
+    {
+      "name": "salt",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "pre-grated parmesan cheese",
+      "quantity": 1,
+      "unit": "cup"
+    },
+    {
+      "name": "fresh parsley minced",
+      "quantity": 4,
+      "unit": "tbsp"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "Seasoning Mix",
+      "ingredients": [
+        {
+          "name": "garlic powder",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "onion powder",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "chicken bouillon powder",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "smoked paprika",
+          "quantity": 0.5,
+          "unit": "tbsp"
+        },
+        {
+          "name": "cayenne pepper",
+          "quantity": 0.5,
+          "unit": "tsp"
+        }
+      ]
+    },
+    {
+      "name": "Chicken",
+      "ingredients": [
+        {
+          "name": "chicken wings",
+          "quantity": 4,
+          "unit": "lbs"
+        },
+        {
+          "name": "Seasoning mix above",
+          "quantity": 0,
+          "unit": ""
+        },
+        {
+          "name": "baking powder",
+          "quantity": 1,
+          "unit": "tbsp"
+        }
+      ]
+    },
+    {
+      "name": "Garlic Parmesan Sauce",
+      "ingredients": [
+        {
+          "name": "butter",
+          "quantity": 1,
+          "unit": "cup"
+        },
+        {
+          "name": "garlic powder",
+          "quantity": 2,
+          "unit": "tsp"
+        },
+        {
+          "name": "garlic cloves grated",
+          "quantity": 8,
+          "unit": ""
+        },
+        {
+          "name": "salt",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "pre-grated parmesan cheese",
+          "quantity": 1,
+          "unit": "cup"
+        },
+        {
+          "name": "fresh parsley minced",
+          "quantity": 4,
+          "unit": "tbsp"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Prepare the wings",
+      "isHeader": true
+    },
+    {
+      "text": "In a medium bowl, combine the seasoning mix and baking powder. Whisk well to fully combine.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-1.jpg"
+    },
+    {
+      "text": "Pat the chicken wings dry with paper towels. Sprinkle the seasoning mixture over the wings.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-2.jpg"
+    },
+    {
+      "text": "Toss well until the wings are evenly coated.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-3.jpg"
+    },
+    {
+      "text": "Arrange the wings in a single layer on a rack or in the air fryer basket, leaving space between each piece.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-4.jpg"
+    },
+    {
+      "text": "Cook until the wings are golden and crispy.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-7.jpg"
+    },
+    {
+      "text": "Make the Garlic Parmesan Sauce",
+      "isHeader": true
+    },
+    {
+      "text": "Add the garlic powder, grated garlic, and salt. Sauté for about 1 minute until fragrant.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-5.jpg"
+    },
+    {
+      "text": "Transfer the garlic butter mixture to a large mixing bowl.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-6.jpg"
+    },
+    {
+      "text": "Toss the wings",
+      "isHeader": true
+    },
+    {
+      "text": "Add the cooked wings to the bowl with the garlic butter. Sprinkle the wings with the Parmesan cheese and parsley, and toss well until everything is evenly coated. Serve immediately.",
+      "imageUrl": "https://cafedelites.com/wp-content/uploads/2026/03/Garlic-Parmesan-Chicken-wings-8.jpg"
+    }
+  ],
+  "notes": "1. Pat the wings dry before seasoning. This helps the skin crisp up instead of steaming.\n2. Use baking powder, not baking soda. It’s what gives you that crispy finish without frying.\n3. Skip the olive oil. It might seem helpful, but it actually prevents the skin from drying out properly.",
+  "nutrition": {
+    "calories": 753,
+    "protein": 37,
+    "carbs": 9,
+    "fat": 64
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-09T06:32:04.372Z"
+}

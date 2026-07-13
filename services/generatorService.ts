@@ -10,6 +10,7 @@
 //   - services/scraper/*        — recipe fetching + filtering
 // ============================================================
 
+import { logEvent } from './devLog';
 import {
   addMealPlanEntry,
   addShoppingItems,
@@ -22,7 +23,6 @@ import {
   updateRecipeTags,
 } from './firestoreService';
 import { getGeminiReminderFlags, tagRecipesWithGemini } from './gemini';
-import { logEvent } from './devLog';
 import {
   calculateRequiredServings,
   checkTimeConstraint,
@@ -47,16 +47,14 @@ import type {
   CuisineStyle,
   GenerateConfig,
   GeneratedMeal,
-  HouseholdSettings,
   MealType,
-  Recipe,
-  ShoppingItem,
+  ShoppingItem
 } from './types';
 
 // ─── Public Types ─────────────────────────────────────────────
 // GeneratedMeal and GenerateConfig are defined in ./types to avoid a circular
 // dependency with firestoreService (which needs them for persistence).
-export type { GeneratedMeal, GenerateConfig };
+export type { GenerateConfig, GeneratedMeal };
 
 export type ProgressCallback = (
   message: string,
@@ -120,7 +118,7 @@ export function addDays(date: Date, n: number): Date {
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
 
 // Cuisine styles that have dedicated dish vocabularies — selected one-per-slot via round-robin.
-const CUISINE_STYLES = new Set<CuisineStyle>(['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian']);
+const CUISINE_STYLES = new Set<CuisineStyle>(['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian', 'Salad']);
 
 // Modifier tags that must appear on every recipe if the user selected them.
 const MODIFIER_TAGS = ['Vegetarian', 'Kid Friendly', 'Healthy'] as const;
@@ -404,6 +402,81 @@ export async function generateMealPlan(
 
   // Phase 2: add Gemini modifier tags to freshly scraped recipes (one batched call)
   await applyGeminiTagsToFreshMeals(results, freshRecipeIds);
+
+  // Phase 3: if strictMatching is enabled, automatically keep regenerating mismatched meals
+  const strictMatching = config.settings?.strictMatching ?? true;
+  if (strictMatching) {
+    let mismatched = findMismatchedMeals(results, config.cuisineStyles);
+    let attempts = 0;
+    const maxRegenAttempts = 3;
+
+    while (mismatched.length > 0 && attempts < maxRegenAttempts) {
+      attempts++;
+      console.log(`[Generator] Strict matching auto-regenerating ${mismatched.length} mismatched meals (attempt ${attempts}/${maxRegenAttempts})...`);
+      
+      const mismatchedIndices = mismatched.map((m) => m.index);
+      const excludeIds = results.map(r => r.recipeId);
+
+      const activeCuisines = config.cuisineStyles;
+      const rawSeeds = config.settings?.selectedSeeds ?? [];
+      const isVegetarianPlan = config.cuisineStyles.includes('Vegetarian');
+      const filteredSeeds = isVegetarianPlan
+        ? rawSeeds.filter((s) => !(MEAT_INGREDIENTS as readonly string[]).some((m) => matchesWord(s, m)))
+        : rawSeeds;
+
+      const regenSelectedCuisines = activeCuisines.filter((s) => CUISINE_STYLES.has(s));
+      const regenModifierStyles = activeCuisines.filter((s) => !CUISINE_STYLES.has(s));
+
+      const newFreshRecipeIds = new Set<string>();
+
+      for (const idx of mismatchedIndices) {
+        const meal = results[idx];
+        const slotCuisine = regenSelectedCuisines.length > 0
+          ? regenSelectedCuisines[Math.floor(Math.random() * regenSelectedCuisines.length)]
+          : undefined;
+        const slotCuisineStyles = slotCuisine ? [slotCuisine, ...regenModifierStyles] : activeCuisines;
+        const forceSeed = filteredSeeds.length > 0
+          ? filteredSeeds[Math.floor(Math.random() * filteredSeeds.length)]
+          : undefined;
+
+        try {
+          console.log(`[Generator] Auto-fixing slot ${idx} (${meal.mealType}) with cuisines=[${slotCuisineStyles.join(',')}]`);
+          onProgress(`Auto-fixing mismatched recipe in slot ${idx + 1}…`, idx + 1, results.length);
+          const scraped = await scrapeRecipe({
+            mealType: meal.mealType,
+            cuisineStyles: slotCuisineStyles,
+            customInstructions: config.customInstructions,
+            requiredServings,
+            excludeRecipeIds: excludeIds,
+            settings: config.settings,
+            forceSeed,
+          });
+
+          if (!scraped.fromCache) {
+            newFreshRecipeIds.add(scraped.recipeId);
+          }
+          excludeIds.push(scraped.recipeId);
+
+          results[idx] = {
+            recipe: scraped.recipe,
+            recipeId: scraped.recipeId,
+            date: meal.date,
+            mealType: meal.mealType,
+            isFromFavourites: false,
+            servings: requiredServings,
+          };
+        } catch (err) {
+          console.warn(`[Generator] Auto-fix scrape failed for slot ${idx}:`, err);
+        }
+      }
+
+      if (newFreshRecipeIds.size > 0) {
+        await applyGeminiTagsToFreshMeals(results, newFreshRecipeIds);
+      }
+
+      mismatched = findMismatchedMeals(results, config.cuisineStyles);
+    }
+  }
 
   onProgress('Building your meal plan…', total, total);
   return results;

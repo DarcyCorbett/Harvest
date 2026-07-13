@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BackgroundJobsProvider } from '@/contexts/BackgroundJobsContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { DeveloperModeProvider } from '@/contexts/DeveloperModeContext';
 import JobToast from '@/components/JobToast';
 import { useNotifications } from '@/hooks/useNotifications';
 
@@ -80,9 +81,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BackgroundJobsProvider>
-          <RootNavigator />
-        </BackgroundJobsProvider>
+        <DeveloperModeProvider>
+          <BackgroundJobsProvider>
+            <RootNavigator />
+          </BackgroundJobsProvider>
+        </DeveloperModeProvider>
       </AuthProvider>
     </ThemeProvider>
   );

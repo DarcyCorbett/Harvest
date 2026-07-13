@@ -1,0 +1,279 @@
+{
+  "title": "Sheet Pan Meatballs with Chickpeas Cauliflower and Butternut",
+  "sourceUrl": "https://www.skinnytaste.com/sheet-pan-meatballs-with-chickpeas-cauliflower-and-butternut-squash/",
+  "imageUrl": "https://www.skinnytaste.com/wp-content/uploads/2026/05/Sheet-Pan-Meatballs-with-Chickpeas-15.jpg",
+  "prepTime": "20 min",
+  "cookTime": "35 min",
+  "totalTime": "55 min",
+  "originalServings": 4,
+  "course": [
+    "Dinner",
+    "main dish",
+    "Meal Prep"
+  ],
+  "description": "Sheet Pan Mediterranean Meatballs with chickpeas, cauliflower, and butternut squash. A high-protein, high-fiber dinner perfect for meal prep.",
+  "cuisine": "Mediterranean",
+  "ingredients": [
+    {
+      "name": "cauliflower florets",
+      "quantity": 3,
+      "unit": "cup"
+    },
+    {
+      "name": "broccoli florets",
+      "quantity": 3,
+      "unit": "cup"
+    },
+    {
+      "name": "cubed butternut squash",
+      "quantity": 3,
+      "unit": "cup"
+    },
+    {
+      "name": "15-ounce can chickpeas",
+      "quantity": 1,
+      "unit": "",
+      "notes": "rinsed and drained well"
+    },
+    {
+      "name": "extra virgin olive oil",
+      "quantity": 2,
+      "unit": "tbsp"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 1.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "garlic powder",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "onion powder",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "cumin",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "ground coriander",
+      "quantity": 0.5,
+      "unit": "tsp"
+    },
+    {
+      "name": "black pepper",
+      "quantity": 0.25,
+      "unit": "tsp"
+    },
+    {
+      "name": "large egg",
+      "quantity": 1,
+      "unit": "",
+      "notes": "lightly beaten"
+    },
+    {
+      "name": "kosher salt",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "cumin",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "chopped dill",
+      "quantity": 4,
+      "unit": "tbsp",
+      "notes": "plus more for garnish"
+    },
+    {
+      "name": "chopped parsley",
+      "quantity": 4,
+      "unit": "tbsp"
+    },
+    {
+      "name": "lemon zest",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "breadcrumbs",
+      "quantity": 0.25,
+      "unit": "cup",
+      "notes": "plain or gluten-free"
+    },
+    {
+      "name": "lean ground bison",
+      "quantity": 454,
+      "unit": "g",
+      "notes": "beef or lamb"
+    },
+    {
+      "name": "Tzatziki",
+      "quantity": 0,
+      "unit": "",
+      "notes": "optional for serving"
+    },
+    {
+      "name": "Harissa",
+      "quantity": 0,
+      "unit": "",
+      "notes": "optional for serving"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "For the Veggie Mixture:",
+      "ingredients": [
+        {
+          "name": "cauliflower florets",
+          "quantity": 3,
+          "unit": "cup"
+        },
+        {
+          "name": "broccoli florets",
+          "quantity": 3,
+          "unit": "cup"
+        },
+        {
+          "name": "cubed butternut squash",
+          "quantity": 3,
+          "unit": "cup"
+        },
+        {
+          "name": "15-ounce can chickpeas",
+          "quantity": 1,
+          "unit": "",
+          "notes": "rinsed and drained well"
+        },
+        {
+          "name": "extra virgin olive oil",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "kosher salt",
+          "quantity": 1.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "garlic powder",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "onion powder",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "cumin",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "ground coriander",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "black pepper",
+          "quantity": 0.25,
+          "unit": "tsp"
+        }
+      ]
+    },
+    {
+      "name": "For the Herby Meatballs:",
+      "ingredients": [
+        {
+          "name": "large egg",
+          "quantity": 1,
+          "unit": "",
+          "notes": "lightly beaten"
+        },
+        {
+          "name": "kosher salt",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "cumin",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "chopped dill",
+          "quantity": 4,
+          "unit": "tbsp",
+          "notes": "plus more for garnish"
+        },
+        {
+          "name": "chopped parsley",
+          "quantity": 4,
+          "unit": "tbsp"
+        },
+        {
+          "name": "lemon zest",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "breadcrumbs",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "plain or gluten-free"
+        },
+        {
+          "name": "lean ground bison",
+          "quantity": 454,
+          "unit": "g",
+          "notes": "beef or lamb"
+        },
+        {
+          "name": "Tzatziki",
+          "quantity": 0,
+          "unit": "",
+          "notes": "optional for serving"
+        },
+        {
+          "name": "Harissa",
+          "quantity": 0,
+          "unit": "",
+          "notes": "optional for serving"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Preheat the oven to 218°C. Line a half sheet tray with parchment paper, and line a second, smaller sheet pan with parchment paper as well. Set both aside."
+    },
+    {
+      "text": "To make the vegetable mixture, add the cauliflower, broccoli, butternut squash, and chickpeas to a large bowl. Drizzle with the olive oil and season with the salt, pepper, garlic powder, onion powder and cumin. Stir to evenly coat the vegetables. Transfer the mixture to the larger sheet pan. Place on the middle rack in the oven to roast for 30-35 minutes, stirring halfway until the vegetables are tender and brown in places."
+    },
+    {
+      "text": "Meanwhile add the egg, salt, cumin, dill, parsley, 2 tablespoons water and lemon zest to a mixing bowl and whisk together to combine. Add the breadcrumbs and mix then the ground meat. Mix until evenly combined. Form 16 meatballs, about 2 tablespoons each and transfer them to the smaller sheet pan. Roast on the top rack in the oven for 15 minutes, broiling for the last couple of minutes if desired."
+    },
+    {
+      "text": "To serve, spoon veggie mixture into bowls and top with meatballs. Serve with tzatziki and harissa, if desired."
+    }
+  ],
+  "notes": "",
+  "nutrition": {
+    "calories": 490,
+    "protein": 36,
+    "carbs": 42,
+    "fat": 23
+  },
+  "tags": [
+    "Mediterranean"
+  ],
+  "scrapedAt": "2026-06-07T07:36:24.382Z"
+}

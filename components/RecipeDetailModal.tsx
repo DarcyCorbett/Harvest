@@ -12,6 +12,7 @@ import { applyServingScale, calculateRequiredServings } from '@/services/recipeS
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -22,6 +23,7 @@ import {
   Modal,
   PanResponder,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +33,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import IngredientSubstitutionSheet from './IngredientSubstitutionSheet';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
@@ -198,6 +201,22 @@ export default function RecipeDetailModal({
   const [children, setChildren] = useState(defaultChildren);
   const [savingServings, setSavingServings] = useState(false);
 
+  // Ingredient substitution state
+  const [selectedSubstitutionIngredient, setSelectedSubstitutionIngredient] = useState<Ingredient | null>(null);
+  const [substitutionSheetVisible, setSubstitutionSheetVisible] = useState(false);
+
+  const handleIngredientLongPress = useCallback((ing: Ingredient) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setSelectedSubstitutionIngredient(ing);
+    setSubstitutionSheetVisible(true);
+  }, []);
+
+  const allIngredientNames = useMemo(() => {
+    if (!recipe?.ingredients) return [];
+    return recipe.ingredients.map(i => i.name);
+  }, [recipe]);
+
+
   useEffect(() => {
     setAdults(defaultAdults);
     setChildren(defaultChildren);
@@ -260,7 +279,7 @@ export default function RecipeDetailModal({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, translateY, backdropOpacity]);
 
   // ── Swipe-to-dismiss pan responder (handle area only) ─────
   const panResponder = useRef(
@@ -615,11 +634,19 @@ export default function RecipeDetailModal({
                 {group.name ? (
                   <Text style={styles.groupHeader}>{group.name}</Text>
                 ) : null}
-                <IngredientCard ingredients={group.ingredients} styles={styles} />
+                <IngredientCard
+                  ingredients={group.ingredients}
+                  styles={styles}
+                  onIngredientLongPress={handleIngredientLongPress}
+                />
               </View>
             ))
           ) : (
-            <IngredientCard ingredients={scaledRecipe?.ingredients ?? []} styles={styles} />
+            <IngredientCard
+              ingredients={scaledRecipe?.ingredients ?? []}
+              styles={styles}
+              onIngredientLongPress={handleIngredientLongPress}
+            />
           )}
 
           {/* Instructions */}
@@ -670,37 +697,78 @@ export default function RecipeDetailModal({
           ) : null}
         </ScrollView>
       </Animated.View>
+
+      <IngredientSubstitutionSheet
+        visible={substitutionSheetVisible}
+        ingredient={selectedSubstitutionIngredient}
+        recipeTitle={recipe.title}
+        allIngredients={allIngredientNames}
+        onClose={() => setSubstitutionSheetVisible(false)}
+      />
     </Modal>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────
 
-function IngredientCard({ ingredients, styles }: { ingredients: Ingredient[]; styles: Styles }) {
+function IngredientCard({
+  ingredients,
+  styles,
+  onIngredientLongPress,
+}: {
+  ingredients: Ingredient[];
+  styles: Styles;
+  onIngredientLongPress?: (ing: Ingredient) => void;
+}) {
   return (
     <View style={[styles.card, Shadows.sm, { marginBottom: Spacing.sm }]}>
-      {ingredients.map((ing, idx) => (
-        <View
-          key={idx}
-          style={[
-            styles.ingredientRow,
-            idx < ingredients.length - 1 && styles.ingredientDivider,
-          ]}
-        >
-          <View style={styles.dot} />
-          <View style={styles.ingredientContent}>
-            <Text style={styles.ingredientText}>
-              {formatIngredientAmount(ing.quantity, ing.unit)
-                ? `${formatIngredientAmount(ing.quantity, ing.unit)}  `
-                : ''}
-              <Text style={{ fontFamily: Fonts.semibold }}>{ing.name}</Text>
-            </Text>
-            {ing.notes ? (
-              <Text style={styles.ingredientNotes}>{ing.notes}</Text>
-            ) : null}
+      {ingredients.map((ing, idx) => {
+        const content = (
+          <>
+            <View style={styles.dot} />
+            <View style={styles.ingredientContent}>
+              <Text style={styles.ingredientText}>
+                {formatIngredientAmount(ing.quantity, ing.unit)
+                  ? `${formatIngredientAmount(ing.quantity, ing.unit)}  `
+                  : ''}
+                <Text style={{ fontFamily: Fonts.semibold }}>{ing.name}</Text>
+              </Text>
+              {ing.notes ? (
+                <Text style={styles.ingredientNotes}>{ing.notes}</Text>
+              ) : null}
+            </View>
+          </>
+        );
+
+        if (onIngredientLongPress) {
+          return (
+            <Pressable
+              key={idx}
+              onLongPress={() => onIngredientLongPress(ing)}
+              style={({ pressed }) => [
+                styles.ingredientRow,
+                idx < ingredients.length - 1 && styles.ingredientDivider,
+                pressed && { backgroundColor: 'rgba(16, 185, 129, 0.08)' } // Subtle primary tinted press highlight
+              ]}
+              android_ripple={{ color: 'rgba(16, 185, 129, 0.12)' }}
+            >
+              {content}
+            </Pressable>
+          );
+        }
+
+        return (
+          <View
+            key={idx}
+            style={[
+              styles.ingredientRow,
+              idx < ingredients.length - 1 && styles.ingredientDivider,
+            ]}
+          >
+            {content}
           </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }

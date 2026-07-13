@@ -1,0 +1,85 @@
+{
+  "title": "Simple 5 Ingredient Baked Falafel",
+  "sourceUrl": "https://pinchofyum.com/simple-6-ingredient-baked-falafel",
+  "imageUrl": "https://pinchofyum.com/tachyon/Falafel-Recipe.jpg?fit=225%2C225",
+  "videoEmbedUrl": "https://content.jwplatform.com/videos/5pHbTFKu.mp4",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "totalTime": "30 min",
+  "originalServings": 9,
+  "course": [
+    "Dinner"
+  ],
+  "description": "Easy baked falafel at home in 30 minutes WITHOUT deep frying! Features lentils, herbs, garlic, lemon juice. Use in salads, sandwiches, healthy recipes.",
+  "cuisine": "Middle Eastern",
+  "ingredients": [
+    {
+      "name": "cooked lentils",
+      "quantity": 2,
+      "unit": "cup"
+    },
+    {
+      "name": "huge handful fresh cilantro leaves and stems",
+      "quantity": 1,
+      "unit": "",
+      "notes": "a cup or so"
+    },
+    {
+      "name": "huge handful fresh parsley leaves and stems",
+      "quantity": 1,
+      "unit": "",
+      "notes": "a cup or so"
+    },
+    {
+      "name": "half a jalapeño",
+      "quantity": 0,
+      "unit": "",
+      "notes": "if you like spicy – leave ribs and seeds!"
+    },
+    {
+      "name": "olive oil",
+      "quantity": 1.5,
+      "unit": "tbsp"
+    },
+    {
+      "name": "garlic",
+      "quantity": 1,
+      "unit": "clove"
+    },
+    {
+      "name": "a squeeze of lemon juice",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "salt",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "all purpose flour",
+      "quantity": 1,
+      "unit": "tbsp",
+      "notes": "sub a gluten free flour if needed"
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Preheat the oven to 350 degrees. Pulse all ingredients except flour in a food processor until combined. The mixture should form semi-dry crumbles that stick together when you press them."
+    },
+    {
+      "text": "Stir in the flour – just one tablespoon at a time, until it’s just dry enough to handle. Form into 9 patties and bake for 18 minutes. Remove from oven and use in salads, sandwiches, bowls, etc. Refrigerate for a few days or freeze."
+    }
+  ],
+  "notes": "1. Traditional falafel is made with chickpeas. I used lentils here because I’m more likely to have lentils on hand at any given time. Also: because I LOVE lentils. I have not tried this recipe with chickpeas.\n2. For the lentils, lean towards just barely cooked. That will give you a better texture than overly wet, heavy, and mushy lentils.\n3. If you don’t have a jalapeño, use red pepper flakes for heat.\n4. Nutrition information is for one falafel patty.",
+  "nutrition": {
+    "calories": 140,
+    "protein": 8,
+    "carbs": 22,
+    "fat": 3
+  },
+  "tags": [
+    "Mediterranean"
+  ],
+  "scrapedAt": "2026-06-07T07:36:25.855Z"
+}

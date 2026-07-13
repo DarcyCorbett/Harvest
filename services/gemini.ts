@@ -5,7 +5,8 @@
 
 import type { Recipe } from './types';
 
-const GEMINI_MODEL = 'gemini-3.1-pro-preview';
+export const GEMINI_TAGGING_MODEL = 'gemini-3.1-flash-lite';
+export const GEMINI_AGGREGATION_MODEL = 'gemini-3.5-flash';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
@@ -18,10 +19,11 @@ export function hasGeminiKey(): boolean {
  * parsed payload. Throws on network / HTTP / MAX_TOKENS / parse errors so callers
  * can decide whether the failure is fatal or should fall back.
  */
-export async function callGemini<T>(prompt: string, maxOutputTokens: number): Promise<T> {
+export async function callGemini<T>(prompt: string, maxOutputTokens: number, modelOverride?: string): Promise<T> {
   if (!GEMINI_API_KEY) throw new Error('No Gemini API key');
 
-  const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const model = modelOverride || GEMINI_TAGGING_MODEL;
+  const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,7 +62,8 @@ export async function callGemini<T>(prompt: string, maxOutputTokens: number): Pr
  * and trades N network round trips for one.
  */
 export async function tagRecipesWithGemini(
-  recipes: { recipeId: string; recipe: Recipe }[]
+  recipes: { recipeId: string; recipe: Recipe }[],
+  modelOverride?: string
 ): Promise<Map<string, string[]>> {
   if (recipes.length === 0 || !GEMINI_API_KEY) return new Map();
 
@@ -126,7 +129,7 @@ ${JSON.stringify(input)}`;
   const maxOutputTokens = Math.min(32000, 4096 + recipes.length * 400);
 
   try {
-    const parsed = await callGemini<{ results?: unknown }>(prompt, maxOutputTokens);
+    const parsed = await callGemini<{ results?: unknown }>(prompt, maxOutputTokens, modelOverride);
     if (!parsed || !Array.isArray(parsed.results)) {
       console.warn('[Tagger] Gemini batched response missing results array:', parsed);
       return new Map();

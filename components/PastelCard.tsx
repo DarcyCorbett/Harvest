@@ -52,7 +52,7 @@ export default function PastelCard({
         <Text style={styles.emoji}>{emoji}</Text>
       </View>
       <Text
-        style={[styles.title, { color: colors.text }]}
+        style={[styles.title, { color: selected ? '#1C1917' : colors.text }]}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}

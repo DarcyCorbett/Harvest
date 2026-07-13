@@ -4,8 +4,9 @@
 // weights, seed selection, and kid friendly filters.
 // ============================================================
 
-import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
+import { FontSizes, Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
+import TimePickerModal from './TimePickerModal';
 import {
   clearAllCachedRecipes,
   getHouseholdSettings,
@@ -73,6 +74,15 @@ export default function SettingsModal({
   const [eveningTime, setEveningTime] = useState(DEFAULT_MEAL_REMINDERS.eveningTime);
   const isValidHHMM = (s: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s);
 
+  // Default servings and strict tag matching
+  const [defaultAdults, setDefaultAdults] = useState(2);
+  const [defaultChildren, setDefaultChildren] = useState(2);
+  const [strictMatching, setStrictMatching] = useState(true);
+
+  // Time picker modal visibility
+  const [morningPickerVisible, setMorningPickerVisible] = useState(false);
+  const [eveningPickerVisible, setEveningPickerVisible] = useState(false);
+
   // ── Hidden debug-log viewer (tap version footer 5x to reveal) ──
   const [debugTapCount, setDebugTapCount] = useState(0);
   const [debugLogVisible, setDebugLogVisible] = useState(false);
@@ -114,6 +124,9 @@ export default function SettingsModal({
         setMarinateEnabled(mr.marinateEnabled);
         setMorningTime(mr.morningTime);
         setEveningTime(mr.eveningTime);
+        setDefaultAdults(s.defaultAdults ?? 2);
+        setDefaultChildren(s.defaultChildren ?? 2);
+        setStrictMatching(s.strictMatching ?? true);
         // Pre-populate lastNonZero from existing weights
         const lnz: Record<string, number> = {};
         TRUSTED_SITES.forEach((site) => {
@@ -219,6 +232,9 @@ export default function SettingsModal({
           morningTime,
           eveningTime,
         },
+        defaultAdults,
+        defaultChildren,
+        strictMatching,
       });
       onSaved();
       onClose();
@@ -228,7 +244,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, onSaved, onClose]);
+  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, strictMatching, onSaved, onClose]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -272,6 +288,90 @@ export default function SettingsModal({
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
+            {/* ── Default Servings ── */}
+            <Text style={styles.sectionTitle}>Default Servings</Text>
+            <Text style={styles.sectionHint}>
+              Configure the default number of adults and children preselected when launching a new generation plan.
+            </Text>
+            <View style={styles.servingsRow}>
+              <View style={styles.servingCounter}>
+                <Text style={styles.servingLabel}>Adults</Text>
+                <View style={styles.counterControls}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (defaultAdults > 1) setDefaultAdults(defaultAdults - 1);
+                    }}
+                    disabled={defaultAdults <= 1}
+                    style={[styles.counterBtn, { opacity: defaultAdults <= 1 ? 0.4 : 1 }]}
+                  >
+                    <Ionicons name="remove-circle-outline" size={28} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>
+                    {defaultAdults}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (defaultAdults < 20) setDefaultAdults(defaultAdults + 1);
+                    }}
+                    disabled={defaultAdults >= 20}
+                    style={[styles.counterBtn, { opacity: defaultAdults >= 20 ? 0.4 : 1 }]}
+                  >
+                    <Ionicons name="add-circle-outline" size={28} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.servingDivider} />
+
+              <View style={styles.servingCounter}>
+                <Text style={styles.servingLabel}>Children</Text>
+                <View style={styles.counterControls}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (defaultChildren > 0) setDefaultChildren(defaultChildren - 1);
+                    }}
+                    disabled={defaultChildren <= 0}
+                    style={[styles.counterBtn, { opacity: defaultChildren <= 0 ? 0.4 : 1 }]}
+                  >
+                    <Ionicons name="remove-circle-outline" size={28} color={colors.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>
+                    {defaultChildren}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (defaultChildren < 20) setDefaultChildren(defaultChildren + 1);
+                    }}
+                    disabled={defaultChildren >= 20}
+                    style={[styles.counterBtn, { opacity: defaultChildren >= 20 ? 0.4 : 1 }]}
+                  >
+                    <Ionicons name="add-circle-outline" size={28} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* ── Meal Generation Matching ── */}
+            <Text style={styles.sectionTitle}>Meal Generation Matching</Text>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextCol}>
+                <Text style={styles.toggleLabel}>Strict Tag Matching</Text>
+                <Text style={styles.toggleDesc}>
+                  When enabled, the generator automatically regenerates meals in the background until all selected criteria (like Healthy, Dinner, Quick & Easy) are fully met.
+                </Text>
+              </View>
+              <Switch
+                value={strictMatching}
+                onValueChange={setStrictMatching}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor="#ffffff"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
             {/* ── Sources ── */}
             <Text style={styles.sectionTitle}>Recipe Sources</Text>
             <Text style={styles.sectionHint}>
@@ -365,7 +465,7 @@ export default function SettingsModal({
             {/* ── Kid Friendly Filters ── */}
             <Text style={styles.sectionTitle}>Kid Friendly Filters</Text>
             <Text style={styles.sectionHint}>
-              When "Kid Friendly" is selected during generation, recipes containing any blocked ingredient are skipped. Tap a default term to allow it through. Add custom terms below.
+              When &ldquo;Kid Friendly&rdquo; is selected during generation, recipes containing any blocked ingredient are skipped. Tap a default term to allow it through. Add custom terms below.
             </Text>
 
             <Text style={styles.subSectionLabel}>Default blocked ingredients</Text>
@@ -469,33 +569,43 @@ export default function SettingsModal({
 
             <View style={styles.reminderRow}>
               <Text style={[styles.reminderTitle, { flex: 1 }]}>Morning reminder time</Text>
-              <TextInput
-                value={morningTime}
-                onChangeText={setMorningTime}
-                placeholder="07:30"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="numeric"
-                maxLength={5}
-                style={[styles.timeInput, !isValidHHMM(morningTime) && styles.timeInputInvalid]}
-              />
+              <TouchableOpacity
+                onPress={() => setMorningPickerVisible(true)}
+                style={styles.timePickerTrigger}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.timePickerTriggerText}>{morningTime}</Text>
+                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.reminderRow}>
               <Text style={[styles.reminderTitle, { flex: 1 }]}>Evening reminder time</Text>
-              <TextInput
-                value={eveningTime}
-                onChangeText={setEveningTime}
-                placeholder="19:30"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="numeric"
-                maxLength={5}
-                style={[styles.timeInput, !isValidHHMM(eveningTime) && styles.timeInputInvalid]}
-              />
+              <TouchableOpacity
+                onPress={() => setEveningPickerVisible(true)}
+                style={styles.timePickerTrigger}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.timePickerTriggerText}>{eveningTime}</Text>
+                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            {(!isValidHHMM(morningTime) || !isValidHHMM(eveningTime)) && (
-              <Text style={styles.helperError}>Use HH:MM (24-hour)</Text>
-            )}
+            <TimePickerModal
+              visible={morningPickerVisible}
+              value={morningTime}
+              onClose={() => setMorningPickerVisible(false)}
+              onSelect={setMorningTime}
+              title="Morning Reminder"
+            />
+
+            <TimePickerModal
+              visible={eveningPickerVisible}
+              value={eveningTime}
+              onClose={() => setEveningPickerVisible(false)}
+              onSelect={setEveningTime}
+              title="Evening Reminder"
+            />
 
             <View style={styles.divider} />
 
@@ -873,5 +983,83 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primaryLight,
+  },
+  servingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  servingCounter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  servingLabel: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+    color: colors.text,
+    marginBottom: Spacing.sm,
+  },
+  counterControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  counterBtn: {
+    padding: Spacing.xs,
+  },
+  counterValue: {
+    fontSize: FontSizes.lg,
+    fontFamily: Fonts.bold,
+    color: colors.text,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  servingDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: colors.borderLight,
+    marginHorizontal: Spacing.md,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  toggleTextCol: {
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  toggleDesc: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.regular,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  timePickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: colors.surface,
+    minWidth: 90,
+    justifyContent: 'center',
+  },
+  timePickerTriggerText: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
+    color: colors.text,
   },
 });

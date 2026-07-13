@@ -1,0 +1,178 @@
+{
+  "title": "One Pot Chicken Pasta",
+  "sourceUrl": "https://www.spendwithpennies.com/one-pot-chicken-pasta/",
+  "imageUrl": "https://www.spendwithpennies.com/wp-content/uploads/2026/04/cropped-One-Pot-Chicken-Pasta-2-SpendWithPennies.jpg",
+  "prepTime": "10 min",
+  "cookTime": "12 min",
+  "totalTime": "22 min",
+  "originalServings": 4,
+  "course": [
+    "Entree"
+  ],
+  "description": "Tender chicken, penne, and tomatoes simmer in a creamy Parmesan sauce for an easy one pot dinner that is cozy, cheesy, and weeknight-friendly.",
+  "cuisine": "American",
+  "ingredients": [
+    {
+      "name": "boneless skinless chicken breasts cut into bite-size pieces",
+      "quantity": 454,
+      "unit": "g"
+    },
+    {
+      "name": "salt and black pepper",
+      "quantity": 0,
+      "unit": ""
+    },
+    {
+      "name": "olive oil",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "medium onion diced",
+      "quantity": 0.5,
+      "unit": ""
+    },
+    {
+      "name": "garlic minced",
+      "quantity": 2,
+      "unit": "clove"
+    },
+    {
+      "name": "chicken broth + 1/2 cup extra if needed",
+      "quantity": 3,
+      "unit": "cup"
+    },
+    {
+      "name": "canned diced tomatoes drained",
+      "quantity": 411,
+      "unit": "g",
+      "notes": "1 can"
+    },
+    {
+      "name": "heavy whipping cream",
+      "quantity": 1,
+      "unit": "cup"
+    },
+    {
+      "name": "chopped fresh parsley or 1 teaspoon dried parsley",
+      "quantity": 1,
+      "unit": "tbsp"
+    },
+    {
+      "name": "Italian seasoning",
+      "quantity": 1,
+      "unit": "tsp"
+    },
+    {
+      "name": "penne or medium pasta",
+      "quantity": 340,
+      "unit": "g"
+    },
+    {
+      "name": "shredded Parmesan cheese divided",
+      "quantity": 0.5,
+      "unit": "cup"
+    },
+    {
+      "name": "shredded mozzarella cheese",
+      "quantity": 0.6666666666666666,
+      "unit": "cup"
+    }
+  ],
+  "ingredientGroups": [
+    {
+      "name": "",
+      "ingredients": [
+        {
+          "name": "boneless skinless chicken breasts cut into bite-size pieces",
+          "quantity": 454,
+          "unit": "g"
+        },
+        {
+          "name": "salt and black pepper",
+          "quantity": 0,
+          "unit": ""
+        },
+        {
+          "name": "olive oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "medium onion diced",
+          "quantity": 0.5,
+          "unit": ""
+        },
+        {
+          "name": "garlic minced",
+          "quantity": 2,
+          "unit": "clove"
+        },
+        {
+          "name": "chicken broth + 1/2 cup extra if needed",
+          "quantity": 3,
+          "unit": "cup"
+        },
+        {
+          "name": "canned diced tomatoes drained",
+          "quantity": 411,
+          "unit": "g",
+          "notes": "1 can"
+        },
+        {
+          "name": "heavy whipping cream",
+          "quantity": 1,
+          "unit": "cup"
+        },
+        {
+          "name": "chopped fresh parsley or 1 teaspoon dried parsley",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "Italian seasoning",
+          "quantity": 1,
+          "unit": "tsp"
+        },
+        {
+          "name": "penne or medium pasta",
+          "quantity": 340,
+          "unit": "g"
+        },
+        {
+          "name": "shredded Parmesan cheese divided",
+          "quantity": 0.5,
+          "unit": "cup"
+        },
+        {
+          "name": "shredded mozzarella cheese",
+          "quantity": 0.6666666666666666,
+          "unit": "cup"
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "text": "Season chicken with salt & pepper. Heat olive oil over medium heat and cook chicken until no pink remains. Set aside."
+    },
+    {
+      "text": "Add onion and garlic to the pan. Cook until onion is tender, about 3 minutes."
+    },
+    {
+      "text": "Add 3 cups broth, tomatoes, cream, parsley, and Italian seasoning and bring to a boil. Add pasta. Let simmer for about 15 minutes or until tender and thickened. If you need, add ½ cup broth till pasta is cooked. Mix in ¼ cup parmesan cheese."
+    },
+    {
+      "text": "Add the chicken back to skillet, top with mozzarella cheese and remaining ¼ cup parmesan, then broil 2-3 minutes or until cheese is melted and golden."
+    }
+  ],
+  "notes": "NotesKeep leftovers in an airtight container in the refrigerator for up to 4 days, and in the freezer for up to 2 months.",
+  "nutrition": {
+    "calories": 468,
+    "protein": 42,
+    "carbs": 50,
+    "fat": 10
+  },
+  "tags": [],
+  "scrapedAt": "2026-05-09T06:32:00.054Z"
+}

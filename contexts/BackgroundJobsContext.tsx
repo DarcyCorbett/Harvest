@@ -71,6 +71,8 @@ interface BackgroundJobsContextValue {
   /** Hide the toast for a finished generation but keep the meals around so
    *  the Generate screen still renders the results phase on next visit. */
   acknowledgeGeneration: () => void;
+  /** Immediately abort a running generation job. */
+  cancelGeneration: () => void;
 
   /** Begin an Add-to-Calendar confirmation. No-op if one is already running. */
   startConfirm: (args: ConfirmStartArgs) => boolean;
@@ -95,6 +97,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
   // overwriting a newer job (e.g. user starts gen 1, dismisses, starts gen 2).
   const generationEpoch = useRef(0);
   const confirmEpoch = useRef(0);
+  const generationCancelledRef = useRef(false);
 
   // ── Rehydrate persisted generation result on startup ──
   const hasRehydrated = useRef(false);
@@ -149,6 +152,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
     (config: GenerateConfig, householdId: string): boolean => {
       if (generation.status === 'running') return false;
       const epoch = ++generationEpoch.current;
+      generationCancelledRef.current = false;
       setGeneration({
         status: 'running',
         config,
@@ -156,7 +160,9 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
       });
 
       generateMealPlan(config, householdId, (msg, current, total) => {
-        if (generationEpoch.current !== epoch) return;
+        if (generationCancelledRef.current || generationEpoch.current !== epoch) {
+          throw new Error('Generation cancelled by user');
+        }
         setGeneration((prev) =>
           prev.status === 'running' ? { ...prev, progress: { msg, current, total } } : prev,
         );
@@ -209,6 +215,12 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
     setGeneration((prev) =>
       prev.status === 'done' || prev.status === 'error' ? { ...prev, acknowledged: true } : prev,
     );
+  }, []);
+
+  const cancelGeneration = useCallback(() => {
+    generationEpoch.current++;
+    generationCancelledRef.current = true;
+    setGeneration({ status: 'idle' });
   }, []);
 
   const startConfirm = useCallback(
@@ -291,11 +303,12 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
       setGenerationMeals,
       clearGeneration,
       acknowledgeGeneration,
+      cancelGeneration,
       startConfirm,
       acknowledgeConfirm,
       clearConfirm,
     }),
-    [generation, confirm, startGeneration, setGenerationMeals, clearGeneration, acknowledgeGeneration, startConfirm, acknowledgeConfirm, clearConfirm],
+    [generation, confirm, startGeneration, setGenerationMeals, clearGeneration, acknowledgeGeneration, cancelGeneration, startConfirm, acknowledgeConfirm, clearConfirm],
   );
 
   return <BackgroundJobsContext.Provider value={value}>{children}</BackgroundJobsContext.Provider>;

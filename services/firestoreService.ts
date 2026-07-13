@@ -194,7 +194,14 @@ export async function getCachedRecipeByUrl(url: string): Promise<Recipe | null> 
 
 // ─── Household Settings ────────────────────────────────────
 
-const DEFAULT_SETTINGS: HouseholdSettings = { sourceWeights: {}, ingredientWeights: {}, selectedSeeds: [] };
+const DEFAULT_SETTINGS: HouseholdSettings = {
+  sourceWeights: {},
+  ingredientWeights: {},
+  selectedSeeds: [],
+  defaultAdults: 2,
+  defaultChildren: 2,
+  strictMatching: true,
+};
 
 // Firestore does not allow dots in field names. Encode/decode site keys for storage.
 function encodeSiteKey(site: string): string { return site.replace(/\./g, '_'); }
@@ -210,6 +217,9 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     selectedSeeds?: string[];
     kidFriendly?: { excludedIngredients?: string[]; allowedExceptions?: string[] };
     mealReminders?: HouseholdSettings['mealReminders'];
+    defaultAdults?: number;
+    defaultChildren?: number;
+    strictMatching?: boolean;
   };
   const sourceWeights: Record<string, number> = {};
   Object.entries(raw.sourceWeights ?? {}).forEach(([k, v]) => {
@@ -221,6 +231,9 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     selectedSeeds: raw.selectedSeeds ?? [],
     kidFriendly: raw.kidFriendly,
     mealReminders: raw.mealReminders,
+    defaultAdults: raw.defaultAdults ?? 2,
+    defaultChildren: raw.defaultChildren ?? 2,
+    strictMatching: raw.strictMatching ?? true,
   };
 }
 
@@ -237,6 +250,9 @@ export async function saveHouseholdSettings(
     sourceWeights: encodedSourceWeights,
     ingredientWeights: settings.ingredientWeights,
     selectedSeeds: settings.selectedSeeds ?? [],
+    defaultAdults: settings.defaultAdults ?? 2,
+    defaultChildren: settings.defaultChildren ?? 2,
+    strictMatching: settings.strictMatching ?? true,
     ...(settings.kidFriendly ? { kidFriendly: settings.kidFriendly } : {}),
     ...(settings.mealReminders ? { mealReminders: settings.mealReminders } : {}),
   });

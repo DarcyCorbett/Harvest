@@ -224,7 +224,7 @@ export function buildQueryTags(ctx: SearchQueryContext): string[] {
   return tags;
 }
 
-function getDishPool(cuisineStyles: CuisineStyle[], mealType: MealType): readonly string[] {
+export function getDishPool(cuisineStyles: CuisineStyle[], mealType: MealType): readonly string[] {
   if (cuisineStyles.includes('Asian')) return DISH_VOCAB.Asian[mealType] ?? DISH_VOCAB.general[mealType];
   if (cuisineStyles.includes('Mexican')) return DISH_VOCAB.Mexican[mealType] ?? DISH_VOCAB.general[mealType];
   if (cuisineStyles.includes('Mediterranean')) return DISH_VOCAB.Mediterranean[mealType] ?? DISH_VOCAB.general[mealType];
@@ -232,7 +232,7 @@ function getDishPool(cuisineStyles: CuisineStyle[], mealType: MealType): readonl
 }
 
 /** Return a weighted-random item from a pool. Items absent from weights default to weight 1. */
-function weightedRandomItem(pool: readonly string[], weights: Record<string, number>): string {
+export function weightedRandomItem(pool: readonly string[], weights: Record<string, number>): string {
   const w = pool.map((item) => Math.max(1, weights[item] ?? 1));
   const total = w.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;

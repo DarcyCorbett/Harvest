@@ -25,6 +25,8 @@ import {
   INDEXED_SITES,
   SITE_SEARCH_URLS,
   prioritiseSites,
+  getDishPool,
+  weightedRandomItem,
 } from './scraper/sites';
 import {
   checkTimeConstraint,
@@ -88,171 +90,225 @@ export function calculateRequiredServings(adults: number, children: number): num
 }
 
 export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult> {
-  const queryCtx = {
-    mealType: request.mealType,
-    cuisineStyles: request.cuisineStyles,
-    customInstructions: request.customInstructions,
-    settings: request.settings,
-    forceSeed: request.forceSeed,
-  };
-  const searchQuery = buildSearchQuery(queryCtx);
-  const queryTags = buildQueryTags(queryCtx);
-  console.log(`[RecipeScraper] Search query: "${searchQuery}"`);
-  console.log(`[RecipeScraper] Query tags (for indexed sites): [${queryTags.join(', ')}]`);
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+  const triedSeeds = new Set<string>();
 
-  const sites = prioritiseSites(request.cuisineStyles, request.settings);
+  if (request.forceSeed) {
+    triedSeeds.add(request.forceSeed.toLowerCase());
+  }
 
-  const globalFallbacks: Array<{ recipe: Recipe; recipeUrl: string }> = [];
-
-  for (const site of sites.slice(0, MAX_SITES_TO_TRY)) {
-    const isIndexed = INDEXED_SITES.includes(site);
-    const searchUrl = isIndexed ? null : SITE_SEARCH_URLS[site]?.(searchQuery);
-    if (!isIndexed && !searchUrl) continue;
-
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      let candidateUrls: string[];
-      if (isIndexed) {
-        console.log(`[RecipeScraper] ${site} uses indexed-pool path`);
-        candidateUrls = await fetchIndexedCandidates(site, queryTags);
-      } else {
-        console.log(`[RecipeScraper] Searching ${site}...`);
-        candidateUrls = await fetchRestApiLinks(searchUrl!);
+      let currentSeed = request.forceSeed;
+
+      if (attempt > 1) {
+        if (request.settings?.selectedSeeds && request.settings.selectedSeeds.length > 0) {
+          const untried = request.settings.selectedSeeds.filter(s => !triedSeeds.has(s.toLowerCase()));
+          if (untried.length > 0) {
+            currentSeed = untried[Math.floor(Math.random() * untried.length)];
+            triedSeeds.add(currentSeed.toLowerCase());
+            console.log(`[RecipeScraper] Retry attempt ${attempt}: Using alternative user-selected seed "${currentSeed}"`);
+          } else {
+            const pool = getDishPool(request.cuisineStyles, request.mealType);
+            const untriedPool = pool.filter(s => !triedSeeds.has(s.toLowerCase()));
+            if (untriedPool.length > 0) {
+              currentSeed = weightedRandomItem(untriedPool, request.settings?.ingredientWeights ?? {});
+              triedSeeds.add(currentSeed.toLowerCase());
+              console.log(`[RecipeScraper] Retry attempt ${attempt}: All user seeds tried. Using random pool seed "${currentSeed}"`);
+            } else {
+              currentSeed = undefined;
+              console.log(`[RecipeScraper] Retry attempt ${attempt}: All seeds exhausted. Retrying without seed restriction`);
+            }
+          }
+        } else {
+          const pool = getDishPool(request.cuisineStyles, request.mealType);
+          const untriedPool = pool.filter(s => !triedSeeds.has(s.toLowerCase()));
+          if (untriedPool.length > 0) {
+            currentSeed = weightedRandomItem(untriedPool, request.settings?.ingredientWeights ?? {});
+            triedSeeds.add(currentSeed.toLowerCase());
+            console.log(`[RecipeScraper] Retry attempt ${attempt}: Using alternative pool seed "${currentSeed}"`);
+          } else {
+            currentSeed = undefined;
+            console.log(`[RecipeScraper] Retry attempt ${attempt}: Pool seeds exhausted. Retrying without seed restriction`);
+          }
+        }
       }
 
-      console.log(
-        `[RecipeScraper] ${candidateUrls.length} candidate(s) on ${site}:`,
-        candidateUrls
-      );
+      const queryCtx = {
+        mealType: request.mealType,
+        cuisineStyles: request.cuisineStyles,
+        customInstructions: request.customInstructions,
+        settings: request.settings,
+        forceSeed: currentSeed,
+      };
+      const searchQuery = buildSearchQuery(queryCtx);
+      const queryTags = buildQueryTags(queryCtx);
+      console.log(`[RecipeScraper] (Attempt ${attempt}/${maxRetries}) Search query: "${searchQuery}"`);
+      console.log(`[RecipeScraper] Query tags (for indexed sites): [${queryTags.join(', ')}]`);
 
-      if (candidateUrls.length === 0) {
-        console.warn(`[RecipeScraper] No recipe links found for ${site}`);
-        continue;
-      }
+      const sites = prioritiseSites(request.cuisineStyles, request.settings);
+      const globalFallbacks: Array<{ recipe: Recipe; recipeUrl: string }> = [];
 
-      shuffleArray(candidateUrls);
+      // Greatly increase the number of sites to search (up to 10)
+      const sitesToTry = Math.max(10, MAX_SITES_TO_TRY);
 
-      for (const recipeUrl of candidateUrls.slice(0, MAX_CANDIDATES_PER_SITE)) {
+      for (const site of sites.slice(0, sitesToTry)) {
+        const isIndexed = INDEXED_SITES.includes(site);
+        const searchUrl = isIndexed ? null : SITE_SEARCH_URLS[site]?.(searchQuery);
+        if (!isIndexed && !searchUrl) continue;
+
         try {
-          const cached = await getCachedRecipeByUrl(recipeUrl);
-          if (cached?.id) {
-            if (request.excludeRecipeIds?.includes(cached.id)) {
-              console.log(`[RecipeScraper] Skipping duplicate (cached): ${recipeUrl}`);
-              continue;
-            }
-            const cacheFilter = evaluateRecipeForRequest(cached, request);
-            if (!cacheFilter.ok) {
-              console.log(`[RecipeScraper] Skipping cached "${cached.title}" — ${cacheFilter.reason}`);
-              continue;
-            }
-            const cachedTimeCheck = checkTimeConstraint(cached, request.cuisineStyles);
-            if (cachedTimeCheck === 'fail') {
-              const prepM = parseMinutes(cached.prepTime) ?? 0;
-              const cookM = parseMinutes(cached.cookTime) ?? 0;
-              const limit = request.cuisineStyles.includes('Quick & Easy') ? 30 : 45;
-              console.log(`[RecipeScraper] Skipping cached "${cached.title}" — ${prepM + cookM} min total exceeds ${limit} min limit`);
-              continue;
-            }
-            if (request.forceSeed && !seedMatchesRecipe(request.forceSeed, cached)) {
-              console.log(`[RecipeScraper] Seed MISS (cached) "${cached.title}" — seed="${request.forceSeed}"`);
-              continue;
-            }
-            console.log(`[RecipeScraper] Cache hit: ${recipeUrl}`);
-            return {
-              recipe: applyServingScale(cached, request.requiredServings),
-              recipeId: cached.id,
-              fromCache: true,
-            };
+          let candidateUrls: string[];
+          if (isIndexed) {
+            console.log(`[RecipeScraper] ${site} uses indexed-pool path`);
+            candidateUrls = await fetchIndexedCandidates(site, queryTags);
+          } else {
+            console.log(`[RecipeScraper] Searching ${site}...`);
+            candidateUrls = await fetchRestApiLinks(searchUrl!);
           }
 
-          const rawHtml = await fetchRawHtml(recipeUrl);
-          const recipe = parseRecipe(rawHtml, recipeUrl);
+          console.log(
+            `[RecipeScraper] ${candidateUrls.length} candidate(s) on ${site}:`,
+            candidateUrls
+          );
 
-          const freshFilter = evaluateRecipeForRequest(recipe, request);
-          if (!freshFilter.ok) {
-            console.log(`[RecipeScraper] Skipping "${recipe.title}" — ${freshFilter.reason}`);
+          if (candidateUrls.length === 0) {
+            console.warn(`[RecipeScraper] No recipe links found for ${site}`);
             continue;
           }
 
-          const timeCheck = checkTimeConstraint(recipe, request.cuisineStyles);
+          shuffleArray(candidateUrls);
 
-          if (timeCheck === 'fail') {
-            const prepM = parseMinutes(recipe.prepTime) ?? 0;
-            const cookM = parseMinutes(recipe.cookTime) ?? 0;
-            const limit = request.cuisineStyles.includes('Quick & Easy') ? 30 : 45;
-            console.log(`[RecipeScraper] Skipping "${recipe.title}" — ${prepM + cookM} min total exceeds ${limit} min limit`);
-            continue;
-          }
+          // Greatly increase candidates checked per site (up to 8)
+          const candidatesToTry = Math.max(8, MAX_CANDIDATES_PER_SITE);
 
-          if (timeCheck === 'unparseable') {
-            console.log(`[RecipeScraper] Time unparseable for "${recipe.title}" — queued as fallback`);
-            globalFallbacks.push({ recipe, recipeUrl });
-            continue;
-          }
+          for (const recipeUrl of candidateUrls.slice(0, candidatesToTry)) {
+            try {
+              const cached = await getCachedRecipeByUrl(recipeUrl);
+              if (cached?.id) {
+                if (request.excludeRecipeIds?.includes(cached.id)) {
+                  console.log(`[RecipeScraper] Skipping duplicate (cached): ${recipeUrl}`);
+                  continue;
+                }
+                const cacheFilter = evaluateRecipeForRequest(cached, request);
+                if (!cacheFilter.ok) {
+                  console.log(`[RecipeScraper] Skipping cached "${cached.title}" — ${cacheFilter.reason}`);
+                  continue;
+                }
+                const cachedTimeCheck = checkTimeConstraint(cached, request.cuisineStyles);
+                if (cachedTimeCheck === 'fail') {
+                  const prepM = parseMinutes(cached.prepTime) ?? 0;
+                  const cookM = parseMinutes(cached.cookTime) ?? 0;
+                  const limit = request.cuisineStyles.includes('Quick & Easy') ? 30 : 45;
+                  console.log(`[RecipeScraper] Skipping cached "${cached.title}" — ${prepM + cookM} min total exceeds ${limit} min limit`);
+                  continue;
+                }
+                if (currentSeed && !seedMatchesRecipe(currentSeed, cached)) {
+                  console.log(`[RecipeScraper] Skipping cached "${cached.title}" — seed="${currentSeed}"`);
+                  continue;
+                }
+                console.log(`[RecipeScraper] Cache hit: ${recipeUrl}`);
+                return {
+                  recipe: applyServingScale(cached, request.requiredServings),
+                  recipeId: cached.id,
+                  fromCache: true,
+                };
+              }
 
-          if (request.forceSeed) {
-            if (!seedMatchesRecipe(request.forceSeed, recipe)) {
-              const ingNames = recipe.ingredients.map((ing) => ing.name).join(', ');
-              const terms = [request.forceSeed, ...(SEED_SYNONYMS[request.forceSeed.toLowerCase()] ?? [])];
-              console.log(`[RecipeScraper] Seed MISS "${recipe.title}" — none of [${terms.join(', ')}] in title or ingredients: [${ingNames}]`);
-              continue;
+              const rawHtml = await fetchRawHtml(recipeUrl);
+              const recipe = parseRecipe(rawHtml, recipeUrl);
+
+              const freshFilter = evaluateRecipeForRequest(recipe, request);
+              if (!freshFilter.ok) {
+                console.log(`[RecipeScraper] Skipping "${recipe.title}" — ${freshFilter.reason}`);
+                continue;
+              }
+
+              const timeCheck = checkTimeConstraint(recipe, request.cuisineStyles);
+
+              if (timeCheck === 'fail') {
+                const prepM = parseMinutes(recipe.prepTime) ?? 0;
+                const cookM = parseMinutes(recipe.cookTime) ?? 0;
+                const limit = request.cuisineStyles.includes('Quick & Easy') ? 30 : 45;
+                console.log(`[RecipeScraper] Skipping "${recipe.title}" — ${prepM + cookM} min total exceeds ${limit} min limit`);
+                continue;
+              }
+
+              if (timeCheck === 'unparseable') {
+                console.log(`[RecipeScraper] Time unparseable for "${recipe.title}" — queued as fallback`);
+                globalFallbacks.push({ recipe, recipeUrl });
+                continue;
+              }
+
+              if (currentSeed) {
+                if (!seedMatchesRecipe(currentSeed, recipe)) {
+                  const ingNames = recipe.ingredients.map((ing) => ing.name).join(', ');
+                  const terms = [currentSeed, ...(SEED_SYNONYMS[currentSeed.toLowerCase()] ?? [])];
+                  console.log(`[RecipeScraper] Seed MISS "${recipe.title}" — none of [${terms.join(', ')}] in title or ingredients: [${ingNames}]`);
+                  continue;
+                }
+                console.log(`[RecipeScraper] Seed HIT "${recipe.title}" — seed="${currentSeed}"`);
+              }
+
+              console.log(`[RecipeScraper] Accepted "${recipe.title}" from ${site}`);
+              const recipeId = await saveRecipe(recipe);
+              if (request.excludeRecipeIds?.includes(recipeId)) {
+                console.log(`[RecipeScraper] Skipping duplicate (fresh): ${recipeUrl}`);
+                continue;
+              }
+              return {
+                recipe: applyServingScale({ ...recipe, id: recipeId }, request.requiredServings),
+                recipeId,
+                fromCache: false,
+              };
+            } catch (err) {
+              console.warn(
+                `[RecipeScraper] Failed on ${recipeUrl}:`,
+                err instanceof Error ? err.message : err
+              );
             }
-            console.log(`[RecipeScraper] Seed HIT "${recipe.title}" — seed="${request.forceSeed}"`);
           }
-
-          console.log(`[RecipeScraper] Accepted "${recipe.title}" from ${site}`);
-          const recipeId = await saveRecipe(recipe);
-          if (request.excludeRecipeIds?.includes(recipeId)) {
-            console.log(`[RecipeScraper] Skipping duplicate (fresh): ${recipeUrl}`);
-            continue;
-          }
-          return {
-            recipe: applyServingScale({ ...recipe, id: recipeId }, request.requiredServings),
-            recipeId,
-            fromCache: false,
-          };
         } catch (err) {
           console.warn(
-            `[RecipeScraper] Failed on ${recipeUrl}:`,
+            `[RecipeScraper] Search on ${site} failed:`,
             err instanceof Error ? err.message : err
           );
         }
       }
-    } catch (err) {
-      console.warn(
-        `[RecipeScraper] Search on ${site} failed:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
 
-  // Use time-unparseable fallbacks when all other candidates were exhausted.
-  // Previously only activated when !anyParseableTime, but that skips fallbacks when
-  // parseable recipes exist but all fail the time constraint (e.g. Kid Friendly + Quick & Easy).
-  if (globalFallbacks.length > 0) {
-    const kfActive = request.cuisineStyles.includes('Kid Friendly');
-    const healthyActive = request.cuisineStyles.includes('Healthy');
-    let validFallbacks = globalFallbacks.filter(({ recipe }) => {
-      if (kfActive && !isKidFriendly(recipe, request.settings?.kidFriendly)) return false;
-      if (healthyActive && !isHealthy(recipe)) return false;
-      return true;
-    });
-    if (request.forceSeed) {
-      const seed = request.forceSeed.toLowerCase();
-      const seedFiltered = validFallbacks.filter(({ recipe }) =>
-        recipe.title.toLowerCase().includes(seed) ||
-        recipe.ingredients.some((ing) => ing.name.toLowerCase().includes(seed))
-      );
-      console.log(`[RecipeScraper] Fallback seed filter: ${seedFiltered.length}/${validFallbacks.length} pass seed="${request.forceSeed}"`);
-      if (seedFiltered.length > 0) validFallbacks = seedFiltered;
+      if (globalFallbacks.length > 0) {
+        const kfActive = request.cuisineStyles.includes('Kid Friendly');
+        const healthyActive = request.cuisineStyles.includes('Healthy');
+        let validFallbacks = globalFallbacks.filter(({ recipe }) => {
+          if (kfActive && !isKidFriendly(recipe, request.settings?.kidFriendly)) return false;
+          if (healthyActive && !isHealthy(recipe)) return false;
+          return true;
+        });
+        if (currentSeed) {
+          const seed = currentSeed.toLowerCase();
+          const seedFiltered = validFallbacks.filter(({ recipe }) =>
+            recipe.title.toLowerCase().includes(seed) ||
+            recipe.ingredients.some((ing) => ing.name.toLowerCase().includes(seed))
+          );
+          console.log(`[RecipeScraper] Fallback seed filter: ${seedFiltered.length}/${validFallbacks.length} pass seed="${currentSeed}"`);
+          if (seedFiltered.length > 0) validFallbacks = seedFiltered;
+        }
+        const { recipe: fallbackRecipe } = (validFallbacks[0] ?? globalFallbacks[0]);
+        console.log(`[RecipeScraper] All candidates filtered — using fallback: "${fallbackRecipe.title}"`);
+        const recipeId = await saveRecipe(fallbackRecipe);
+        return {
+          recipe: applyServingScale({ ...fallbackRecipe, id: recipeId }, request.requiredServings),
+          recipeId,
+          fromCache: false,
+        };
+      }
+
+      throw new Error(`No matching recipes found on any of the attempted sites for seed "${currentSeed ?? 'none'}"`);
+    } catch (err) {
+      console.warn(`[RecipeScraper] Attempt ${attempt} failed:`, err instanceof Error ? err.message : err);
+      lastError = err instanceof Error ? err : new Error(String(err));
     }
-    const { recipe: fallbackRecipe } = (validFallbacks[0] ?? globalFallbacks[0]);
-    console.log(`[RecipeScraper] All candidates filtered — using time-unparseable fallback: "${fallbackRecipe.title}"`);
-    const recipeId = await saveRecipe(fallbackRecipe);
-    return {
-      recipe: applyServingScale({ ...fallbackRecipe, id: recipeId }, request.requiredServings),
-      recipeId,
-      fromCache: false,
-    };
   }
 
   const activeFilters: string[] = [];
@@ -262,7 +318,7 @@ export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult
   if (request.forceSeed) activeFilters.push(`seed "${request.forceSeed}"`);
   const filterDetail = activeFilters.length > 0 ? ` with filters: ${activeFilters.join(', ')}` : '';
   throw new Error(
-    `No matching recipe found for ${request.mealType}${filterDetail}. Try broadening your criteria.`
+    `No matching recipe found for ${request.mealType}${filterDetail} after multiple retries across different sites and seeds. Try broadening your criteria.`
   );
 }
 
