@@ -1,8 +1,21 @@
 import type { CallableRequest } from 'firebase-functions/v2/https';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const firestore = vi.hoisted(() => {
+  const get = vi.fn();
+  const doc = vi.fn(() => ({ get }));
+  const collection = vi.fn(() => ({ doc }));
+  const getFirestore = vi.fn(() => ({ collection }));
+  return { collection, doc, get, getFirestore };
+});
+
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: firestore.getFirestore,
+}));
 
 import {
   authorizeHouseholdMember,
+  firestoreAuthzLookups,
   type AuthzLookups,
 } from '../src/authz.js';
 
@@ -19,6 +32,50 @@ function lookups(overrides: Partial<AuthzLookups> = {}): AuthzLookups {
     ...overrides,
   };
 }
+
+afterEach(() => {
+  vi.clearAllMocks();
+  firestore.get.mockReset();
+});
+
+describe('firestoreAuthzLookups', () => {
+  it.each([true, false])(
+    'returns allowlist snapshot existence when it is %s',
+    async (exists) => {
+      firestore.get.mockResolvedValue({ exists });
+      const injected = firestoreAuthzLookups();
+
+      await expect(
+        injected.isAllowlisted('member@example.com'),
+      ).resolves.toBe(exists);
+      expect(firestore.collection).toHaveBeenCalledWith('allowlist');
+      expect(firestore.doc).toHaveBeenCalledWith('member@example.com');
+      expect(firestore.get).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([
+    ['missing household', { exists: false }, null],
+    [
+      'non-array members',
+      { exists: true, get: () => 'user-1' },
+      [],
+    ],
+    [
+      'mixed members',
+      { exists: true, get: () => ['user-1', 42, null, 'user-2'] },
+      ['user-1', 'user-2'],
+    ],
+  ])('returns safe members for %s', async (_name, snapshot, expected) => {
+    firestore.get.mockResolvedValue(snapshot);
+    const injected = firestoreAuthzLookups();
+
+    await expect(injected.getMembers('home-1')).resolves.toEqual(expected);
+    expect(firestore.collection).toHaveBeenCalledWith('households');
+    expect(firestore.doc).toHaveBeenCalledWith('home-1');
+    expect(firestore.get).toHaveBeenCalledOnce();
+  });
+});
 
 describe('authorizeHouseholdMember', () => {
   it('rejects missing authentication before any lookup', async () => {

@@ -5,13 +5,23 @@ const firestore = vi.hoisted(() => {
   const docRef = {};
   const set = vi.fn();
   const get = vi.fn();
-  const collection = vi.fn(() => ({ doc: vi.fn(() => docRef) }));
+  const doc = vi.fn(() => docRef);
+  const collection = vi.fn(() => ({ doc }));
   const runTransaction = vi.fn(async (callback: (transaction: unknown) => unknown) =>
     callback({ get, set }),
   );
   const getFirestore = vi.fn(() => ({ collection, runTransaction }));
   const serverTimestamp = vi.fn(() => 'server-timestamp');
-  return { collection, docRef, get, getFirestore, runTransaction, serverTimestamp, set };
+  return {
+    collection,
+    doc,
+    docRef,
+    get,
+    getFirestore,
+    runTransaction,
+    serverTimestamp,
+    set,
+  };
 });
 
 vi.mock('firebase-admin/firestore', () => ({
@@ -47,6 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   firestore.collection.mockClear();
+  firestore.doc.mockClear();
   firestore.get.mockReset();
   firestore.getFirestore.mockClear();
   firestore.runTransaction.mockClear();
@@ -157,6 +168,81 @@ describe('reserveQuota', () => {
 });
 
 describe('firestoreQuotaStore', () => {
+  it('reads and merges the next counter in an aiUsage transaction', async () => {
+    firestore.get.mockResolvedValue({
+      exists: true,
+      get: () => 12,
+    });
+    const store = firestoreQuotaStore();
+
+    await expect(
+      store.incrementIfAllowed('2026-07-13_u1_tagRecipes', 3, 100),
+    ).resolves.toBe(15);
+    expect(firestore.collection).toHaveBeenCalledWith('aiUsage');
+    expect(firestore.doc).toHaveBeenCalledWith(
+      '2026-07-13_u1_tagRecipes',
+    );
+    expect(firestore.runTransaction).toHaveBeenCalledOnce();
+    expect(firestore.get).toHaveBeenCalledWith(firestore.docRef);
+    expect(firestore.serverTimestamp).toHaveBeenCalledOnce();
+    expect(firestore.set).toHaveBeenCalledOnce();
+    expect(firestore.set).toHaveBeenCalledWith(
+      firestore.docRef,
+      { units: 15, updatedAt: 'server-timestamp' },
+      { merge: true },
+    );
+  });
+
+  it('starts a missing quota document at zero', async () => {
+    const readUnits = vi.fn();
+    firestore.get.mockResolvedValue({
+      exists: false,
+      get: readUnits,
+    });
+    const store = firestoreQuotaStore();
+
+    await expect(
+      store.incrementIfAllowed('2026-07-13_u1_shoppingGroups', 2, 40),
+    ).resolves.toBe(2);
+    expect(readUnits).not.toHaveBeenCalled();
+    expect(firestore.set).toHaveBeenCalledWith(
+      firestore.docRef,
+      { units: 2, updatedAt: 'server-timestamp' },
+      { merge: true },
+    );
+  });
+
+  it('accepts a transaction that reaches the exact limit', async () => {
+    firestore.get.mockResolvedValue({
+      exists: true,
+      get: () => 39,
+    });
+    const store = firestoreQuotaStore();
+
+    await expect(
+      store.incrementIfAllowed('2026-07-13_u1_shoppingGroups', 1, 40),
+    ).resolves.toBe(40);
+    expect(firestore.set).toHaveBeenCalledWith(
+      firestore.docRef,
+      { units: 40, updatedAt: 'server-timestamp' },
+      { merge: true },
+    );
+  });
+
+  it('returns null without writing when the transaction would exceed the limit', async () => {
+    firestore.get.mockResolvedValue({
+      exists: true,
+      get: () => 39,
+    });
+    const store = firestoreQuotaStore();
+
+    await expect(
+      store.incrementIfAllowed('2026-07-13_u1_shoppingGroups', 2, 40),
+    ).resolves.toBeNull();
+    expect(firestore.set).not.toHaveBeenCalled();
+    expect(firestore.serverTimestamp).not.toHaveBeenCalled();
+  });
+
   it.each([Number.NaN, Infinity, -1, '39', null, undefined])(
     'fails closed for a malformed stored counter (%s)',
     async (storedUnits) => {
