@@ -5,6 +5,7 @@ import {
   requestGeminiJson,
 } from '../src/ai/geminiProvider.js';
 import {
+  shoppingGroupsResponse,
   shoppingGroupsRequest,
   substitutionsRequest,
   tagRecipesRequest,
@@ -191,5 +192,23 @@ describe('AI request contract caps', () => {
         allIngredients: ['Rice'],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('AI response contract categories', () => {
+  it('accepts the combined oils category and rejects its split forms', () => {
+    const resultFor = (category: string) =>
+      shoppingGroupsResponse.safeParse([
+        {
+          canonicalName: 'Olive oil',
+          category,
+          sourceIds: [1],
+          unit: 'ml',
+        },
+      ]).success;
+
+    expect.soft(resultFor('Oils, Sauces & Condiments')).toBe(true);
+    expect.soft(resultFor('Oils')).toBe(false);
+    expect.soft(resultFor('Sauces & Condiments')).toBe(false);
   });
 });
