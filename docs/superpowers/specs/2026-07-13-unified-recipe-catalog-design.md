@@ -1,7 +1,7 @@
 # Unified Recipe Catalogue — Design Specification
 
 **Date:** 2026-07-13
-**Status:** Approved, awaiting implementation plan
+**Status:** Approved; Phase 0 implementation plan ready
 **Scope:** Security hardening, unified complete-recipe ingestion, catalogue-only generation, metadata editing, migration, and managed maintenance
 
 ## Context
