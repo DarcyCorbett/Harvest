@@ -1538,14 +1538,18 @@ git commit -m "refactor: route mobile AI through callables"
 - Modify: `functions/src/authz.ts`
 - Modify: `functions/src/index.ts`
 - Modify: `contexts/AuthContext.tsx`
+- Modify: `app/register.tsx`
+- Modify: `app/login.tsx`
 - Modify: `services/firestoreService.ts`
 
 **Acceptance Criteria:**
-- [ ] Create, join, and switch require an authenticated allowlisted email.
+- [ ] Create, join, and switch require an authenticated, allowlisted identity with `email_verified === true`.
 - [ ] Join/switch accept only an exact normalized invite code and atomically update both household members and `users/{uid}.householdId`.
 - [ ] The mobile app performs no household collection query or membership-array write.
 - [ ] Invalid invites preserve the existing user-facing registration cleanup/error behavior.
 - [ ] Google first sign-in creates the profile and household through the backend.
+- [ ] Password registration sends a Firebase verification email and cannot create/join a household until a refreshed verified token is present; unverified sessions are signed out with a stable, actionable message.
+- [ ] After verification, password users can resume their intended create-or-join onboarding without bypassing the allowlist or verified backend guard.
 
 **Verify:** `npm --prefix functions test -- households.test.ts && npm test -- householdClient.test.ts && npx tsc --noEmit` → all tests pass and TypeScript exits 0.
 
@@ -1579,7 +1583,10 @@ Create `functions/test/households.test.ts`:
 import { describe, expect, it, vi } from 'vitest';
 import { createHouseholdHandlers } from '../src/callables/households.js';
 
-const auth = { uid: 'u1', token: { email: 'user@example.com' } };
+const auth = {
+  uid: 'u1',
+  token: { email: 'user@example.com', email_verified: true }
+};
 
 describe('household callables', () => {
   it('creates a household and profile for the authenticated identity', async () => {
@@ -1833,7 +1840,27 @@ Run: `npm test -- householdClient.test.ts`
 
 Expected: PASS, 2 tests.
 
-- [ ] **Step 4: Replace direct household mutations in authentication flows**
+- [ ] **Step 4: Complete verified password onboarding and replace direct household mutations**
+
+Before any password-created account can call `householdClient.create()` or
+`householdClient.join()`, update `contexts/AuthContext.tsx` and the register/login
+screens to enforce ownership of the allowlisted address:
+
+- Call Firebase `sendEmailVerification` immediately after password account creation.
+- Preserve the user's pending create-or-join intent locally until verification;
+  never place the raw password or an ID token in storage.
+- Do not call a household mutation or write a user profile for the unverified account.
+- Sign out the unverified account and return a stable verification-required result
+  that `app/register.tsx` displays as an actionable “check your email” message.
+- On password login, reload the Firebase user/token. If `emailVerified` is false,
+  sign out and show the same stable message without reading a profile or calling a
+  household mutation.
+- Once the refreshed identity is verified, resume the pending create-or-join intent
+  through `householdClient`, clear it only after success, and load the resulting
+  profile/household. Google identities continue through their existing verified flow.
+- Add focused root tests proving the sequencing: unverified registration sends the
+  email and stops before mutation; unverified login signs out; verified resume calls
+  exactly the intended mutation; invalid join retains a recoverable error path.
 
 In `contexts/AuthContext.tsx`:
 
@@ -1870,7 +1897,7 @@ Expected: PASS and exit 0.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add functions/src/authz.ts functions/src/callables/households.ts functions/src/index.ts functions/test/households.test.ts services/householdClient.ts tests/householdClient.test.ts contexts/AuthContext.tsx services/firestoreService.ts
+git add functions/src/authz.ts functions/src/callables/households.ts functions/src/index.ts functions/test/households.test.ts services/householdClient.ts tests/householdClient.test.ts contexts/AuthContext.tsx app/register.tsx app/login.tsx services/firestoreService.ts
 git commit -m "feat: protect household membership mutations"
 ```
 

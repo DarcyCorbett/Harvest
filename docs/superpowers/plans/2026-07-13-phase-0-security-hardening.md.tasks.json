@@ -10,7 +10,7 @@
     {
       "id": 2,
       "subject": "Task 2: Enforce endpoint authorization and quotas",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1
       ],
@@ -89,5 +89,26 @@
       "description": "**Goal:** Capture a Phase 0 evidence record from emulator tests, deployed callables/rules, a clean exported client bundle, live authorized and unauthorized smoke tests, preserved missing-recipe references, and confirmed old-key revocation; pass only when every result is green before Phase 1 begins.\n\n> **USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- Create: `docs/superpowers/verification/phase-0-security-evidence.md`\n- Modify: `docs/superpowers/specs/2026-07-13-unified-recipe-catalog-design.md`\n\n**Acceptance Criteria:**\n- [ ] `npm run verify:phase0` passes functions tests/build, client tests/lint/type-check, Firestore emulator rules tests, and the client source scan.\n- [ ] Firebase deploy succeeds for Functions and Firestore rules in `meal-wizard-ad202`, and deployed logs show successful calls without prompts, ingredients, responses, or secrets.\n- [ ] An authenticated allowlisted household member can use all four AI features and create/join/switch a household.\n- [ ] Unauthenticated/non-member calls fail, client recipe writes/deletes fail, and membership-array writes fail.\n- [ ] A missing-recipe simulation leaves the meal-plan and cookbook documents present and shows “Recipe unavailable”.\n- [ ] A fresh Expo export scans clean, and the replacement preview build uses callables rather than direct provider requests.\n- [ ] The existing scheduled tagger either completes its Secret Manager smoke test or is paused explicitly until Phase 1.\n- [ ] The old Gemini key is disabled/revoked and the old DeepSeek key is revoked; replacement secret versions remain enabled.\n- [ ] Evidence is recorded in `docs/superpowers/verification/phase-0-security-evidence.md` with command, timestamp, pass/fail, and sanitized output for each check.\n\n**Verify:** `npm run verify:phase0` plus `firebase deploy --only functions,firestore:rules --project meal-wizard-ad202` and the signed-in app smoke matrix → every automated command exits 0, every live row is PASS, bundle scan is clean, and both old-key rows say REVOKED.\n\n```json:metadata\n{\"files\":[\"package.json\",\"package-lock.json\",\"docs/superpowers/verification/phase-0-security-evidence.md\",\"docs/superpowers/specs/2026-07-13-unified-recipe-catalog-design.md\"],\"verifyCommand\":\"npm run verify:phase0 && firebase deploy --only functions,firestore:rules --project meal-wizard-ad202\",\"acceptanceCriteria\":[\"`npm run verify:phase0` passes functions tests/build, client tests/lint/type-check, Firestore emulator rules tests, and the client source scan.\",\"Firebase deploy succeeds for Functions and Firestore rules in `meal-wizard-ad202`, and deployed logs show successful calls without prompts, ingredients, responses, or secrets.\",\"An authenticated allowlisted household member can use all four AI features and create/join/switch a household.\",\"Unauthenticated/non-member calls fail, client recipe writes/deletes fail, and membership-array writes fail.\",\"A missing-recipe simulation leaves the meal-plan and cookbook documents present and shows “Recipe unavailable”.\",\"A fresh Expo export scans clean, and the replacement preview build uses callables rather than direct provider requests.\",\"The existing scheduled tagger either completes its Secret Manager smoke test or is paused explicitly until Phase 1.\",\"The old Gemini key is disabled/revoked and the old DeepSeek key is revoked; replacement secret versions remain enabled.\",\"Evidence is recorded in `docs/superpowers/verification/phase-0-security-evidence.md` with command, timestamp, pass/fail, and sanitized output for each check.\"],\"estimatedScope\":\"medium\",\"modelTier\":\"frontier\",\"userGate\":true,\"tags\":[\"user-gate\",\"security\",\"verification\"],\"requiresUserSpecification\":false,\"gateScope\":\"once\",\"failurePolicy\":\"stop-plan\",\"requireEvidenceTokens\":[[\"before-patch\",\"vulnerable\",\"EXPO_PUBLIC_GEMINI_API_KEY\"],[\"after-patch\",\"hardened\",\"bundle-scan=clean\"],[\"old-gemini-key=REVOKED\"],[\"old-deepseek-key=REVOKED\"]]}\n```"
     }
   ],
-  "lastUpdated": "2026-07-14T01:34:59+03:00"
+  "crossTaskFollowUps": [
+    {
+      "sourceTaskId": 2,
+      "targetTaskId": 5,
+      "subject": "Complete verified-email password registration before household onboarding",
+      "status": "pending",
+      "required": true,
+      "files": [
+        "contexts/AuthContext.tsx",
+        "app/register.tsx",
+        "app/login.tsx",
+        "tests/householdClient.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Password registration sends a Firebase verification email and does not call create/join household mutations until the refreshed user token has email_verified=true.",
+        "Unverified password sessions are signed out with a stable user-facing verification message; Google sign-in remains functional.",
+        "A verified password user can resume the intended create-or-join flow without bypassing the allowlist or verified backend guard.",
+        "Task 5 household callable tests use verified auth claims and reject unverified identities before any Firestore mutation."
+      ]
+    }
+  ],
+  "lastUpdated": "2026-07-14T02:05:48+03:00"
 }
