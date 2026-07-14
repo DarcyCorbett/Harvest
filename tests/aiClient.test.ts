@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   aiClient,
@@ -13,7 +13,10 @@ import {
   getGeminiGroupings,
   type RawIngredient,
 } from '../services/shoppingList';
-import { getIngredientSubstitutions } from '../services/substitutions';
+import {
+  getIngredientSubstitutions,
+  type SubstitutionResult,
+} from '../services/substitutions';
 import type { Recipe } from '../services/types';
 
 const recipeInput = {
@@ -77,6 +80,9 @@ const validSubstitutions = [
   { name: 'B', adjustment: '1:1', reason: 'Reason B' },
   { name: 'C', adjustment: '1:1', reason: 'Reason C' },
 ] as const;
+
+const freshSubstitutions = (): SubstitutionResult[] =>
+  validSubstitutions.map((substitution) => ({ ...substitution }));
 
 const validCallableResponses = {
   tagRecipes: { results: [validTagItem] },
@@ -458,6 +464,10 @@ describe('mobile AI adapters', () => {
     vi.restoreAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('batches tagging at 25, keeps unique canonical IDs, and maps all results', async () => {
     const invoke = vi.spyOn(aiClient, 'tagRecipes').mockImplementation(async (_householdId, recipes) => ({
       results: recipes.map(({ recipeId }) => ({ id: recipeId, tags: ['Dinner'] as const })),
@@ -474,6 +484,47 @@ describe('mobile AI adapters', () => {
     expect(invoke.mock.calls.every(([householdId]) => householdId === 'household-a')).toBe(true);
     expect(result.size).toBe(26);
     expect(result.get('recipe-25')).toEqual(['Dinner']);
+  });
+
+  it('parses scraper and numeric durations across tagging batches', async () => {
+    const invoke = vi.spyOn(aiClient, 'tagRecipes').mockImplementation(async (_householdId, recipes) => ({
+      results: recipes.map(({ recipeId }) => ({ id: recipeId, tags: [] })),
+    }));
+    const totalTimes = [
+      '1 hr',
+      '1 hr 30 min',
+      '90',
+      'N/A',
+      'invalid',
+      '0',
+      '-5',
+      '0.5',
+      '999999 min',
+      ...Array.from({ length: 16 }, () => '30 min'),
+      '1 hr 30 min',
+    ];
+
+    await tagRecipesWithGemini(
+      'household-a',
+      totalTimes.map((totalTime, index) => ({
+        recipeId: `duration-${index}`,
+        recipe: makeRecipe({ title: `Duration ${index}`, totalTime }),
+      })),
+    );
+
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke.mock.calls[0][1].slice(0, 9).map(({ totalMinutes }) => totalMinutes)).toEqual([
+      60,
+      90,
+      90,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10_080,
+    ]);
+    expect(invoke.mock.calls[1][1][0].totalMinutes).toBe(90);
   });
 
   it('rejects duplicate tagging IDs created by normalization before invoking', async () => {
@@ -548,6 +599,9 @@ describe('mobile AI adapters', () => {
     const result = await getGeminiReminderFlags('household-a', recipes);
 
     expect(invoke.mock.calls.map(([, batch]) => batch.length)).toEqual([25, 2]);
+    expect(
+      invoke.mock.calls.flatMap(([, batch]) => batch).every((input) => !('totalMinutes' in input)),
+    ).toBe(true);
     expect(result.size).toBe(27);
     expect(result.get('recipe-26')).toEqual({ needsDefrost: true, needsMarinate: false });
   });
@@ -610,35 +664,121 @@ describe('mobile AI adapters', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('validates household before substitution cache and scopes cache entries by household', async () => {
-    const substitutions = [
-      { name: 'A', adjustment: '1:1', reason: 'Reason A' },
-      { name: 'B', adjustment: '1:1', reason: 'Reason B' },
-      { name: 'C', adjustment: '1:1', reason: 'Reason C' },
-    ];
+  it('validates household before cache hits and scopes substitutions by every normalized input', async () => {
+    const substitutions = freshSubstitutions();
     const invoke = vi.spyOn(aiClient, 'substitutions').mockResolvedValue({ substitutions });
     const args: [string, string, string, string[]] = [
-      'Cache ingredient',
+      'Scope ingredient',
       'cup',
-      'Cache recipe',
-      ['Cache ingredient'],
+      'Scope recipe',
+      ['Scope ingredient', 'Salt'],
     ];
 
-    await expect(getIngredientSubstitutions(' ', ...args)).rejects.toThrow('Household is required');
-    expect(invoke).not.toHaveBeenCalled();
-
     const first = await getIngredientSubstitutions('household-a', ...args);
-    const cached = await getIngredientSubstitutions(' household-a ', ...args);
-    const otherHousehold = await getIngredientSubstitutions('household-b', ...args);
+    await expect(getIngredientSubstitutions(' ', ...args)).rejects.toThrow('Household is required');
+    const cached = await getIngredientSubstitutions(' household-a ',
+      ' scope ingredient ', ' CUP ', ' scope recipe ', [' scope ingredient ', ' salt ']);
+    await getIngredientSubstitutions('household-b', ...args);
+    await getIngredientSubstitutions('household-a', 'Other ingredient', args[1], args[2], args[3]);
+    await getIngredientSubstitutions('household-a', args[0], 'tbsp', args[2], args[3]);
+    await getIngredientSubstitutions('household-a', args[0], args[1], 'Other recipe', args[3]);
+    await getIngredientSubstitutions('household-a', args[0], args[1], args[2], [
+      'Scope ingredient',
+      'Pepper',
+    ]);
 
     expect(first).toEqual(substitutions);
     expect(cached).toEqual(substitutions);
-    expect(otherHousehold).toEqual(substitutions);
+    expect(invoke).toHaveBeenCalledTimes(6);
+  });
+
+  it('returns owned substitution snapshots that callers and responses cannot poison', async () => {
+    const substitutions = freshSubstitutions();
+    const original = substitutions.map((substitution) => ({ ...substitution }));
+    const invoke = vi.spyOn(aiClient, 'substitutions').mockResolvedValue({ substitutions });
+    const args: [string, string, string, string[]] = [
+      'Owned ingredient',
+      'cup',
+      'Owned recipe',
+      ['Owned ingredient'],
+    ];
+
+    const first = await getIngredientSubstitutions('household-a', ...args);
+    first[0].name = 'Caller mutation';
+    first.pop();
+    substitutions[0].reason = 'Response mutation';
+    substitutions.pop();
+
+    const second = await getIngredientSubstitutions('household-a', ...args);
+
+    expect(second).toEqual(original);
+    expect(second).not.toBe(first);
+    expect(second[0]).not.toBe(first[0]);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a failed substitution callable', async () => {
+    const substitutions = freshSubstitutions();
+    const invoke = vi.spyOn(aiClient, 'substitutions')
+      .mockRejectedValueOnce(new Error('Provider unavailable'))
+      .mockResolvedValueOnce({ substitutions });
+    const args: [string, string, string, string[]] = [
+      'Retry ingredient',
+      'cup',
+      'Retry recipe',
+      ['Retry ingredient'],
+    ];
+
+    await expect(getIngredientSubstitutions('household-a', ...args)).rejects.toThrow(
+      'Provider unavailable',
+    );
+    await expect(getIngredientSubstitutions('household-a', ...args)).resolves.toEqual(substitutions);
     expect(invoke).toHaveBeenCalledTimes(2);
-    expect(invoke.mock.calls.map(([householdId]) => householdId)).toEqual([
-      'household-a',
-      'household-b',
-    ]);
+  });
+
+  it('reuses substitutions within 30 minutes and refreshes an expired entry', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-14T00:00:00Z'));
+    const substitutions = freshSubstitutions();
+    const invoke = vi.spyOn(aiClient, 'substitutions').mockResolvedValue({ substitutions });
+    const args: [string, string, string, string[]] = [
+      'TTL ingredient',
+      'cup',
+      'TTL recipe',
+      ['TTL ingredient'],
+    ];
+
+    await getIngredientSubstitutions('household-a', ...args);
+    vi.advanceTimersByTime(30 * 60 * 1000 - 1);
+    await getIngredientSubstitutions('household-a', ...args);
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(2);
+    await getIngredientSubstitutions('household-a', ...args);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('evicts the least-recently-used substitution while retaining a touched entry', async () => {
+    const substitutions = freshSubstitutions();
+    const invoke = vi.spyOn(aiClient, 'substitutions').mockResolvedValue({ substitutions });
+    const call = (index: number) => getIngredientSubstitutions(
+      'household-lru',
+      `LRU ingredient ${index}`,
+      'cup',
+      'LRU recipe',
+      [`LRU ingredient ${index}`],
+    );
+
+    for (let index = 0; index < 100; index += 1) await call(index);
+    await call(0);
+    await call(100);
+    await call(1);
+    await call(0);
+
+    expect(invoke).toHaveBeenCalledTimes(102);
+    expect(invoke.mock.calls[invoke.mock.calls.length - 1][1].ingredientName).toBe(
+      'LRU ingredient 1',
+    );
   });
 
   it('normalizes substitution payload caps and returns exactly the validated array', async () => {

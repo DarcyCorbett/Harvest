@@ -4,6 +4,7 @@ import {
   type RecipeAiInput,
   type ReminderRecipeAiInput,
 } from './aiClient';
+import { parseMinutes } from './scraper/parse';
 import type { Recipe } from './types';
 
 interface RecipeRequest {
@@ -28,9 +29,12 @@ function boundedTextList(values: string[], maxItems: number, maxLength: number):
 
 function totalMinutesOf(recipe: Recipe): number | null {
   if (!recipe.totalTime) return null;
-  const parsed = Number.parseInt(recipe.totalTime, 10);
+  const value = recipe.totalTime.trim();
+  const parsed = parseMinutes(value) ??
+    (/^(?:\d+\.?\d*|\.\d+)$/.test(value) ? Number(value) : Number.NaN);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return Math.min(10_080, Math.floor(parsed));
+  const minutes = Math.floor(parsed);
+  return minutes > 0 ? Math.min(10_080, minutes) : null;
 }
 
 function normalizeRecipeInput({ recipeId, recipe }: RecipeRequest): RecipeAiInput {

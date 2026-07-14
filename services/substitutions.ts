@@ -6,7 +6,44 @@ export interface SubstitutionResult {
   reason: string;
 }
 
-const substitutionCache = new Map<string, SubstitutionResult[]>();
+interface SubstitutionCacheEntry {
+  expiresAt: number;
+  value: SubstitutionResult[];
+}
+
+const CACHE_MAX_ENTRIES = 100;
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const substitutionCache = new Map<string, SubstitutionCacheEntry>();
+
+function cloneSubstitutions(values: SubstitutionResult[]): SubstitutionResult[] {
+  return values.map((value) => ({ ...value }));
+}
+
+function readCachedSubstitutions(cacheKey: string): SubstitutionResult[] | null {
+  const cached = substitutionCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    substitutionCache.delete(cacheKey);
+    return null;
+  }
+  substitutionCache.delete(cacheKey);
+  substitutionCache.set(cacheKey, cached);
+  return cloneSubstitutions(cached.value);
+}
+
+function cacheSubstitutions(cacheKey: string, values: SubstitutionResult[]): SubstitutionResult[] {
+  const snapshot = cloneSubstitutions(values);
+  substitutionCache.set(cacheKey, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    value: snapshot,
+  });
+  while (substitutionCache.size > CACHE_MAX_ENTRIES) {
+    const oldestKey = substitutionCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    substitutionCache.delete(oldestKey);
+  }
+  return cloneSubstitutions(snapshot);
+}
 
 function requiredText(value: string, max: number, label: string): string {
   const normalized = value.trim().slice(0, max);
@@ -46,11 +83,9 @@ export async function getIngredientSubstitutions(
     input.ingredientUnit.toLowerCase(),
     input.allIngredients.map((value) => value.toLowerCase()),
   ]);
-  const cached = substitutionCache.get(cacheKey);
+  const cached = readCachedSubstitutions(cacheKey);
   if (cached) return cached;
 
   const response = await aiClient.substitutions(household, input);
-  const substitutions = response.substitutions.map((substitution) => ({ ...substitution }));
-  substitutionCache.set(cacheKey, substitutions);
-  return substitutions;
+  return cacheSubstitutions(cacheKey, response.substitutions);
 }
