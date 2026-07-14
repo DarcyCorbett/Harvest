@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { tagRecipesWithGemini } from '../services/gemini';
+import { tagRecipesWithGemini } from './lib/legacyGeminiOperator';
 import { fetchRawHtml } from '../services/scraper/http';
 import { parseRecipe } from '../services/scraper/parse';
 import { INDEXED_SITES } from '../services/scraper/sites';

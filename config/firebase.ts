@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 // @ts-ignore - TS doesn't see this export due to web-focused type definitions, but it exists at runtime via Metro
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, initializeFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -22,6 +23,8 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
+const functions = getFunctions(app, 'europe-west1');
+
 // Initialize Firestore.
 // `initializeFirestore` is used (instead of getFirestore) so we can set
 // ignoreUndefinedProperties — without it, any document write containing an
@@ -36,4 +39,4 @@ try {
   db = getFirestore(app);
 }
 
-export { app, auth, db };
+export { app, auth, db, functions };

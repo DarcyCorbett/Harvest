@@ -195,7 +195,7 @@ export default function LoginScreen() {
         {/* Register Link */}
         <View style={styles.switchSection}>
           <Text style={[styles.switchText, { color: colors.textSecondary }]}>
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
           </Text>
           <TouchableOpacity onPress={() => router.push('/register')} id="go-to-register">
             <Text style={[styles.switchLink, { color: colors.primary }]}>Create Account</Text>

@@ -425,7 +425,7 @@ export default function ShoppingScreen() {
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[s.confirmTitle, { color: colors.text }]}>Building your shopping list…</Text>
             <Text style={[s.confirmSubtitle, { color: colors.textSecondary }]}>
-              We're aggregating ingredients across your meal plan. You can keep using the app — we'll notify you when it's ready.
+              We&apos;re aggregating ingredients across your meal plan. You can keep using the app — we&apos;ll notify you when it&apos;s ready.
             </Text>
           </View>
         </View>

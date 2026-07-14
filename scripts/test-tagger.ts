@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tagRecipesWithGemini } from '../services/gemini';
+import { tagRecipesWithGemini } from './lib/legacyGeminiOperator';
 import type { Recipe } from '../services/types';
 
 async function main() {

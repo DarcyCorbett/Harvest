@@ -339,6 +339,7 @@ export default function GenerateScreen() {
           children,
           settings: activeSettings,
         },
+        householdId,
         (msg, current, total) => {
           setLoadingMsg(msg);
           setLoadingProgress({ current, total });
@@ -395,6 +396,7 @@ export default function GenerateScreen() {
           children,
           settings: seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings,
         },
+        householdId,
         (msg, current, total) => {
           setLoadingMsg(msg);
           setLoadingProgress({ current, total });

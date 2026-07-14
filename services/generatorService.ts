@@ -5,7 +5,7 @@
 // saving confirmed meals to Firestore.
 //
 // Implementation split:
-//   - services/gemini.ts        — callGemini + tagRecipesWithGemini
+//   - services/gemini.ts        — callable-backed recipe AI mappings
 //   - services/shoppingList.ts  — aggregateIngredients + getGeminiGroupings
 //   - services/scraper/*        — recipe fetching + filtering
 // ============================================================
@@ -187,15 +187,22 @@ const LOADING_MESSAGES = [
  * Non-fatal — tagging errors are logged and skipped.
  */
 async function applyGeminiTagsToFreshMeals(
+  householdId: string,
   meals: GeneratedMeal[],
   freshRecipeIds: Set<string>
 ): Promise<void> {
   const freshMeals = meals.filter((m) => freshRecipeIds.has(m.recipeId));
   if (freshMeals.length === 0) return;
 
-  const tagsByRecipeId = await tagRecipesWithGemini(
-    freshMeals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe }))
-  );
+  let tagsByRecipeId: Map<string, string[]>;
+  try {
+    tagsByRecipeId = await tagRecipesWithGemini(
+      householdId,
+      freshMeals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe }))
+    );
+  } catch {
+    return;
+  }
 
   for (const meal of freshMeals) {
     const geminiTags = tagsByRecipeId.get(meal.recipeId) ?? [];
@@ -401,7 +408,7 @@ export async function generateMealPlan(
   }
 
   // Phase 2: add Gemini modifier tags to freshly scraped recipes (one batched call)
-  await applyGeminiTagsToFreshMeals(results, freshRecipeIds);
+  await applyGeminiTagsToFreshMeals(householdId, results, freshRecipeIds);
 
   // Phase 3: if strictMatching is enabled, automatically keep regenerating mismatched meals
   const strictMatching = config.settings?.strictMatching ?? true;
@@ -471,7 +478,7 @@ export async function generateMealPlan(
       }
 
       if (newFreshRecipeIds.size > 0) {
-        await applyGeminiTagsToFreshMeals(results, newFreshRecipeIds);
+        await applyGeminiTagsToFreshMeals(householdId, results, newFreshRecipeIds);
       }
 
       mismatched = findMismatchedMeals(results, config.cuisineStyles);
@@ -490,6 +497,7 @@ export async function regenerateMeals(
   meals: GeneratedMeal[],
   indicesToRegenerate: number[],
   config: Pick<GenerateConfig, 'cuisineStyles' | 'customInstructions' | 'adults' | 'children' | 'settings'>,
+  householdId: string,
   onProgress: ProgressCallback
 ): Promise<GeneratedMeal[]> {
   const updated = [...meals];
@@ -571,7 +579,7 @@ export async function regenerateMeals(
     }
   }
 
-  await applyGeminiTagsToFreshMeals(updated, freshRecipeIds);
+  await applyGeminiTagsToFreshMeals(householdId, updated, freshRecipeIds);
 
   return updated;
 }
@@ -617,30 +625,15 @@ export async function confirmMealPlan(
 
   if (rawIngredients.length === 0) return;
 
-  console.log(`\n[ShoppingList] ${rawIngredients.length} raw ingredients across ${meals.length} meals`);
-
   let items: Omit<ShoppingItem, 'id'>[];
   try {
-    const groups = await getGeminiGroupings(rawIngredients);
-    console.log(`[ShoppingList] Gemini produced ${groups.length} groups`);
+    const groups = await getGeminiGroupings(householdId, rawIngredients);
     items = aggregateByGeminiGroups(rawIngredients, groups);
-
-    console.log('\n[ShoppingList] ── After Gemini-guided aggregation ────────────────');
-    items.forEach((i) =>
-      console.log(`  [${i.category.padEnd(20)}]  ${String(i.quantity).padStart(6)} ${i.unit.padEnd(5)}  ${i.name}`)
-    );
-    console.log(`[ShoppingList] Total: ${items.length} items\n`);
-  } catch (err) {
-    logEvent('warn', 'Generator', 'Gemini grouping failed — falling back to programmatic aggregation:', err);
+  } catch {
+    logEvent('warn', 'Generator', 'AI grouping unavailable; using local shopping aggregation.');
     items = aggregateIngredients(
       meals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe, servings: m.servings }))
     );
-
-    console.log('\n[ShoppingList] ── Fallback programmatic aggregation ────────────────');
-    items.forEach((i) =>
-      console.log(`  [${i.category.padEnd(20)}]  ${String(i.quantity).padStart(6)} ${i.unit.padEnd(5)}  ${i.name}`)
-    );
-    console.log(`[ShoppingList] Total: ${items.length} items\n`);
   }
 
   await addShoppingItems(householdId, items);
@@ -657,7 +650,7 @@ export async function confirmMealPlan(
 
   if (recipesNeedingFlags.length > 0) {
     try {
-      const flagMap = await getGeminiReminderFlags(recipesNeedingFlags);
+      const flagMap = await getGeminiReminderFlags(householdId, recipesNeedingFlags);
       await Promise.all(
         Array.from(flagMap.entries()).map(([recipeId, flags]) =>
           updateRecipeFlags(recipeId, flags).catch((err) =>
@@ -674,8 +667,8 @@ export async function confirmMealPlan(
           meal.recipe.needsMarinate = flags.needsMarinate;
         }
       }
-    } catch (err) {
-      logEvent('warn', 'Generator', 'Reminder-flag detection failed; skipping:', err);
+    } catch {
+      logEvent('warn', 'Generator', 'Reminder-flag detection unavailable; skipping.');
     }
   }
 

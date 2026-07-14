@@ -17,11 +17,8 @@
         "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1023058847517",
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1023058847517:web:3da2434cbc278cd62c63f4",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-QH2NEWMFCE",
-        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyA9F5YCUqlbJ-q5PVlEAG2zggj9RcTC_-o",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1023058847517-fqein87hocmkds0oibe52a1seepl70fv.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com",
-        "EXPO_PUBLIC_DEEPSEEK_API_KEY": "sk-b1dfa468c46347f9b752fe3c1cf4685b",
-        "EXPO_PUBLIC_DEEPSEEK_MODEL": "deepseek-v4-pro"
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com"
       },
       "channel": "preview"
     },
@@ -38,11 +35,8 @@
         "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1023058847517",
         "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1023058847517:web:3da2434cbc278cd62c63f4",
         "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-QH2NEWMFCE",
-        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyA9F5YCUqlbJ-q5PVlEAG2zggj9RcTC_-o",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1023058847517-fqein87hocmkds0oibe52a1seepl70fv.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com",
-        "EXPO_PUBLIC_DEEPSEEK_API_KEY": "sk-b1dfa468c46347f9b752fe3c1cf4685b",
-        "EXPO_PUBLIC_DEEPSEEK_MODEL": "deepseek-v4-pro"
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1023058847517-c5d1co4p83s1oko3h825u79i20ttk8us.apps.googleusercontent.com"
       },
       "channel": "production"
     },

@@ -3,7 +3,7 @@
 // categorises them, and optionally uses Gemini for semantic grouping.
 // ============================================================
 
-import { callGemini, GEMINI_AGGREGATION_MODEL } from './gemini';
+import { aiClient, canonicalizeHouseholdId, type ShoppingIngredientAiInput } from './aiClient';
 import type { Recipe, ShoppingCategory, ShoppingItem } from './types';
 
 // ─── Public Types ─────────────────────────────────────────────
@@ -195,7 +195,7 @@ export interface RawIngredient {
   source: { id: string; title: string; servings: number };
 }
 
-interface GeminiGroup {
+export interface GeminiGroup {
   canonicalName: string;
   category: ShoppingCategory;
   sourceIds: number[];
@@ -485,67 +485,72 @@ export function aggregateByGeminiGroups(
 }
 
 /**
- * Ask Gemini to semantically group raw ingredients. Returns `[{canonicalName, category, sourceIds[]}]`
- * with every raw id placed into exactly one group.
+ * Ask the authenticated regional callable to semantically group raw ingredients.
+ * Rows that cannot be sent, exceed the callable cap, or are omitted by the AI
+ * are preserved through the existing local categorisation fallback.
  */
-export async function getGeminiGroupings(rawIngredients: RawIngredient[], modelOverride?: string): Promise<GeminiGroup[]> {
-  const prompt = `You are given a list of recipe ingredients as JSON. Group them into shopping list items.
+export async function getGeminiGroupings(
+  householdId: string,
+  rawIngredients: RawIngredient[],
+): Promise<GeminiGroup[]> {
+  const household = canonicalizeHouseholdId(householdId);
+  if (rawIngredients.length === 0) return [];
 
-Rules:
-1. Group ingredients that refer to the same item despite different wording. Use the most natural canonical name (e.g. "garlic", not "minced garlic").
-2. Prep-state differences done at home → merge into one group: "minced garlic" + "garlic" → "garlic"; "diced onion" + "onion" → "onion"; "chopped tomato" + "tomato" → "tomato".
-3. Different cuts or forms of meat, poultry, and fish → ALWAYS keep as separate groups (they are sold separately): "chicken breast" ≠ "chicken thighs" ≠ "chicken mince"; "beef mince" ≠ "beef steak"; "salmon fillet" ≠ "smoked salmon".
-4. "shredded chicken" with no whole-chicken ingredient → treat as "chicken breast". "shredded chicken" where a whole roast chicken ingredient also appears → merge into "whole chicken".
-5. Every ingredient id must appear in exactly one group. If uncertain, create a single-item group.
-6. Set the "category" field for each group using these rules:
-   - Herbs & Spices: fresh/dried herbs, spices, spice blends
-   - Oils, Sauces & Condiments: cooking oils, vinegar, soy sauce, fish sauce, oyster sauce, Worcestershire, sriracha, ketchup, mayo, mustard, miso, tahini, hoisin
-   - Pantry & Dry Goods: stocks, broths, canned goods, pasta, rice, flour, sugar, honey, baking
-   - Produce: fresh fruit and vegetables
-   - Meat & Seafood: raw meat, fish, seafood
-   - Dairy & Eggs: milk, cream, butter, cheese, yoghurt, eggs
-   - Bread & Bakery: bread, wraps, rolls, tortillas
-   - Frozen: anything frozen
-   - Other: anything else
-7. For dry pantry ingredients measured in ml (converted from cups/tbsp), note this in the canonicalName or leave as-is — the quantity conversion will be handled by the caller.
-8. For groups whose natural shopping unit is a count (e.g. "chicken thighs", "eggs", "onions", "lemons"), set the "unit" field to the plural noun used when counting that item at the supermarket. Examples: "chicken thighs" → unit "thighs"; "eggs" → unit "eggs"; "onions" → unit "onions"; "lemons" → unit "lemons"; "bananas" → unit "bananas". A count-style group should always have a non-empty unit so the list reads "3 onions" not "3". Only leave unit as "" when the item is measured by weight or volume (e.g. flour, olive oil).
-
-Return ONLY a valid JSON array — no markdown, no explanation:
-[{"canonicalName": "...", "category": "...", "sourceIds": [0, 4, 7], "unit": ""}, ...]
-
-Input:
-${JSON.stringify(rawIngredients.map(({ id, name, quantity, unit }) => ({ id, name, quantity, unit })))}`;
-
-  // Each group's JSON averages ~55–80 output tokens. Scale the ceiling with
-  // ingredient count so large plans don't truncate while small plans stay cheap.
-  // (maxOutputTokens is a truncation cap, not a billing amount — Gemini bills
-  // only for tokens actually produced.)
-  const maxOutputTokens = Math.min(65536, 4096 + rawIngredients.length * 200);
-  const parsed = await callGemini<unknown>(prompt, maxOutputTokens, modelOverride || GEMINI_AGGREGATION_MODEL);
-
-  if (!Array.isArray(parsed)) throw new Error('Gemini response is not an array');
-
-  const coveredIds = new Set<number>();
-  const groups = (parsed as Record<string, unknown>[]).map((g) => ({
-    canonicalName: String(g.canonicalName ?? '').trim(),
-    category: (g.category as ShoppingCategory) ?? 'Other',
-    sourceIds: (g.sourceIds as number[]) ?? [],
-    unit: g.unit != null ? String(g.unit) : undefined,
-  }));
-  groups.forEach((g) => g.sourceIds.forEach((id) => coveredIds.add(id)));
-
+  const allIds = new Set<number>();
   for (const raw of rawIngredients) {
-    if (!coveredIds.has(raw.id)) {
-      groups.push({
-        canonicalName: raw.name.trim(),
-        category: categoriseIngredient(raw.name),
-        sourceIds: [raw.id],
-        unit: undefined,
-      });
-    }
+    if (allIds.has(raw.id)) throw new Error('Duplicate shopping ingredient IDs');
+    allIds.add(raw.id);
   }
 
-  return groups;
+  const candidates: ShoppingIngredientAiInput[] = [];
+  for (const raw of rawIngredients) {
+    if (!Number.isInteger(raw.id) || raw.id < 0 || raw.id > 9_999) continue;
+    const name = raw.name.trim().slice(0, 120);
+    if (!name) continue;
+    const finiteQuantity = Number.isFinite(raw.quantity) ? raw.quantity : 0;
+    candidates.push({
+      id: raw.id,
+      name,
+      quantity: Math.min(1_000_000, Math.max(0, finiteQuantity)),
+      unit: raw.unit.trim().slice(0, 40),
+    });
+    if (candidates.length === 500) break;
+  }
+
+  const groups: GeminiGroup[] =
+    candidates.length > 0 ? await aiClient.shoppingGroups(household, candidates) : [];
+  const sentIds = new Set(candidates.map(({ id }) => id));
+  const coveredIds = new Set<number>();
+  const normalizedGroups: GeminiGroup[] = [];
+
+  for (const group of groups) {
+    const sourceIds = group.sourceIds.filter((id) => {
+      if (!sentIds.has(id) || coveredIds.has(id)) return false;
+      coveredIds.add(id);
+      return true;
+    });
+    if (sourceIds.length === 0) continue;
+    normalizedGroups.push({
+      canonicalName: group.canonicalName,
+      category: group.category,
+      sourceIds,
+      unit: group.unit,
+    });
+  }
+
+  for (const raw of rawIngredients) {
+    if (coveredIds.has(raw.id)) continue;
+    coveredIds.add(raw.id);
+    const canonicalName = raw.name.trim().slice(0, 120) || 'Ingredient';
+    normalizedGroups.push({
+      canonicalName,
+      category: categoriseIngredient(canonicalName),
+      sourceIds: [raw.id],
+      unit: undefined,
+    });
+  }
+
+  return normalizedGroups;
 }
 
 // ─── Name / Unit Normalisation ────────────────────────────────

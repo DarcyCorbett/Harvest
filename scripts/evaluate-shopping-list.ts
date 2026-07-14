@@ -1,7 +1,11 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import { getGeminiGroupings, aggregateByGeminiGroups, type RawIngredient } from '../services/shoppingList';
+import {
+  getGeminiGroupings,
+  type LegacyGeminiGroup,
+} from './lib/legacyGeminiOperator';
+import { aggregateByGeminiGroups, type RawIngredient } from '../services/shoppingList';
 import type { Recipe, Ingredient, ShoppingItem } from '../services/types';
 
 // Standalone implementation of applyServingScale to avoid importing React Native dependencies
@@ -87,7 +91,7 @@ async function main() {
   const evaluationResults: Record<string, {
     latencyMs: number;
     groupCount: number;
-    groups: any[];
+    groups: LegacyGeminiGroup[];
     finalItems: Omit<ShoppingItem, 'id'>[];
     error?: string;
   }> = {};
@@ -205,7 +209,7 @@ async function main() {
         count = 0;
       }
       if (count < 3) {
-        console.log(`      - ${item.quantity} ${item.unit} ${item.name} (from ${item.sources.length} recipe(s))`);
+        console.log(`      - ${item.quantity} ${item.unit} ${item.name} (from ${item.sources?.length ?? 0} recipe(s))`);
         count++;
       }
     }

@@ -15,9 +15,10 @@ import {
   PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
-import { getIngredientSubstitutions, SubstitutionResult } from '@/services/deepseek';
+import { getIngredientSubstitutions, type SubstitutionResult } from '@/services/substitutions';
 import type { Ingredient } from '@/services/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -38,6 +39,7 @@ export default function IngredientSubstitutionSheet({
   visible,
   onClose,
 }: Props) {
+  const { householdId } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -85,6 +87,7 @@ export default function IngredientSubstitutionSheet({
     setError(null);
     try {
       const results = await getIngredientSubstitutions(
+        householdId ?? '',
         ingredient.name,
         ingredient.unit,
         recipeTitle,
@@ -96,7 +99,7 @@ export default function IngredientSubstitutionSheet({
     } finally {
       setLoading(false);
     }
-  }, [ingredient, recipeTitle, allIngredients]);
+  }, [householdId, ingredient, recipeTitle, allIngredients]);
 
   // Animate in / out
   useEffect(() => {
