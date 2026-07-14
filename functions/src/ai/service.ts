@@ -1,9 +1,13 @@
 import { z } from 'zod';
 
 import {
+  reminderFlagsRequest,
   reminderFlagsResponse,
+  shoppingGroupsRequest,
   shoppingGroupsResponse,
+  substitutionsRequest,
   substitutionsResponse,
+  tagRecipesRequest,
   tagRecipesResponse,
   type ReminderFlagsInput,
   type ShoppingGroupsInput,
@@ -19,6 +23,8 @@ import {
 
 const FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
 const FLASH_MODEL = 'gemini-3.5-flash';
+const INTERNAL_HOUSEHOLD_ID = 'internal-ai-service';
+const DUPLICATE_IDENTIFIER_MESSAGE = 'Duplicate request identifiers.';
 
 export interface JsonRequester {
   requestJson(
@@ -33,7 +39,8 @@ class AiServiceError extends Error {
     code:
       | 'provider-output-invalid'
       | 'provider-id-coverage-mismatch'
-      | 'request-id-duplicates',
+      | 'request-id-duplicates'
+      | 'request-input-invalid',
   ) {
     super(code);
     this.name = 'AiServiceError';
@@ -44,6 +51,21 @@ function parseProviderOutput<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
     throw new AiServiceError('provider-output-invalid');
+  }
+  return parsed.data;
+}
+
+function parseServiceInput<T>(schema: z.ZodType<T>, value: unknown): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    const hasDuplicateIdentifiers = parsed.error.issues.some(
+      (issue) =>
+        issue.code === z.ZodIssueCode.custom
+        && issue.message === DUPLICATE_IDENTIFIER_MESSAGE,
+    );
+    throw new AiServiceError(
+      hasDuplicateIdentifiers ? 'request-id-duplicates' : 'request-input-invalid',
+    );
   }
   return parsed.data;
 }
@@ -98,54 +120,71 @@ function requireUniqueInputIds<T, Identifier extends string | number>(
 export function createAiService(provider: JsonRequester) {
   return {
     async tagRecipes(recipes: TagRecipesInput['recipes']) {
-      requireUniqueInputIds(recipes, ({ recipeId }) => recipeId);
+      const input = parseServiceInput(tagRecipesRequest, {
+        householdId: INTERNAL_HOUSEHOLD_ID,
+        recipes,
+      });
+      requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
         FLASH_LITE_MODEL,
-        buildTagRecipesPrompt(recipes),
-        Math.min(32_000, 4_096 + recipes.length * 400),
+        buildTagRecipesPrompt(input.recipes),
+        Math.min(32_000, 4_096 + input.recipes.length * 400),
       );
       const parsed = parseProviderOutput(tagRecipesResponse, output);
       requireExactCoverage(
-        recipes.map(({ recipeId }) => recipeId),
+        input.recipes.map(({ recipeId }) => recipeId),
         parsed.results.map(({ id }) => id),
       );
       return parsed;
     },
 
     async reminderFlags(recipes: ReminderFlagsInput['recipes']) {
-      requireUniqueInputIds(recipes, ({ recipeId }) => recipeId);
+      const input = parseServiceInput(reminderFlagsRequest, {
+        householdId: INTERNAL_HOUSEHOLD_ID,
+        recipes,
+      });
+      requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
         FLASH_LITE_MODEL,
-        buildReminderFlagsPrompt(recipes),
-        Math.min(8_000, 1_024 + recipes.length * 200),
+        buildReminderFlagsPrompt(input.recipes),
+        Math.min(8_000, 1_024 + input.recipes.length * 200),
       );
       const parsed = parseProviderOutput(reminderFlagsResponse, output);
       requireExactCoverage(
-        recipes.map(({ recipeId }) => recipeId),
+        input.recipes.map(({ recipeId }) => recipeId),
         parsed.results.map(({ id }) => id),
       );
       return parsed;
     },
 
     async shoppingGroups(ingredients: ShoppingGroupsInput['ingredients']) {
-      requireUniqueInputIds(ingredients, ({ id }) => id);
+      const input = parseServiceInput(shoppingGroupsRequest, {
+        householdId: INTERNAL_HOUSEHOLD_ID,
+        ingredients,
+      });
+      requireUniqueInputIds(input.ingredients, ({ id }) => id);
       const output = await provider.requestJson(
         FLASH_MODEL,
-        buildShoppingGroupsPrompt(ingredients),
-        Math.min(65_536, 4_096 + ingredients.length * 200),
+        buildShoppingGroupsPrompt(input.ingredients),
+        Math.min(65_536, 4_096 + input.ingredients.length * 200),
       );
       const parsed = parseProviderOutput(shoppingGroupsResponse, output);
       requireExactCoverage(
-        ingredients.map(({ id }) => id),
+        input.ingredients.map(({ id }) => id),
         parsed.flatMap(({ sourceIds }) => sourceIds),
       );
       return parsed;
     },
 
     async substitutions(input: Omit<SubstitutionsInput, 'householdId'>) {
+      const parsedInput = parseServiceInput(substitutionsRequest, {
+        ...input,
+        householdId: INTERNAL_HOUSEHOLD_ID,
+      });
+      const { householdId: _householdId, ...normalizedInput } = parsedInput;
       const output = await provider.requestJson(
         FLASH_LITE_MODEL,
-        buildSubstitutionsPrompt(input),
+        buildSubstitutionsPrompt(normalizedInput),
         600,
       );
       return parseProviderOutput(substitutionsResponse, output);

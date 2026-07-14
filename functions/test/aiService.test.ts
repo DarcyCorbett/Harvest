@@ -296,6 +296,20 @@ describe('createAiService', () => {
         rawIngredient(7),
       ]),
     },
+    {
+      name: 'normalized-equivalent tagging',
+      invoke: (provider: JsonRequester) => createAiService(provider).tagRecipes([
+        tagRecipe('same'),
+        tagRecipe(' same '),
+      ]),
+    },
+    {
+      name: 'normalized-equivalent reminders',
+      invoke: (provider: JsonRequester) => createAiService(provider).reminderFlags([
+        reminderRecipe('same'),
+        reminderRecipe(' same '),
+      ]),
+    },
   ])('rejects duplicate $name input ids before calling the provider', async ({
     invoke,
   }) => {
@@ -303,6 +317,127 @@ describe('createAiService', () => {
 
     await expect(invoke(provider)).rejects.toMatchObject({
       message: 'request-id-duplicates',
+    });
+    expect(provider.requestJson).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: 'tagging',
+      response: { results: [{ id: 'normalized-id', tags: [] }] },
+      invoke: (provider: JsonRequester) => createAiService(provider).tagRecipes([{
+        ...tagRecipe(' normalized-id '),
+        steps: [' Cook rice ', ' Add carrots '],
+      }]),
+      expectedSerializedInput: JSON.stringify([{
+        id: 'normalized-id',
+        title: 'Vegetable rice bowl',
+        totalMinutes: 25,
+        ingredients: ['Rice', 'Carrots'],
+        steps: 'Cook rice | Add carrots',
+        existingTags: ['Lunch'],
+      }]),
+    },
+    {
+      name: 'reminders',
+      response: {
+        results: [{
+          id: 'normalized-id',
+          needsDefrost: false,
+          needsMarinate: false,
+        }],
+      },
+      invoke: (provider: JsonRequester) => createAiService(provider).reminderFlags([{
+        ...reminderRecipe(' normalized-id '),
+        steps: [' Marinate for 2 hours in the fridge ', ' Bake '],
+      }]),
+      expectedSerializedInput: JSON.stringify([{
+        recipeId: 'normalized-id',
+        title: 'Marinated chicken',
+        ingredients: ['Chicken breast', 'Yoghurt'],
+        steps: ['Marinate for 2 hours in the fridge', 'Bake'],
+      }]),
+    },
+    {
+      name: 'shopping',
+      response: [{
+        canonicalName: 'Carrot',
+        category: 'Produce',
+        sourceIds: [1],
+      }],
+      invoke: (provider: JsonRequester) => createAiService(provider).shoppingGroups([{
+        ...rawIngredient(1),
+        name: ' Carrot ',
+        unit: ' g ',
+      }]),
+      expectedSerializedInput: JSON.stringify([{
+        id: 1,
+        name: 'Carrot',
+        quantity: 2,
+        unit: 'g',
+      }]),
+    },
+    {
+      name: 'substitutions',
+      response: threeSubstitutions,
+      invoke: (provider: JsonRequester) => createAiService(provider).substitutions({
+        ...substitutionInput,
+        ingredientName: ' Butter ',
+        ingredientUnit: ' g ',
+        recipeTitle: ' Chocolate cake ',
+        allIngredients: [' Flour ', ' Butter ', ' Chocolate '],
+      }),
+      expectedSerializedInput: JSON.stringify(substitutionInput),
+    },
+  ])('normalizes direct $name input before building the prompt', async ({
+    response,
+    invoke,
+    expectedSerializedInput,
+  }) => {
+    const provider = requester(response);
+
+    await invoke(provider);
+
+    expect(provider.requestJson).toHaveBeenCalledOnce();
+    expect(provider.requestJson.mock.calls[0][1]).toContain(expectedSerializedInput);
+  });
+
+  it.each([
+    {
+      name: 'tagging',
+      invoke: (provider: JsonRequester) => createAiService(provider).tagRecipes([{
+        ...tagRecipe(),
+        unexpected: true,
+      }]),
+    },
+    {
+      name: 'reminders',
+      invoke: (provider: JsonRequester) => createAiService(provider).reminderFlags([{
+        ...reminderRecipe(),
+        unexpected: true,
+      }]),
+    },
+    {
+      name: 'shopping',
+      invoke: (provider: JsonRequester) => createAiService(provider).shoppingGroups([{
+        ...rawIngredient(),
+        id: -1,
+      }]),
+    },
+    {
+      name: 'substitutions',
+      invoke: (provider: JsonRequester) => createAiService(provider).substitutions({
+        ...substitutionInput,
+        allIngredients: [],
+      }),
+    },
+  ])('rejects invalid direct $name input before calling the provider', async ({
+    invoke,
+  }) => {
+    const provider = requester({});
+
+    await expect(invoke(provider)).rejects.toMatchObject({
+      message: 'request-input-invalid',
     });
     expect(provider.requestJson).not.toHaveBeenCalled();
   });
