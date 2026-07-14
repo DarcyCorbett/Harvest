@@ -116,19 +116,47 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isBoundedText(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= max;
+function hasExactEnumerableKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const keys = Reflect.ownKeys(value).filter((key) =>
+    Object.prototype.propertyIsEnumerable.call(value, key),
+  );
+  const allowed = new Set([...required, ...optional]);
+  return (
+    required.every((requiredKey) => keys.includes(requiredKey)) &&
+    keys.every((key) => typeof key === 'string' && allowed.has(key))
+  );
+}
+
+function isTrimmedText(value: unknown, min: number, max: number): value is string {
+  return (
+    typeof value === 'string' &&
+    value === value.trim() &&
+    value.length >= min &&
+    value.length <= max
+  );
 }
 
 function isRecipeId(value: unknown): value is string {
-  return isBoundedText(value, 160);
+  return isTrimmedText(value, 1, 160);
 }
 
 function isTagRecipesResponse(value: unknown): value is TagRecipesResponse {
-  if (!isRecord(value) || !Array.isArray(value.results) || value.results.length > 25) return false;
+  if (
+    !isRecord(value) ||
+    !hasExactEnumerableKeys(value, ['results']) ||
+    !Array.isArray(value.results) ||
+    value.results.length > 25
+  ) {
+    return false;
+  }
   return value.results.every(
     (entry) =>
       isRecord(entry) &&
+      hasExactEnumerableKeys(entry, ['id', 'tags']) &&
       isRecipeId(entry.id) &&
       Array.isArray(entry.tags) &&
       entry.tags.length <= 14 &&
@@ -137,10 +165,18 @@ function isTagRecipesResponse(value: unknown): value is TagRecipesResponse {
 }
 
 function isReminderFlagsResponse(value: unknown): value is ReminderFlagsResponse {
-  if (!isRecord(value) || !Array.isArray(value.results) || value.results.length > 25) return false;
+  if (
+    !isRecord(value) ||
+    !hasExactEnumerableKeys(value, ['results']) ||
+    !Array.isArray(value.results) ||
+    value.results.length > 25
+  ) {
+    return false;
+  }
   return value.results.every(
     (entry) =>
       isRecord(entry) &&
+      hasExactEnumerableKeys(entry, ['id', 'needsDefrost', 'needsMarinate']) &&
       isRecipeId(entry.id) &&
       typeof entry.needsDefrost === 'boolean' &&
       typeof entry.needsMarinate === 'boolean',
@@ -152,7 +188,8 @@ function isShoppingGroupsResponse(value: unknown): value is ShoppingGroupRespons
   return value.every(
     (group) =>
       isRecord(group) &&
-      isBoundedText(group.canonicalName, 120) &&
+      hasExactEnumerableKeys(group, ['canonicalName', 'category', 'sourceIds'], ['unit']) &&
+      isTrimmedText(group.canonicalName, 1, 120) &&
       typeof group.category === 'string' &&
       SHOPPING_CATEGORIES.has(group.category as ShoppingCategoryResponse) &&
       Array.isArray(group.sourceIds) &&
@@ -161,20 +198,28 @@ function isShoppingGroupsResponse(value: unknown): value is ShoppingGroupRespons
       group.sourceIds.every(
         (id) => Number.isInteger(id) && id >= 0 && id <= 9_999,
       ) &&
+      new Set(group.sourceIds).size === group.sourceIds.length &&
       (group.unit === undefined ||
-        (typeof group.unit === 'string' && group.unit.trim().length <= 40)),
+        isTrimmedText(group.unit, 0, 40)),
   );
 }
 
 function isSubstitutionsResponse(value: unknown): value is SubstitutionsResponse {
-  if (!isRecord(value) || !Array.isArray(value.substitutions)) return false;
+  if (
+    !isRecord(value) ||
+    !hasExactEnumerableKeys(value, ['substitutions']) ||
+    !Array.isArray(value.substitutions)
+  ) {
+    return false;
+  }
   if (value.substitutions.length !== 3) return false;
   return value.substitutions.every(
     (substitution) =>
       isRecord(substitution) &&
-      isBoundedText(substitution.name, 120) &&
-      isBoundedText(substitution.adjustment, 160) &&
-      isBoundedText(substitution.reason, 300),
+      hasExactEnumerableKeys(substitution, ['name', 'adjustment', 'reason']) &&
+      isTrimmedText(substitution.name, 1, 120) &&
+      isTrimmedText(substitution.adjustment, 1, 160) &&
+      isTrimmedText(substitution.reason, 1, 300),
   );
 }
 

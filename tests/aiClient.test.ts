@@ -53,6 +53,152 @@ function makeRaw(id: number, overrides: Partial<RawIngredient> = {}): RawIngredi
   };
 }
 
+const validTagItem = { id: 'recipe-1', tags: ['Dinner'] } as const;
+const validReminderItem = {
+  id: 'recipe-1',
+  needsDefrost: true,
+  needsMarinate: false,
+} as const;
+const validShoppingGroup = {
+  canonicalName: 'tomato',
+  category: 'Produce',
+  sourceIds: [1],
+  unit: 'items',
+} as const;
+const validSubstitutions = [
+  { name: 'A', adjustment: '1:1', reason: 'Reason A' },
+  { name: 'B', adjustment: '1:1', reason: 'Reason B' },
+  { name: 'C', adjustment: '1:1', reason: 'Reason C' },
+] as const;
+
+const validCallableResponses = {
+  tagRecipes: { results: [validTagItem] },
+  reminderFlags: { results: [validReminderItem] },
+  shoppingGroups: [validShoppingGroup],
+  substitutions: { substitutions: validSubstitutions },
+} as const;
+
+const repeated = <T>(count: number, value: T): T[] =>
+  Array.from({ length: count }, () => value);
+const shoppingGroup = (overrides: Record<string, unknown>) => ({
+  ...validShoppingGroup,
+  ...overrides,
+});
+const substitutionsWithFirst = (first: Record<string, unknown>) => ({
+  substitutions: [first, ...validSubstitutions.slice(1)],
+});
+
+type StrictResponseCase = {
+  endpoint: AiEndpoint;
+  call: (client: ReturnType<typeof createAiClient>) => Promise<unknown>;
+  invalid: Array<[label: string, response: unknown]>;
+};
+
+const strictResponseCases: StrictResponseCase[] = [
+  {
+    endpoint: 'tagRecipes',
+    call: (client) => client.tagRecipes('h', [recipeInput]),
+    invalid: [
+      ['null top level', null],
+      ['array top level', []],
+      ['unknown top-level field', { results: [], extra: true }],
+      ['null nested item', { results: [null] }],
+      ['unknown nested field', { results: [{ ...validTagItem, extra: true }] }],
+      ['invalid tag enum', { results: [{ ...validTagItem, tags: ['Other'] }] }],
+      ['too many results', { results: repeated(26, validTagItem) }],
+      ['empty id', { results: [{ ...validTagItem, id: '' }] }],
+      ['untrimmed id', { results: [{ ...validTagItem, id: ' recipe-1 ' }] }],
+      ['oversized id', { results: [{ ...validTagItem, id: 'r'.repeat(161) }] }],
+      ['too many tags', { results: [{ ...validTagItem, tags: repeated(15, 'Dinner') }] }],
+    ],
+  },
+  {
+    endpoint: 'reminderFlags',
+    call: (client) => client.reminderFlags('h', []),
+    invalid: [
+      ['null top level', null],
+      ['array top level', []],
+      ['unknown top-level field', { results: [], extra: true }],
+      ['null nested item', { results: [null] }],
+      ['unknown nested field', { results: [{ ...validReminderItem, extra: true }] }],
+      ['too many results', { results: repeated(26, validReminderItem) }],
+      ['empty id', { results: [{ ...validReminderItem, id: '' }] }],
+      ['oversized id', { results: [{ ...validReminderItem, id: 'r'.repeat(161) }] }],
+      ['non-boolean flag', { results: [{ ...validReminderItem, needsDefrost: 1 }] }],
+    ],
+  },
+  {
+    endpoint: 'shoppingGroups',
+    call: (client) => client.shoppingGroups('h', []),
+    invalid: [
+      ['null top level', null],
+      ['object top level', { groups: [] }],
+      ['null nested item', [null]],
+      ['unknown nested field', [shoppingGroup({ extra: true })]],
+      ['invalid category enum', [shoppingGroup({ category: 'Drinks' })]],
+      ['too many groups', repeated(501, validShoppingGroup)],
+      ['blank canonical name', [shoppingGroup({ canonicalName: ' ' })]],
+      ['untrimmed canonical name', [shoppingGroup({ canonicalName: ' tomato ' })]],
+      ['oversized canonical name', [shoppingGroup({ canonicalName: 't'.repeat(121) })]],
+      ['empty source ids', [shoppingGroup({ sourceIds: [] })]],
+      ['too many source ids', [shoppingGroup({ sourceIds: Array.from({ length: 501 }, (_, id) => id) })]],
+      ['duplicate source ids', [shoppingGroup({ sourceIds: [1, 1] })]],
+      ['negative source id', [shoppingGroup({ sourceIds: [-1] })]],
+      ['oversized source id', [shoppingGroup({ sourceIds: [10_000] })]],
+      ['fractional source id', [shoppingGroup({ sourceIds: [1.5] })]],
+      ['untrimmed unit', [shoppingGroup({ unit: ' items ' })]],
+      ['oversized unit', [shoppingGroup({ unit: 'u'.repeat(41) })]],
+    ],
+  },
+  {
+    endpoint: 'substitutions',
+    call: (client) =>
+      client.substitutions('h', {
+        ingredientName: 'tomato',
+        ingredientUnit: '',
+        recipeTitle: 'Pasta',
+        allIngredients: ['tomato'],
+      }),
+    invalid: [
+      ['null top level', null],
+      ['array top level', []],
+      ['unknown top-level field', { substitutions: validSubstitutions, extra: true }],
+      ['null nested item', { substitutions: [null, ...validSubstitutions.slice(1)] }],
+      [
+        'unknown nested field',
+        substitutionsWithFirst({ ...validSubstitutions[0], extra: true }),
+      ],
+      [
+        'extra substitution',
+        {
+          substitutions: [
+            ...validSubstitutions,
+            { name: 'D', adjustment: '1:1', reason: 'Reason D' },
+          ],
+        },
+      ],
+      ['blank name', substitutionsWithFirst({ ...validSubstitutions[0], name: ' ' })],
+      [
+        'oversized name',
+        substitutionsWithFirst({ ...validSubstitutions[0], name: 'n'.repeat(121) }),
+      ],
+      [
+        'blank adjustment',
+        substitutionsWithFirst({ ...validSubstitutions[0], adjustment: ' ' }),
+      ],
+      [
+        'untrimmed adjustment',
+        substitutionsWithFirst({ ...validSubstitutions[0], adjustment: ' 1:1 ' }),
+      ],
+      [
+        'oversized reason',
+        substitutionsWithFirst({ ...validSubstitutions[0], reason: 'r'.repeat(301) }),
+      ],
+    ],
+  },
+];
+
+
 describe('createAiClient', () => {
   it('exposes only the four fixed AI methods and invokes their fixed endpoint names', async () => {
     const invoke = vi.fn<AiInvoke>(async (endpoint) => {
@@ -158,30 +304,24 @@ describe('createAiClient', () => {
     await expect(call(client)).rejects.toThrow(`Invalid response from ${endpoint}`);
   });
 
+  it.each(strictResponseCases)(
+    'rejects strict $endpoint response contract violations',
+    async ({ endpoint, call, invalid }) => {
+      for (const [label, response] of invalid) {
+        const client = createAiClient(vi.fn().mockResolvedValue(response));
+        await expect(call(client), label).rejects.toThrow(`Invalid response from ${endpoint}`);
+      }
+    },
+  );
+
   it('preserves valid callable response shapes', async () => {
-    const responses = {
-      tagRecipes: { results: [{ id: 'recipe-1', tags: ['Dinner'] }] },
-      reminderFlags: {
-        results: [{ id: 'recipe-1', needsDefrost: true, needsMarinate: false }],
-      },
-      shoppingGroups: [
-        { canonicalName: 'tomato', category: 'Produce', sourceIds: [1], unit: 'items' },
-      ],
-      substitutions: {
-        substitutions: [
-          { name: 'A', adjustment: '1:1', reason: 'Reason A' },
-          { name: 'B', adjustment: '1:1', reason: 'Reason B' },
-          { name: 'C', adjustment: '1:1', reason: 'Reason C' },
-        ],
-      },
-    } as const;
     const client = createAiClient(
-      vi.fn<AiInvoke>(async (endpoint: AiEndpoint) => responses[endpoint]),
+      vi.fn<AiInvoke>(async (endpoint: AiEndpoint) => validCallableResponses[endpoint]),
     );
 
-    await expect(client.tagRecipes('h', [recipeInput])).resolves.toEqual(responses.tagRecipes);
-    await expect(client.reminderFlags('h', [])).resolves.toEqual(responses.reminderFlags);
-    await expect(client.shoppingGroups('h', [])).resolves.toEqual(responses.shoppingGroups);
+    await expect(client.tagRecipes('h', [recipeInput])).resolves.toEqual(validCallableResponses.tagRecipes);
+    await expect(client.reminderFlags('h', [])).resolves.toEqual(validCallableResponses.reminderFlags);
+    await expect(client.shoppingGroups('h', [])).resolves.toEqual(validCallableResponses.shoppingGroups);
     await expect(
       client.substitutions('h', {
         ingredientName: 'tomato',
@@ -189,10 +329,9 @@ describe('createAiClient', () => {
         recipeTitle: 'Pasta',
         allIngredients: ['tomato'],
       }),
-    ).resolves.toEqual(responses.substitutions);
+    ).resolves.toEqual(validCallableResponses.substitutions);
   });
 });
-
 describe('mobile AI adapters', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
