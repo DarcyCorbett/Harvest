@@ -1230,13 +1230,23 @@ git commit -m "feat: add protected AI callables"
 - Modify: `components/IngredientSubstitutionSheet.tsx`
 - Modify: `eas.json`
 - Modify: `package.json`
+- Modify: `package-lock.json`
 - Modify: `tsconfig.json`
+- Modify: `app/(tabs)/shopping.tsx`
+- Modify: `app/(tabs)/generate.tsx`
+- Modify: `app/login.tsx`
+- Modify: `scripts/evaluate-shopping-list.ts`
+- Create: `scripts/lib/legacyGeminiOperator.ts`
+- Modify: `scripts/tagRecipeIndex.ts`
+- Modify: `scripts/test-tagger.ts`
 
 **Acceptance Criteria:**
 - [ ] Recipe tagging, reminder flags, shopping grouping, and substitutions all call Firebase Functions with the active `householdId`.
 - [ ] Client source contains no `fetch` to Gemini/DeepSeek and no references to `EXPO_PUBLIC_GEMINI_API_KEY` or `EXPO_PUBLIC_DEEPSEEK_API_KEY`.
 - [ ] Existing public service return shapes remain unchanged: tag/reminder maps, shopping groups, and substitution arrays.
 - [ ] Missing household context fails locally before a paid endpoint call.
+- [ ] The pre-existing four lint errors and four TypeScript errors captured at baseline `5c4d3ca` are corrected so Task 4 verification is fully green rather than merely regression-neutral.
+- [ ] The existing scheduled tagger remains functional through a script-only temporary provider adapter; no operator script imports a mobile callable adapter, and Task 9 must replace/delete the temporary adapter when Secret Manager migration lands.
 
 **Verify:** `npm test -- aiClient.test.ts && npm run lint && npx tsc --noEmit` → tests, lint, and type-check all exit 0.
 
