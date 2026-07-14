@@ -24,6 +24,13 @@ const recipeInput = {
   steps: ['Cook pasta'],
   existingTags: ['Dinner'],
 };
+const reminderInput = {
+  recipeId: recipeInput.recipeId,
+  title: recipeInput.title,
+  ingredients: recipeInput.ingredients,
+  steps: recipeInput.steps,
+};
+const shoppingInput = { id: 1, name: 'tomato', quantity: 2, unit: 'items' };
 
 function makeRecipe(overrides: Partial<Recipe> = {}): Recipe {
   return {
@@ -93,6 +100,101 @@ type StrictResponseCase = {
   call: (client: ReturnType<typeof createAiClient>) => Promise<unknown>;
   invalid: Array<[label: string, response: unknown]>;
 };
+
+type ExactCoverageCase = {
+  endpoint: Exclude<AiEndpoint, 'substitutions'>;
+  call: (client: ReturnType<typeof createAiClient>) => Promise<unknown>;
+  invalid: Array<[label: string, response: unknown]>;
+};
+
+const exactCoverageCases: ExactCoverageCase[] = [
+  {
+    endpoint: 'tagRecipes',
+    call: (client) =>
+      client.tagRecipes('h', [recipeInput, { ...recipeInput, recipeId: 'recipe-2' }]),
+    invalid: [
+      ['missing id', { results: [validTagItem] }],
+      ['extra id', { results: [validTagItem, { ...validTagItem, id: 'recipe-2' }, { ...validTagItem, id: 'recipe-3' }] }],
+      ['duplicate id', { results: [validTagItem, validTagItem] }],
+    ],
+  },
+  {
+    endpoint: 'tagRecipes',
+    call: (client) =>
+      client.tagRecipes('h', [
+        { ...recipeInput, recipeId: 'a,b' },
+        { ...recipeInput, recipeId: 'c' },
+      ]),
+    invalid: [
+      [
+        'join-collision ids',
+        { results: [{ ...validTagItem, id: 'a' }, { ...validTagItem, id: 'b,c' }] },
+      ],
+    ],
+  },
+  {
+    endpoint: 'reminderFlags',
+    call: (client) =>
+      client.reminderFlags('h', [reminderInput, { ...reminderInput, recipeId: 'recipe-2' }]),
+    invalid: [
+      ['missing id', { results: [validReminderItem] }],
+      ['extra id', { results: [validReminderItem, { ...validReminderItem, id: 'recipe-2' }, { ...validReminderItem, id: 'recipe-3' }] }],
+      ['duplicate id', { results: [validReminderItem, validReminderItem] }],
+    ],
+  },
+  {
+    endpoint: 'shoppingGroups',
+    call: (client) =>
+      client.shoppingGroups('h', [shoppingInput, { ...shoppingInput, id: 2 }]),
+    invalid: [
+      [
+        'same source id in two groups',
+        [validShoppingGroup, { ...validShoppingGroup, canonicalName: 'tomatoes', sourceIds: [1] }],
+      ],
+      ['missing id', [validShoppingGroup]],
+      ['extra id', [shoppingGroup({ sourceIds: [1, 2, 3] })]],
+    ],
+  },
+];
+
+type InvalidRequestCase = {
+  endpoint: Exclude<AiEndpoint, 'substitutions'>;
+  label: string;
+  call: (client: ReturnType<typeof createAiClient>) => Promise<unknown>;
+};
+
+const invalidRequestCases: InvalidRequestCase[] = [
+  {
+    endpoint: 'tagRecipes',
+    label: 'duplicate recipe ids',
+    call: (client) => client.tagRecipes('h', [recipeInput, recipeInput]),
+  },
+  {
+    endpoint: 'tagRecipes',
+    label: 'malformed recipe id',
+    call: (client) => client.tagRecipes('h', [{ ...recipeInput, recipeId: ' recipe-1 ' }]),
+  },
+  {
+    endpoint: 'reminderFlags',
+    label: 'duplicate recipe ids',
+    call: (client) => client.reminderFlags('h', [reminderInput, reminderInput]),
+  },
+  {
+    endpoint: 'reminderFlags',
+    label: 'malformed recipe id',
+    call: (client) => client.reminderFlags('h', [{ ...reminderInput, recipeId: '' }]),
+  },
+  {
+    endpoint: 'shoppingGroups',
+    label: 'duplicate ingredient ids',
+    call: (client) => client.shoppingGroups('h', [shoppingInput, shoppingInput]),
+  },
+  {
+    endpoint: 'shoppingGroups',
+    label: 'malformed ingredient id',
+    call: (client) => client.shoppingGroups('h', [{ ...shoppingInput, id: 1.5 }]),
+  },
+];
 
 const strictResponseCases: StrictResponseCase[] = [
   {
@@ -314,14 +416,33 @@ describe('createAiClient', () => {
     },
   );
 
+  it.each(exactCoverageCases)(
+    'rejects $endpoint responses without exact requested-id coverage',
+    async ({ endpoint, call, invalid }) => {
+      for (const [label, response] of invalid) {
+        const client = createAiClient(vi.fn().mockResolvedValue(response));
+        await expect(call(client), label).rejects.toThrow(`Invalid response from ${endpoint}`);
+      }
+    },
+  );
+
+  it.each(invalidRequestCases)(
+    'rejects $label before invoking $endpoint',
+    async ({ endpoint, call }) => {
+      const invoke = vi.fn().mockResolvedValue(validCallableResponses[endpoint]);
+      await expect(call(createAiClient(invoke))).rejects.toThrow(`Invalid request for ${endpoint}`);
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
   it('preserves valid callable response shapes', async () => {
     const client = createAiClient(
       vi.fn<AiInvoke>(async (endpoint: AiEndpoint) => validCallableResponses[endpoint]),
     );
 
     await expect(client.tagRecipes('h', [recipeInput])).resolves.toEqual(validCallableResponses.tagRecipes);
-    await expect(client.reminderFlags('h', [])).resolves.toEqual(validCallableResponses.reminderFlags);
-    await expect(client.shoppingGroups('h', [])).resolves.toEqual(validCallableResponses.shoppingGroups);
+    await expect(client.reminderFlags('h', [reminderInput])).resolves.toEqual(validCallableResponses.reminderFlags);
+    await expect(client.shoppingGroups('h', [shoppingInput])).resolves.toEqual(validCallableResponses.shoppingGroups);
     await expect(
       client.substitutions('h', {
         ingredientName: 'tomato',

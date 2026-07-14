@@ -144,6 +144,36 @@ function isRecipeId(value: unknown): value is string {
   return isTrimmedText(value, 1, 160);
 }
 
+function isShoppingId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 9_999;
+}
+
+function hasValidUniqueIds<Id extends string | number>(
+  ids: readonly Id[],
+  isValid: (value: unknown) => boolean,
+): boolean {
+  const seen = new Set<Id>();
+  for (const id of ids) {
+    if (!isValid(id) || seen.has(id)) return false;
+    seen.add(id);
+  }
+  return true;
+}
+
+function hasExactIdCoverage<Id extends string | number>(
+  requestedIds: readonly Id[],
+  responseIds: readonly Id[],
+): boolean {
+  if (requestedIds.length !== responseIds.length) return false;
+  const requested = new Set(requestedIds);
+  const returned = new Set<Id>();
+  for (const id of responseIds) {
+    if (!requested.has(id) || returned.has(id)) return false;
+    returned.add(id);
+  }
+  return returned.size === requested.size;
+}
+
 function isTagRecipesResponse(value: unknown): value is TagRecipesResponse {
   if (
     !isRecord(value) ||
@@ -195,9 +225,7 @@ function isShoppingGroupsResponse(value: unknown): value is ShoppingGroupRespons
       Array.isArray(group.sourceIds) &&
       group.sourceIds.length > 0 &&
       group.sourceIds.length <= 500 &&
-      group.sourceIds.every(
-        (id) => Number.isInteger(id) && id >= 0 && id <= 9_999,
-      ) &&
+      group.sourceIds.every(isShoppingId) &&
       new Set(group.sourceIds).size === group.sourceIds.length &&
       (group.unit === undefined ||
         isTrimmedText(group.unit, 0, 40)),
@@ -243,39 +271,67 @@ function invalidResponse(endpoint: AiEndpoint): never {
   throw new Error(`Invalid response from ${endpoint}`);
 }
 
+function invalidRequest(endpoint: AiEndpoint): never {
+  throw new Error(`Invalid request for ${endpoint}`);
+}
+
 export function createAiClient(invoke: AiInvoke = firebaseInvoke) {
   return {
     async tagRecipes(
       householdId: string,
       recipes: RecipeAiInput[],
     ): Promise<TagRecipesResponse> {
+      const requestedIds = recipes.map(({ recipeId }) => recipeId);
+      if (!hasValidUniqueIds(requestedIds, isRecipeId)) invalidRequest('tagRecipes');
       const data = await invoke('tagRecipes', {
         householdId: canonicalizeHouseholdId(householdId),
         recipes,
       });
-      return isTagRecipesResponse(data) ? data : invalidResponse('tagRecipes');
+      if (
+        !isTagRecipesResponse(data) ||
+        !hasExactIdCoverage(requestedIds, data.results.map(({ id }) => id))
+      ) {
+        invalidResponse('tagRecipes');
+      }
+      return data;
     },
 
     async reminderFlags(
       householdId: string,
       recipes: ReminderRecipeAiInput[],
     ): Promise<ReminderFlagsResponse> {
+      const requestedIds = recipes.map(({ recipeId }) => recipeId);
+      if (!hasValidUniqueIds(requestedIds, isRecipeId)) invalidRequest('reminderFlags');
       const data = await invoke('reminderFlags', {
         householdId: canonicalizeHouseholdId(householdId),
         recipes,
       });
-      return isReminderFlagsResponse(data) ? data : invalidResponse('reminderFlags');
+      if (
+        !isReminderFlagsResponse(data) ||
+        !hasExactIdCoverage(requestedIds, data.results.map(({ id }) => id))
+      ) {
+        invalidResponse('reminderFlags');
+      }
+      return data;
     },
 
     async shoppingGroups(
       householdId: string,
       ingredients: ShoppingIngredientAiInput[],
     ): Promise<ShoppingGroupResponse[]> {
+      const requestedIds = ingredients.map(({ id }) => id);
+      if (!hasValidUniqueIds(requestedIds, isShoppingId)) invalidRequest('shoppingGroups');
       const data = await invoke('shoppingGroups', {
         householdId: canonicalizeHouseholdId(householdId),
         ingredients,
       });
-      return isShoppingGroupsResponse(data) ? data : invalidResponse('shoppingGroups');
+      if (
+        !isShoppingGroupsResponse(data) ||
+        !hasExactIdCoverage(requestedIds, data.flatMap(({ sourceIds }) => sourceIds))
+      ) {
+        invalidResponse('shoppingGroups');
+      }
+      return data;
     },
 
     async substitutions(
