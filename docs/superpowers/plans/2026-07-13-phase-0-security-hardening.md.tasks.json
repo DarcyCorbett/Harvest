@@ -19,7 +19,7 @@
     {
       "id": 3,
       "subject": "Task 3: Implement four fixed-purpose AI callables",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         2
       ],
@@ -110,5 +110,19 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-14T02:05:48+03:00"
+  "scopeAmendments": [
+    {
+      "taskId": 3,
+      "reason": "Independent quality review found duplicate request IDs were charged and later collapsed by Map-based clients.",
+      "filesAdded": [
+        "functions/src/ai/contracts.ts",
+        "functions/test/geminiProvider.test.ts"
+      ],
+      "acceptanceCriteriaAdded": [
+        "Duplicate recipe IDs and shopping ingredient IDs fail request contracts before authorization, quota, or provider work.",
+        "The AI service defensively rejects duplicate input IDs before calling its provider dependency."
+      ]
+    }
+  ],
+  "lastUpdated": "2026-07-14T21:16:26+03:00"
 }

@@ -723,6 +723,8 @@ git commit -m "feat: guard AI calls with auth and quotas"
 **Goal:** Expose only recipe tagging, reminder classification, shopping grouping, and ingredient substitution as authenticated, schema-validated callables bound to the Gemini secret.
 
 **Files:**
+- Modify: `functions/src/ai/contracts.ts`
+- Test: `functions/test/geminiProvider.test.ts`
 - Create: `functions/src/ai/prompts.ts`
 - Create: `functions/src/ai/service.ts`
 - Create: `functions/src/callables/ai.ts`
@@ -732,6 +734,7 @@ git commit -m "feat: guard AI calls with auth and quotas"
 
 **Acceptance Criteria:**
 - [ ] Each handler validates input before authorization/provider work and validates structured provider output before returning.
+- [ ] Duplicate recipe IDs and shopping ingredient IDs are rejected by request contracts before authorization, quota, or provider work; the service also rejects them defensively before a provider request.
 - [ ] Every handler calls the auth guard and endpoint-specific quota.
 - [ ] The Gemini secret is bound only to the four AI functions.
 - [ ] Tests prove malformed provider output is rejected and no generic prompt proxy exists.
