@@ -2661,6 +2661,7 @@ git commit -m "fix: enforce Firestore security boundaries"
 - Create: `tests/dataSafety.test.ts`
 - Modify: `components/SettingsModal.tsx`
 - Modify: `services/firestoreService.ts`
+- Create: `services/recipeAvailability.ts`
 - Modify: `app/(tabs)/index.tsx`
 - Modify: `app/(tabs)/cookbook.tsx`
 
@@ -2670,6 +2671,9 @@ git commit -m "fix: enforce Firestore security boundaries"
 - [ ] A missing recipe marks its meal-plan/cookbook row unavailable and leaves the reference document intact.
 - [ ] Explicit user-initiated removal of a meal-plan or cookbook item still works.
 - [ ] Loading and missing states are visually distinct.
+- [ ] Visible history and actions are scoped by household, session generation, and snapshot revision; stale confirmations fail closed.
+- [ ] Recipe fetches settle independently, distinguish unavailable from transient failure, and use per-recipe load tokens so stale remove/re-add completions are ignored.
+- [ ] Preview and action controls are separate and accessible, and destructive/star failures show user feedback.
 
 **Verify:** `npm test -- dataSafety.test.ts && npm run lint && npx tsc --noEmit` → regression tests, lint, and type-check pass.
 

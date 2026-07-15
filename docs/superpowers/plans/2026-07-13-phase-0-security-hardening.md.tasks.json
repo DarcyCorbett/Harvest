@@ -64,7 +64,7 @@
     {
       "id": 8,
       "subject": "Task 8: Preserve unavailable-recipe history",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [
         7
       ],
@@ -199,7 +199,19 @@
         "For every household subcollection, members can query/get/create/update/delete while outsiders and anonymous clients are denied all five operations.",
         "Authenticated recipe and recipe-index queries succeed while anonymous document and collection reads fail."
       ]
+    },
+    {
+      "taskId": 8,
+      "reason": "Independent quality review found cross-household action races, stale fetch races, inaccessible nested removal controls, and silent action failures while hardening missing-recipe history.",
+      "filesAdded": [
+        "services/recipeAvailability.ts"
+      ],
+      "acceptanceCriteriaAdded": [
+        "Visible history and actions are scoped by household, session generation, and snapshot revision; stale confirmations fail closed.",
+        "Recipe fetches settle independently, distinguish unavailable from transient failure, and use per-recipe load tokens so stale remove/re-add completions are ignored.",
+        "Preview and action controls are separate and accessible, and destructive/star failures show user feedback."
+      ]
     }
   ],
-  "lastUpdated": "2026-07-15T23:32:00+03:00"
+  "lastUpdated": "2026-07-16T00:16:00+03:00"
 }
