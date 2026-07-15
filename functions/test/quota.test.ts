@@ -29,7 +29,7 @@ vi.mock('firebase-admin/firestore', () => ({
   getFirestore: firestore.getFirestore,
 }));
 
-import type { AiEndpoint } from '../src/ai/contracts.js';
+import type { QuotaEndpoint } from '../src/ai/contracts.js';
 import {
   firestoreQuotaStore,
   quotaDocumentId,
@@ -92,11 +92,13 @@ describe('quotaDocumentId', () => {
 });
 
 describe('reserveQuota', () => {
-  it.each<[AiEndpoint, number]>([
+  it.each<[QuotaEndpoint, number]>([
     ['tagRecipes', 100],
     ['reminderFlags', 100],
     ['shoppingGroups', 40],
     ['substitutions', 80],
+    ['legacyRecipeCreate', 100],
+    ['legacyRecipeMetadata', 200],
   ])('%s accepts exactly %i units and rejects the next unit', async (endpoint, limit) => {
     const store = new MemoryQuotaStore();
 
@@ -171,7 +173,7 @@ describe('reserveQuota', () => {
       incrementIfAllowed: vi.fn(),
     };
     const logSpy = vi.mocked(logger.info);
-    const endpoint = 'unsupportedEndpoint' as AiEndpoint;
+    const endpoint = 'unsupportedEndpoint' as QuotaEndpoint;
 
     await expect(
       reserveQuota(store, 'u1', endpoint, 1, NOW),

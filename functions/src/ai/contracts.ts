@@ -93,7 +93,7 @@ export const substitutionsRequest = householdRequest.extend({
   allIngredients: z.array(ingredientName).min(1).max(100),
 });
 
-const recipeTag = z.enum([
+export const legacyTag = z.enum([
   'Breakfast',
   'Lunch',
   'Dinner',
@@ -117,7 +117,7 @@ export const tagRecipesResponse = z
         z
           .object({
             id: recipeId,
-            tags: z.array(recipeTag).max(14),
+            tags: z.array(legacyTag).max(14),
           })
           .strict(),
       )
@@ -190,6 +190,93 @@ export type AiEndpoint =
   | 'reminderFlags'
   | 'shoppingGroups'
   | 'substitutions';
+
+const optionalUrl = z.string().url().max(2_048).optional();
+const legacyIngredient = z
+  .object({
+    name: ingredientName,
+    quantity: z.number().finite().min(0).max(1_000_000),
+    unit: z.string().max(40),
+    notes: z.string().max(300).optional(),
+  })
+  .strict();
+const legacyInstruction = z
+  .object({
+    text: z.string().trim().min(1).max(5_000),
+    imageUrl: optionalUrl,
+    videoEmbedUrl: optionalUrl,
+    isHeader: z.boolean().optional(),
+  })
+  .strict();
+
+export const legacyRecipeSchema = z
+  .object({
+    title: shortText,
+    sourceUrl: z.string().url().max(2_048),
+    imageUrl: optionalUrl,
+    videoEmbedUrl: optionalUrl,
+    prepTime: z.string().max(80),
+    cookTime: z.string().max(80),
+    totalTime: z.string().max(80).optional(),
+    originalServings: z.number().positive().max(10_000),
+    course: z.array(shortText).max(20).optional(),
+    tags: z.array(legacyTag).max(14).optional(),
+    description: z.string().max(5_000).optional(),
+    cuisine: z.string().max(100).optional(),
+    difficulty: z.string().max(100).optional(),
+    ingredients: z.array(legacyIngredient).min(1).max(200),
+    ingredientGroups: z
+      .array(
+        z
+          .object({
+            name: z.string().max(200),
+            ingredients: z.array(legacyIngredient).max(200),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional(),
+    instructions: z.array(legacyInstruction).min(1).max(150),
+    notes: z.string().max(20_000),
+    nutrition: z
+      .object({
+        calories: z.number().finite().min(0).max(1_000_000),
+        protein: z.number().finite().min(0).max(1_000_000),
+        carbs: z.number().finite().min(0).max(1_000_000),
+        fat: z.number().finite().min(0).max(1_000_000),
+      })
+      .strict(),
+    needsDefrost: z.boolean().optional(),
+    needsMarinate: z.boolean().optional(),
+  })
+  .strict();
+
+export const saveLegacyRecipeRequest = householdRequest
+  .extend({ recipe: legacyRecipeSchema })
+  .strict();
+
+export const updateLegacyRecipeMetadataRequest = householdRequest
+  .extend({
+    recipeId: z.string().trim().min(1).max(160),
+    course: z.array(shortText).max(20).optional(),
+    tags: z.array(legacyTag).max(14).optional(),
+    needsDefrost: z.boolean().optional(),
+    needsMarinate: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.course !== undefined
+      || value.tags !== undefined
+      || value.needsDefrost !== undefined
+      || value.needsMarinate !== undefined,
+    'At least one metadata field is required',
+  );
+
+export type QuotaEndpoint =
+  | AiEndpoint
+  | 'legacyRecipeCreate'
+  | 'legacyRecipeMetadata';
 
 export type TagRecipesInput = z.infer<typeof tagRecipesRequest>;
 export type ReminderFlagsInput = z.infer<typeof reminderFlagsRequest>;

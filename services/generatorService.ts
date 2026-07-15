@@ -215,7 +215,7 @@ async function applyGeminiTagsToFreshMeals(
       ]),
     ];
     try {
-      await updateRecipeTags(meal.recipeId, merged);
+      await updateRecipeTags(householdId, meal.recipeId, merged);
       meal.recipe.tags = merged;
     } catch (err) {
       logEvent('warn', 'Tagger', 'Firestore tag update failed (non-fatal):', err);
@@ -352,6 +352,7 @@ export async function generateMealPlan(
 
         // ── Fresh scrape ──────────────────────────────────
         const request: ScrapeRequest = {
+          householdId,
           mealType: slot.mealType,
           cuisineStyles: slotCuisineStyles,
           customInstructions: config.customInstructions,
@@ -383,6 +384,7 @@ export async function generateMealPlan(
         console.log(`[Generator] Duplicate ${meal.recipeId} within chunk — re-scraping slot ${r.cfg.index + 1} serially`);
         const { slot, slotCuisineStyles, forceSeed } = r.cfg;
         const reScraped = await scrapeRecipe({
+          householdId,
           mealType: slot.mealType,
           cuisineStyles: slotCuisineStyles,
           customInstructions: config.customInstructions,
@@ -450,6 +452,7 @@ export async function generateMealPlan(
           console.log(`[Generator] Auto-fixing slot ${idx} (${meal.mealType}) with cuisines=[${slotCuisineStyles.join(',')}]`);
           onProgress(`Auto-fixing mismatched recipe in slot ${idx + 1}…`, idx + 1, results.length);
           const scraped = await scrapeRecipe({
+            householdId,
             mealType: meal.mealType,
             cuisineStyles: slotCuisineStyles,
             customInstructions: config.customInstructions,
@@ -540,6 +543,7 @@ export async function regenerateMeals(
         const globalIdx = chunkStart + j;
         onProgress(`Regenerating recipe ${globalIdx + 1} of ${total}…`, globalIdx + 1, total);
         const result = await scrapeRecipe({
+          householdId,
           mealType: cfg.meal.mealType,
           cuisineStyles: cfg.slotCuisineStyles,
           customInstructions: config.customInstructions,
@@ -557,6 +561,7 @@ export async function regenerateMeals(
       if (excludeIds.includes(result.recipeId)) {
         console.log(`[Regenerate] Duplicate ${result.recipeId} within chunk — re-scraping slot ${cfg.idx} serially`);
         finalResult = await scrapeRecipe({
+          householdId,
           mealType: cfg.meal.mealType,
           cuisineStyles: cfg.slotCuisineStyles,
           customInstructions: config.customInstructions,
@@ -653,7 +658,7 @@ export async function confirmMealPlan(
       const flagMap = await getGeminiReminderFlags(householdId, recipesNeedingFlags);
       await Promise.all(
         Array.from(flagMap.entries()).map(([recipeId, flags]) =>
-          updateRecipeFlags(recipeId, flags).catch((err) =>
+          updateRecipeFlags(householdId, recipeId, flags).catch((err) =>
             logEvent('warn', 'Generator', `updateRecipeFlags failed for ${recipeId}:`, err),
           ),
         ),

@@ -36,6 +36,14 @@ const indexMocks = vi.hoisted(() => {
       create: vi.fn(),
       join: vi.fn(),
     },
+    legacyRecipeStore: {
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    legacyRecipeHandlers: {
+      save: vi.fn(),
+      update: vi.fn(),
+    },
   };
 });
 
@@ -66,6 +74,11 @@ vi.mock('../src/callables/households.js', () => ({
     join: vi.fn(),
     switch: vi.fn(),
   })),
+}));
+
+vi.mock('../src/callables/legacyRecipes.js', () => ({
+  firestoreLegacyRecipeStore: vi.fn(() => indexMocks.legacyRecipeStore),
+  createLegacyRecipeHandlers: vi.fn(() => indexMocks.legacyRecipeHandlers),
 }));
 
 vi.mock('../src/quota.js', () => ({
@@ -414,7 +427,7 @@ describe('createAiHandlers', () => {
 });
 
 describe('Functions entrypoint', () => {
-  it('registers four secret-bound AI callables and three non-secret household callables', async () => {
+  it('registers four secret-bound AI callables and five fixed non-secret mutation callables', async () => {
     vi.resetModules();
 
     const entrypoint = await import('../src/index.js');
@@ -423,14 +436,16 @@ describe('Functions entrypoint', () => {
       'createHousehold',
       'joinHousehold',
       'reminderFlags',
+      'saveLegacyRecipe',
       'shoppingGroups',
       'substitutions',
       'switchHousehold',
       'tagRecipes',
+      'updateLegacyRecipeMetadata',
     ]);
     expect(indexMocks.initializeApp).toHaveBeenCalledOnce();
     expect(indexMocks.firestoreQuotaStore).toHaveBeenCalledOnce();
-    expect(indexMocks.onCall).toHaveBeenCalledTimes(7);
+    expect(indexMocks.onCall).toHaveBeenCalledTimes(9);
     for (const [options] of indexMocks.onCall.mock.calls.slice(0, 4)) {
       expect(options).toEqual({
         secrets: [indexMocks.secret],

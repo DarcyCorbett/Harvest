@@ -23,6 +23,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { logEvent } from './devLog';
+import { legacyRecipeClient } from './legacyRecipeClient';
 import type {
   GenerateConfig,
   GeneratedMeal,
@@ -81,17 +82,12 @@ export async function isEmailAllowed(email: string): Promise<boolean> {
 // ─── Recipe Operations ─────────────────────────────────────
 
 /** Save a scraped recipe to the root recipes collection */
-export async function saveRecipe(recipe: Recipe): Promise<string> {
-  const recipeData = {
-    ...recipe,
-    scrapedAt: Timestamp.fromDate(recipe.scrapedAt || new Date()),
-  };
-  if (recipe.id) {
-    await withTimeout(setDoc(doc(db, 'recipes', recipe.id), recipeData), 15000, 'saveRecipe');
-    return recipe.id;
-  }
-  const docRef = await withTimeout(addDoc(collection(db, 'recipes'), recipeData), 15000, 'saveRecipe');
-  return docRef.id;
+export async function saveRecipe(householdId: string, recipe: Recipe): Promise<string> {
+  return withTimeout(
+    legacyRecipeClient.save(householdId, recipe),
+    15000,
+    'saveRecipe',
+  );
 }
 
 /** Get a recipe by ID */
@@ -187,21 +183,24 @@ export async function saveHouseholdSettings(
 }
 
 /** Update the course tags on a cached recipe. */
-export async function updateRecipeCourse(recipeId: string, course: string[]): Promise<void> {
-  await updateDoc(doc(db, 'recipes', recipeId), { course });
+export async function updateRecipeCourse(
+  householdId: string,
+  recipeId: string,
+  course: string[],
+): Promise<void> {
+  await legacyRecipeClient.update(householdId, recipeId, { course });
 }
 
 /** Update the Gemini-assigned tags on a cached recipe. */
-export async function updateRecipeTags(recipeId: string, tags: string[]): Promise<void> {
-  await updateDoc(doc(db, 'recipes', recipeId), { tags });
+export async function updateRecipeTags(
+  householdId: string,
+  recipeId: string,
+  tags: string[],
+): Promise<void> {
+  await legacyRecipeClient.update(householdId, recipeId, { tags });
 }
 
 // ─── Recipe Cache Operations ────────────────────────────────
-
-/** Delete a single cached recipe by ID */
-export async function deleteRecipe(recipeId: string): Promise<void> {
-  await deleteDoc(doc(db, 'recipes', recipeId));
-}
 
 /**
  * Delete ALL documents in the root recipes collection.
@@ -558,6 +557,7 @@ export async function getStarredRecipes(householdId: string): Promise<CookbookEn
 
 /** Persist Gemini-detected reminder flags onto the cached recipe doc. */
 export async function updateRecipeFlags(
+  householdId: string,
   recipeId: string,
   flags: { needsDefrost?: boolean; needsMarinate?: boolean },
 ): Promise<void> {
@@ -565,7 +565,11 @@ export async function updateRecipeFlags(
   if (typeof flags.needsDefrost === 'boolean') update.needsDefrost = flags.needsDefrost;
   if (typeof flags.needsMarinate === 'boolean') update.needsMarinate = flags.needsMarinate;
   if (Object.keys(update).length === 0) return;
-  await withTimeout(updateDoc(doc(db, 'recipes', recipeId), update), 10000, 'updateRecipeFlags');
+  await withTimeout(
+    legacyRecipeClient.update(householdId, recipeId, update),
+    10000,
+    'updateRecipeFlags',
+  );
 }
 
 /** Bump the "last confirmed at" marker so every household device knows to re-sync reminders. */

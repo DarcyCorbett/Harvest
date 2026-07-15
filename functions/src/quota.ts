@@ -2,13 +2,15 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { AiEndpoint } from './ai/contracts.js';
+import type { QuotaEndpoint } from './ai/contracts.js';
 
-const DAILY_LIMITS: Record<AiEndpoint, number> = {
+const DAILY_LIMITS: Record<QuotaEndpoint, number> = {
   tagRecipes: 100,
   reminderFlags: 100,
   shoppingGroups: 40,
   substitutions: 80,
+  legacyRecipeCreate: 100,
+  legacyRecipeMetadata: 200,
 };
 
 export interface QuotaStore {
@@ -49,7 +51,7 @@ export function firestoreQuotaStore(): QuotaStore {
 
 export function quotaDocumentId(
   uid: string,
-  endpoint: AiEndpoint,
+  endpoint: QuotaEndpoint,
   now: Date,
 ): string {
   return `${now.toISOString().slice(0, 10)}_${uid}_${endpoint}`;
@@ -58,7 +60,7 @@ export function quotaDocumentId(
 export async function reserveQuota(
   store: QuotaStore,
   uid: string,
-  endpoint: AiEndpoint,
+  endpoint: QuotaEndpoint,
   units = 1,
   now = new Date(),
 ): Promise<number> {

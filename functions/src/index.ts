@@ -9,6 +9,10 @@ import {
   createHouseholdHandlers,
   firestoreHouseholdMutations,
 } from './callables/households.js';
+import {
+  createLegacyRecipeHandlers,
+  firestoreLegacyRecipeStore,
+} from './callables/legacyRecipes.js';
 import { GEMINI_API_KEY } from './config.js';
 import { firestoreQuotaStore, reserveQuota } from './quota.js';
 
@@ -38,6 +42,15 @@ const householdHandlers = createHouseholdHandlers({
   create: householdMutations.create,
   join: householdMutations.join,
 });
+const legacyRecipeStore = firestoreLegacyRecipeStore();
+const legacyRecipeHandlers = createLegacyRecipeHandlers({
+  authorize: authorizeHouseholdMember,
+  reserve(uid, endpoint, units) {
+    return reserveQuota(quotaStore, uid, endpoint, units);
+  },
+  create: legacyRecipeStore.create,
+  update: legacyRecipeStore.update,
+});
 
 const aiOptions = {
   secrets: [GEMINI_API_KEY] as [typeof GEMINI_API_KEY],
@@ -52,3 +65,5 @@ export const substitutions = onCall(aiOptions, handlers.substitutions);
 export const createHousehold = onCall(householdHandlers.create);
 export const joinHousehold = onCall(householdHandlers.join);
 export const switchHousehold = onCall(householdHandlers.switch);
+export const saveLegacyRecipe = onCall(legacyRecipeHandlers.save);
+export const updateLegacyRecipeMetadata = onCall(legacyRecipeHandlers.update);

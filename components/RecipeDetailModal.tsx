@@ -7,7 +7,8 @@
 import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { updateMealPlanServings, updateRecipeCourse, updateRecipeTags } from '@/services/firestoreService';
+import { updateMealPlanServings } from '@/services/firestoreService';
+import { legacyRecipeClient } from '@/services/legacyRecipeClient';
 import { applyServingScale, calculateRequiredServings } from '@/services/recipeScraperService';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
@@ -320,17 +321,19 @@ export default function RecipeDetailModal({
   }, [recipe]);
 
   const handleSaveLabels = useCallback(async () => {
-    if (!recipe?.id) return;
+    if (!householdId || !recipe?.id) return;
     try {
-      await updateRecipeCourse(recipe.id, localCourse);
-      await updateRecipeTags(recipe.id, localTags);
+      await legacyRecipeClient.update(householdId, recipe.id, {
+        course: localCourse,
+        tags: localTags,
+      });
       setEditingLabels(false);
       onCourseUpdate?.(recipe.id, localCourse);
       onTagsUpdate?.(recipe.id, localTags);
     } catch {
       Alert.alert('Error', 'Could not save changes.');
     }
-  }, [recipe?.id, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
+  }, [householdId, recipe?.id, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
 
   const handleCancelLabels = useCallback(() => {
     setLocalCourse(recipe?.course ?? []);

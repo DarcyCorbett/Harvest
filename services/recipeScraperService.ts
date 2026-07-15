@@ -64,6 +64,7 @@ const MAX_CANDIDATES_PER_SITE = 5;
 // ─── Public Types ─────────────────────────────────────────────
 
 export interface ScrapeRequest {
+  householdId: string;
   mealType: MealType;
   cuisineStyles: CuisineStyle[];
   customInstructions?: string;
@@ -252,7 +253,7 @@ export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult
               }
 
               console.log(`[RecipeScraper] Accepted "${recipe.title}" from ${site}`);
-              const recipeId = await saveRecipe(recipe);
+              const recipeId = await saveRecipe(request.householdId, recipe);
               if (request.excludeRecipeIds?.includes(recipeId)) {
                 console.log(`[RecipeScraper] Skipping duplicate (fresh): ${recipeUrl}`);
                 continue;
@@ -296,7 +297,7 @@ export async function scrapeRecipe(request: ScrapeRequest): Promise<ScrapeResult
         }
         const { recipe: fallbackRecipe } = (validFallbacks[0] ?? globalFallbacks[0]);
         console.log(`[RecipeScraper] All candidates filtered — using fallback: "${fallbackRecipe.title}"`);
-        const recipeId = await saveRecipe(fallbackRecipe);
+        const recipeId = await saveRecipe(request.householdId, fallbackRecipe);
         return {
           recipe: applyServingScale({ ...fallbackRecipe, id: recipeId }, request.requiredServings),
           recipeId,
