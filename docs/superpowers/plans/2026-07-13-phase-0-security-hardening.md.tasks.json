@@ -82,7 +82,7 @@
     {
       "id": 10,
       "subject": "Task 10: Deploy, smoke-test, scan, and revoke old keys",
-      "status": "pending",
+      "status": "in_progress",
       "blockedBy": [
         9
       ],
@@ -229,5 +229,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-16T00:53:25+03:00"
+  "lastUpdated": "2026-07-16T00:56:00+03:00"
 }
