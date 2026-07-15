@@ -32,8 +32,15 @@ import {
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, MealPlanEntry, Recipe, MealType } from '@/services/types';
 import {
+  applyRecipeFetchResults,
+  beginRecipeLoads,
+  createRecipeHistoryState,
+  executeOwnedHistoryAction,
   getRecipePresentation,
-  reconcileRecipeAvailability,
+  isCurrentHistorySession,
+  pruneRecipeHistory,
+  recipeIdsToLoad,
+  retryRecipeLoad,
 } from '@/services/recipeAvailability';
 
 // ─── Layout constants ─────────────────────────────────────────
@@ -42,6 +49,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = SCREEN_WIDTH * 0.8;
 const CARD_SIDE_PAD = (SCREEN_WIDTH - CARD_WIDTH) / 2;
+const EMPTY_MEAL_PLAN_ENTRIES: MealPlanEntry[] = [];
+const EMPTY_RECIPES: Record<string, Recipe> = {};
+const EMPTY_RECIPE_IDS = new Set<string>();
 
 // ─── Date helpers ─────────────────────────────────────────────
 
@@ -126,9 +136,11 @@ export default function CalendarScreen() {
     return { year: n.getFullYear(), month: n.getMonth() };
   });
 
-  const [entries, setEntries] = useState<MealPlanEntry[]>([]);
-  const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
-  const [missingRecipeIds, setMissingRecipeIds] = useState<Set<string>>(new Set());
+  const [snapshotEntries, setSnapshotEntries] = useState<MealPlanEntry[]>([]);
+  const [snapshotHouseholdId, setSnapshotHouseholdId] = useState<string | null>(null);
+  const [recipeHistory, setRecipeHistory] = useState(() =>
+    createRecipeHistoryState<Recipe>(null, 0)
+  );
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
   const [previewEntry, setPreviewEntry] = useState<{
@@ -138,40 +150,82 @@ export default function CalendarScreen() {
     servings?: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const loadedIdsRef = useRef<Set<string>>(new Set());
+  const sessionGenerationRef = useRef(0);
+  const currentHouseholdRef = useRef<string | null>(householdId);
   const carouselRef = useRef<FlatList<Date>>(null);
+
+  currentHouseholdRef.current = householdId;
+  const ownsSnapshot = !!householdId && snapshotHouseholdId === householdId;
+  const entries = ownsSnapshot ? snapshotEntries : EMPTY_MEAL_PLAN_ENTRIES;
+  const ownsRecipeHistory = ownsSnapshot && recipeHistory.householdId === householdId;
+  const recipes = ownsRecipeHistory ? recipeHistory.recipes : EMPTY_RECIPES;
+  const missingRecipeIds = ownsRecipeHistory ? recipeHistory.missingRecipeIds : EMPTY_RECIPE_IDS;
+  const errorRecipeIds = ownsRecipeHistory ? recipeHistory.errorRecipeIds : EMPTY_RECIPE_IDS;
+  const visiblePreviewRecipe = ownsSnapshot ? previewRecipe : null;
 
   // ── Real-time subscription ──
   useEffect(() => {
+    const generation = sessionGenerationRef.current + 1;
+    sessionGenerationRef.current = generation;
+    currentHouseholdRef.current = householdId;
+    setSnapshotEntries([]);
+    setSnapshotHouseholdId(null);
+    setCookbook([]);
+    setPreviewRecipe(null);
+    setPreviewEntry(null);
+    setLoading(!!householdId);
+    setRecipeHistory(createRecipeHistoryState<Recipe>(householdId, generation));
     if (!householdId) return;
-    const unsub = subscribeMealPlan(householdId, (e) => {
-      setEntries(e);
+
+    const mealPlanUnsubscribe = subscribeMealPlan(householdId, (nextEntries) => {
+      if (!isCurrentHistorySession(
+        householdId,
+        generation,
+        currentHouseholdRef.current,
+        sessionGenerationRef.current,
+      )) return;
+      setSnapshotEntries(nextEntries);
+      setSnapshotHouseholdId(householdId);
+      setRecipeHistory((previous) =>
+        pruneRecipeHistory(previous, nextEntries.map((entry) => entry.recipeId))
+      );
       setLoading(false);
     });
-    return unsub;
-  }, [householdId]);
-
-  useEffect(() => {
-    if (!householdId) return;
-    return subscribeCookbook(householdId, setCookbook);
+    const cookbookUnsubscribe = subscribeCookbook(householdId, (nextCookbook) => {
+      if (isCurrentHistorySession(
+        householdId,
+        generation,
+        currentHouseholdRef.current,
+        sessionGenerationRef.current,
+      )) setCookbook(nextCookbook);
+    });
+    return () => {
+      mealPlanUnsubscribe();
+      cookbookUnsubscribe();
+    };
   }, [householdId]);
 
   // ── Lazy recipe loading ──
   useEffect(() => {
-    const toLoad = [...new Set(entries.map((e) => e.recipeId))].filter(
-      (id) => !loadedIdsRef.current.has(id)
-    );
+    if (!householdId || !ownsSnapshot || recipeHistory.householdId !== householdId) return;
+    const toLoad = recipeIdsToLoad(entries.map((entry) => entry.recipeId), recipeHistory);
     if (!toLoad.length) return;
-    toLoad.forEach((id) => loadedIdsRef.current.add(id));
-    Promise.all(toLoad.map(getRecipe)).then((fetched) => {
-      setRecipes((previous) =>
-        reconcileRecipeAvailability(toLoad, fetched, previous, new Set()).recipes
-      );
-      setMissingRecipeIds((previous) =>
-        reconcileRecipeAvailability<Recipe>(toLoad, fetched, {}, previous).missingRecipeIds
-      );
+    const request = {
+      householdId,
+      generation: recipeHistory.generation,
+      recipeIds: toLoad,
+    };
+    setRecipeHistory((previous) => beginRecipeLoads(previous, toLoad));
+    Promise.allSettled(toLoad.map(getRecipe)).then((results) => {
+      if (!isCurrentHistorySession(
+        request.householdId,
+        request.generation,
+        currentHouseholdRef.current,
+        sessionGenerationRef.current,
+      )) return;
+      setRecipeHistory((previous) => applyRecipeFetchResults(previous, request, results));
     });
-  }, [entries]);
+  }, [entries, householdId, ownsSnapshot, recipeHistory]);
 
   const forDate = useCallback(
     (dateStr: string) =>
@@ -183,18 +237,28 @@ export default function CalendarScreen() {
 
   const handleDelete = useCallback(
     (entry: MealPlanEntry) => {
-      if (!householdId || !entry.id) return;
+      if (!entry.id) return;
       const title = recipes[entry.recipeId]?.title ?? 'this meal';
       Alert.alert('Remove meal', `Remove "${title}" from ${entry.date}?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => deleteMealPlanEntry(householdId, entry.id!),
+          onPress: async () => {
+            const result = await executeOwnedHistoryAction(
+              snapshotHouseholdId,
+              currentHouseholdRef.current,
+              (ownerHouseholdId) => deleteMealPlanEntry(ownerHouseholdId, entry.id!),
+              () => Alert.alert('Could not remove meal', 'Please try again.'),
+            );
+            if (result === 'blocked') {
+              Alert.alert('Household changed', 'Wait for the current meal plan to finish loading.');
+            }
+          },
         },
       ]);
     },
-    [householdId, recipes]
+    [recipes, snapshotHouseholdId]
   );
 
   const today = toISO(new Date());
@@ -227,7 +291,7 @@ export default function CalendarScreen() {
     return () => clearTimeout(t);
   }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) {
+  if (loading || (!!householdId && !ownsSnapshot)) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
         <View style={s.center}>
@@ -315,23 +379,9 @@ export default function CalendarScreen() {
                 { calories: 0, protein: 0, carbs: 0, fat: 0 }
               );
               const hasMacros = dayEntries.some((e) => recipes[e.recipeId]);
-              // First loaded recipe — used when tapping the card outside a meal row
-              const firstEntry = dayEntries.find((e) => recipes[e.recipeId]);
-              const firstRecipe = firstEntry ? recipes[firstEntry.recipeId] : null;
 
               return (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    if (!firstRecipe || !firstEntry) return;
-                    setPreviewRecipe(firstRecipe);
-                    setPreviewEntry({
-                      id: firstEntry.id!,
-                      adults: firstEntry.adults,
-                      children: firstEntry.children,
-                      servings: firstEntry.servings,
-                    });
-                  }}
+                <View
                   style={[
                     s.dayCard,
                     { backgroundColor: colors.surface, width: CARD_WIDTH, marginRight: CARD_GAP },
@@ -366,73 +416,92 @@ export default function CalendarScreen() {
                     <View style={s.cardMeals}>
                       {dayEntries.map((entry) => {
                         const recipe = recipes[entry.recipeId];
-                        const presentation = getRecipePresentation(recipe, missingRecipeIds.has(entry.recipeId));
+                        const presentation = getRecipePresentation(
+                          recipe,
+                          missingRecipeIds.has(entry.recipeId),
+                          errorRecipeIds.has(entry.recipeId),
+                        );
                         const { bg, fg } = mealBadge(entry.mealType, colors);
                         return (
-                          <TouchableOpacity
+                          <View
                             key={entry.id}
                             style={[s.cardMealRow, { backgroundColor: colors.background }]}
-                            onPress={() => {
-                              if (!recipe) return;
-                              setPreviewRecipe(recipe);
-                              setPreviewEntry({
-                                id: entry.id!,
-                                adults: entry.adults,
-                                children: entry.children,
-                                servings: entry.servings,
-                              });
-                            }}
-                            onLongPress={() => handleDelete(entry)}
-                            disabled={presentation.status === 'loading'}
-                            activeOpacity={0.7}
                           >
-                            <View style={[s.mealBadge, { backgroundColor: bg }]}>
-                              <Text style={[s.mealBadgeText, { color: fg }]}>
-                                {MEAL_LABELS[entry.mealType]}
-                              </Text>
-                            </View>
-                            {presentation.status === 'unavailable' && (
-                              <Ionicons name="alert-circle-outline" size={18} color={colors.textTertiary} />
-                            )}
-                            <View style={s.cardMealInfo}>
-                              <Text
-                                style={[
-                                  s.cardMealTitle,
-                                  { color: presentation.status === 'unavailable' ? colors.textTertiary : colors.text },
-                                ]}
-                                numberOfLines={2}
-                              >
-                                {presentation.title}
-                              </Text>
-                              {recipe && (
-                                <View style={s.cardMealMetaRow}>
-                                  <Text style={[s.cardMealMeta, { color: colors.textTertiary }]}>
-                                    {recipe.prepTime} prep · {recipe.cookTime} cook
-                                  </Text>
-                                  {(recipe.needsDefrost || recipe.needsMarinate) && (
-                                    <View style={s.reminderChips}>
-                                      {recipe.needsDefrost && (
-                                        <View style={[s.reminderChip, { backgroundColor: colors.carbsBadge }]}>
-                                          <Ionicons name="snow-outline" size={10} color={colors.carbsText} />
-                                        </View>
-                                      )}
-                                      {recipe.needsMarinate && (
-                                        <View style={[s.reminderChip, { backgroundColor: colors.accentLight }]}>
-                                          <Ionicons name="timer-outline" size={10} color={colors.accent} />
-                                        </View>
-                                      )}
-                                    </View>
-                                  )}
-                                </View>
+                            <TouchableOpacity
+                              style={s.cardMealPreview}
+                              onPress={() => {
+                                if (presentation.status === 'error') {
+                                  setRecipeHistory((previous) => retryRecipeLoad(previous, entry.recipeId));
+                                  return;
+                                }
+                                if (!recipe) return;
+                                setPreviewRecipe(recipe);
+                                setPreviewEntry({
+                                  id: entry.id!,
+                                  adults: entry.adults,
+                                  children: entry.children,
+                                  servings: entry.servings,
+                                });
+                              }}
+                              disabled={presentation.status === 'loading' || presentation.status === 'unavailable'}
+                              activeOpacity={0.7}
+                            >
+                              <View style={[s.mealBadge, { backgroundColor: bg }]}>
+                                <Text style={[s.mealBadgeText, { color: fg }]}>
+                                  {MEAL_LABELS[entry.mealType]}
+                                </Text>
+                              </View>
+                              {presentation.status === 'unavailable' && (
+                                <Ionicons name="alert-circle-outline" size={18} color={colors.textTertiary} />
                               )}
-                            </View>
-                            {recipe?.imageUrl && (
-                              <Image
-                                source={{ uri: recipe.imageUrl }}
-                                style={s.mealRowThumb}
-                              />
-                            )}
-                          </TouchableOpacity>
+                              {presentation.status === 'error' && (
+                                <Ionicons name="refresh-circle-outline" size={18} color={colors.error} />
+                              )}
+                              <View style={s.cardMealInfo}>
+                                <Text
+                                  style={[
+                                    s.cardMealTitle,
+                                    { color: presentation.status === 'available' ? colors.text : colors.textTertiary },
+                                  ]}
+                                  numberOfLines={2}
+                                >
+                                  {presentation.title}
+                                </Text>
+                                {recipe && (
+                                  <View style={s.cardMealMetaRow}>
+                                    <Text style={[s.cardMealMeta, { color: colors.textTertiary }]}>
+                                      {recipe.prepTime} prep · {recipe.cookTime} cook
+                                    </Text>
+                                    {(recipe.needsDefrost || recipe.needsMarinate) && (
+                                      <View style={s.reminderChips}>
+                                        {recipe.needsDefrost && (
+                                          <View style={[s.reminderChip, { backgroundColor: colors.carbsBadge }]}>
+                                            <Ionicons name="snow-outline" size={10} color={colors.carbsText} />
+                                          </View>
+                                        )}
+                                        {recipe.needsMarinate && (
+                                          <View style={[s.reminderChip, { backgroundColor: colors.accentLight }]}>
+                                            <Ionicons name="timer-outline" size={10} color={colors.accent} />
+                                          </View>
+                                        )}
+                                      </View>
+                                    )}
+                                  </View>
+                                )}
+                              </View>
+                              {recipe?.imageUrl && (
+                                <Image source={{ uri: recipe.imageUrl }} style={s.mealRowThumb} />
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              accessibilityRole="button"
+                              accessibilityLabel="Remove meal"
+                              onPress={() => handleDelete(entry)}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                              <Ionicons name="trash-outline" size={18} color={colors.textTertiary} />
+                            </TouchableOpacity>
+                          </View>
                         );
                       })}
                     </View>
@@ -447,7 +516,7 @@ export default function CalendarScreen() {
                       <CardMacro value={`${Math.round(dayMacros.fat)}g`} label="fat" fg={colors.fatText} bg={colors.fatBadge} />
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             }}
           />
@@ -524,7 +593,11 @@ export default function CalendarScreen() {
                       </Text>
                       {shown.map((entry, idx) => {
                         const recipe = recipes[entry.recipeId];
-                        const presentation = getRecipePresentation(recipe, missingRecipeIds.has(entry.recipeId));
+                        const presentation = getRecipePresentation(
+                          recipe,
+                          missingRecipeIds.has(entry.recipeId),
+                          errorRecipeIds.has(entry.recipeId),
+                        );
                         const { bg, fg } = mealBadge(entry.mealType, colors);
                         return (
                           <View key={idx} style={[s.gridMealPill, { backgroundColor: bg }]}>
@@ -559,20 +632,35 @@ export default function CalendarScreen() {
       )}
 
       <RecipeDetailModal
-        recipe={previewRecipe}
-        visible={!!previewRecipe}
+        recipe={visiblePreviewRecipe}
+        visible={!!visiblePreviewRecipe}
         onClose={() => { setPreviewRecipe(null); setPreviewEntry(null); }}
-        mealPlanEntry={previewEntry ?? undefined}
-        starred={previewRecipe ? (cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
-        onStarToggle={() => {
-          if (!householdId || !previewRecipe?.id) return;
-          const current = cookbook.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false;
-          toggleStarred(householdId, previewRecipe.id, !current)
-            .catch((err) => console.warn('[index] star toggle failed:', err));
+        mealPlanEntry={ownsSnapshot ? (previewEntry ?? undefined) : undefined}
+        starred={visiblePreviewRecipe ? (cookbook.find((e) => e.recipeId === visiblePreviewRecipe.id)?.starred ?? false) : undefined}
+        onStarToggle={async () => {
+          if (!visiblePreviewRecipe?.id) return;
+          const recipeId = visiblePreviewRecipe.id;
+          const current = cookbook.find((e) => e.recipeId === recipeId)?.starred ?? false;
+          const result = await executeOwnedHistoryAction(
+            snapshotHouseholdId,
+            currentHouseholdRef.current,
+            (ownerHouseholdId) => toggleStarred(
+              ownerHouseholdId,
+              recipeId,
+              !current,
+            ),
+            () => Alert.alert('Could not update favourite', 'Please try again.'),
+          );
+          if (result === 'blocked') {
+            Alert.alert('Household changed', 'Wait for the current meal plan to finish loading.');
+          }
         }}
         onCourseUpdate={(id, course) => {
           setPreviewRecipe((prev) => prev?.id === id ? { ...prev, course } : prev);
-          setRecipes((prev) => prev[id] ? { ...prev, [id]: { ...prev[id], course } } : prev);
+          setRecipeHistory((previous) => previous.recipes[id] ? {
+            ...previous,
+            recipes: { ...previous.recipes, [id]: { ...previous.recipes[id], course } },
+          } : previous);
         }}
       />
     </SafeAreaView>
@@ -695,6 +783,12 @@ const s = StyleSheet.create({
     gap: Spacing.sm,
     padding: Spacing.sm,
     borderRadius: Radius.xl,
+  },
+  cardMealPreview: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
   cardMealInfo: { flex: 1 },
   cardMealTitle: { fontSize: FontSizes.md, fontFamily: Fonts.semibold, lineHeight: 20 },

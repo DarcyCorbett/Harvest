@@ -32,14 +32,24 @@ import {
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, Recipe } from '@/services/types';
 import {
+  applyRecipeFetchResults,
+  beginRecipeLoads,
+  createRecipeHistoryState,
+  executeOwnedHistoryAction,
   getRecipePresentation,
-  reconcileRecipeAvailability,
+  isCurrentHistorySession,
+  pruneRecipeHistory,
+  recipeIdsToLoad,
+  retryRecipeLoad,
 } from '@/services/recipeAvailability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING = Spacing.xl;
 const GRID_GAP = Spacing.md;
 const GRID_CARD_WIDTH = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP) / 2;
+const EMPTY_COOKBOOK_ENTRIES: CookbookEntry[] = [];
+const EMPTY_RECIPES: Record<string, Recipe> = {};
+const EMPTY_RECIPE_IDS = new Set<string>();
 
 // ─── Screen ───────────────────────────────────────────────────
 
@@ -50,9 +60,11 @@ export default function CookbookScreen() {
   const colors = Colors[colorScheme];
   const { householdId } = useAuth();
 
-  const [entries, setEntries] = useState<CookbookEntry[]>([]);
-  const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
-  const [missingRecipeIds, setMissingRecipeIds] = useState<Set<string>>(new Set());
+  const [snapshotEntries, setSnapshotEntries] = useState<CookbookEntry[]>([]);
+  const [snapshotHouseholdId, setSnapshotHouseholdId] = useState<string | null>(null);
+  const [recipeHistory, setRecipeHistory] = useState(() =>
+    createRecipeHistoryState<Recipe>(null, 0)
+  );
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
@@ -60,33 +72,66 @@ export default function CookbookScreen() {
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadedIdsRef = useRef<Set<string>>(new Set());
+  const sessionGenerationRef = useRef(0);
+  const currentHouseholdRef = useRef<string | null>(householdId);
+  currentHouseholdRef.current = householdId;
+  const ownsSnapshot = !!householdId && snapshotHouseholdId === householdId;
+  const entries = ownsSnapshot ? snapshotEntries : EMPTY_COOKBOOK_ENTRIES;
+  const ownsRecipeHistory = ownsSnapshot && recipeHistory.householdId === householdId;
+  const recipes = ownsRecipeHistory ? recipeHistory.recipes : EMPTY_RECIPES;
+  const missingRecipeIds = ownsRecipeHistory ? recipeHistory.missingRecipeIds : EMPTY_RECIPE_IDS;
+  const errorRecipeIds = ownsRecipeHistory ? recipeHistory.errorRecipeIds : EMPTY_RECIPE_IDS;
+  const visiblePreviewRecipe = ownsSnapshot ? previewRecipe : null;
 
   // ── Real-time subscription ──
   useEffect(() => {
+    const generation = sessionGenerationRef.current + 1;
+    sessionGenerationRef.current = generation;
+    currentHouseholdRef.current = householdId;
+    setSnapshotEntries([]);
+    setSnapshotHouseholdId(null);
+    setPreviewRecipe(null);
+    setLoading(!!householdId);
+    setRecipeHistory(createRecipeHistoryState<Recipe>(householdId, generation));
     if (!householdId) return;
-    return subscribeCookbook(householdId, (e) => {
-      setEntries(e);
+
+    return subscribeCookbook(householdId, (nextEntries) => {
+      if (!isCurrentHistorySession(
+        householdId,
+        generation,
+        currentHouseholdRef.current,
+        sessionGenerationRef.current,
+      )) return;
+      setSnapshotEntries(nextEntries);
+      setSnapshotHouseholdId(householdId);
+      setRecipeHistory((previous) =>
+        pruneRecipeHistory(previous, nextEntries.map((entry) => entry.recipeId))
+      );
       setLoading(false);
     });
   }, [householdId]);
 
   // ── Lazy recipe loading ──
   useEffect(() => {
-    const toLoad = entries
-      .map((e) => e.recipeId)
-      .filter((id) => !loadedIdsRef.current.has(id));
+    if (!householdId || !ownsSnapshot || recipeHistory.householdId !== householdId) return;
+    const toLoad = recipeIdsToLoad(entries.map((entry) => entry.recipeId), recipeHistory);
     if (!toLoad.length) return;
-    toLoad.forEach((id) => loadedIdsRef.current.add(id));
-    Promise.all(toLoad.map(getRecipe)).then((fetched) => {
-      setRecipes((previous) =>
-        reconcileRecipeAvailability(toLoad, fetched, previous, new Set()).recipes
-      );
-      setMissingRecipeIds((previous) =>
-        reconcileRecipeAvailability<Recipe>(toLoad, fetched, {}, previous).missingRecipeIds
-      );
+    const request = {
+      householdId,
+      generation: recipeHistory.generation,
+      recipeIds: toLoad,
+    };
+    setRecipeHistory((previous) => beginRecipeLoads(previous, toLoad));
+    Promise.allSettled(toLoad.map(getRecipe)).then((results) => {
+      if (!isCurrentHistorySession(
+        request.householdId,
+        request.generation,
+        currentHouseholdRef.current,
+        sessionGenerationRef.current,
+      )) return;
+      setRecipeHistory((previous) => applyRecipeFetchResults(previous, request, results));
     });
-  }, [entries]);
+  }, [entries, householdId, ownsSnapshot, recipeHistory]);
 
   // ── Filtered + sorted list ──
   const filtered = useMemo(() => {
@@ -100,30 +145,46 @@ export default function CookbookScreen() {
   }, [entries, recipes, onlyStarred, search]);
 
   const handleStarToggle = useCallback(
-    (entry: CookbookEntry) => {
-      if (!householdId) return;
-      toggleStarred(householdId, entry.recipeId, !entry.starred);
+    async (entry: CookbookEntry) => {
+      const result = await executeOwnedHistoryAction(
+        snapshotHouseholdId,
+        currentHouseholdRef.current,
+        (ownerHouseholdId) => toggleStarred(ownerHouseholdId, entry.recipeId, !entry.starred),
+        () => Alert.alert('Could not update favourite', 'Please try again.'),
+      );
+      if (result === 'blocked') {
+        Alert.alert('Household changed', 'Wait for the current cookbook to finish loading.');
+      }
     },
-    [householdId]
+    [snapshotHouseholdId]
   );
 
   const handleRemove = useCallback(
     (entry: CookbookEntry) => {
-      if (!householdId) return;
       const title = recipes[entry.recipeId]?.title ?? 'this recipe';
       Alert.alert('Remove recipe', `Remove "${title}" from your cookbook?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => removeFromCookbook(householdId, entry.recipeId),
+          onPress: async () => {
+            const result = await executeOwnedHistoryAction(
+              snapshotHouseholdId,
+              currentHouseholdRef.current,
+              (ownerHouseholdId) => removeFromCookbook(ownerHouseholdId, entry.recipeId),
+              () => Alert.alert('Could not remove recipe', 'Please try again.'),
+            );
+            if (result === 'blocked') {
+              Alert.alert('Household changed', 'Wait for the current cookbook to finish loading.');
+            }
+          },
         },
       ]);
     },
-    [householdId, recipes]
+    [recipes, snapshotHouseholdId]
   );
 
-  if (loading) {
+  if (loading || (!!householdId && !ownsSnapshot)) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
         <View style={s.center}>
@@ -251,8 +312,13 @@ export default function CookbookScreen() {
                 entry={entry}
                 recipe={recipe}
                 missing={missingRecipeIds.has(entry.recipeId)}
+                error={errorRecipeIds.has(entry.recipeId)}
                 colors={colors}
-                onPress={() => recipe && setPreviewRecipe(recipe)}
+                onPress={() => {
+                  if (errorRecipeIds.has(entry.recipeId)) {
+                    setRecipeHistory((previous) => retryRecipeLoad(previous, entry.recipeId));
+                  } else if (recipe) setPreviewRecipe(recipe);
+                }}
                 onStar={() => handleStarToggle(entry)}
                 onRemove={() => handleRemove(entry)}
               />
@@ -261,8 +327,13 @@ export default function CookbookScreen() {
                 entry={entry}
                 recipe={recipe}
                 missing={missingRecipeIds.has(entry.recipeId)}
+                error={errorRecipeIds.has(entry.recipeId)}
                 colors={colors}
-                onPress={() => recipe && setPreviewRecipe(recipe)}
+                onPress={() => {
+                  if (errorRecipeIds.has(entry.recipeId)) {
+                    setRecipeHistory((previous) => retryRecipeLoad(previous, entry.recipeId));
+                  } else if (recipe) setPreviewRecipe(recipe);
+                }}
                 onStar={() => handleStarToggle(entry)}
                 onRemove={() => handleRemove(entry)}
               />
@@ -272,14 +343,14 @@ export default function CookbookScreen() {
       )}
 
       <RecipeDetailModal
-        recipe={previewRecipe}
-        visible={!!previewRecipe}
+        recipe={visiblePreviewRecipe}
+        visible={!!visiblePreviewRecipe}
         onClose={() => setPreviewRecipe(null)}
-        defaultServings={previewRecipe?.originalServings}
-        starred={previewRecipe ? (entries.find((e) => e.recipeId === previewRecipe.id)?.starred ?? false) : undefined}
+        defaultServings={visiblePreviewRecipe?.originalServings}
+        starred={visiblePreviewRecipe ? (entries.find((e) => e.recipeId === visiblePreviewRecipe.id)?.starred ?? false) : undefined}
         onStarToggle={() => {
-          if (!previewRecipe) return;
-          const entry = entries.find((e) => e.recipeId === previewRecipe.id);
+          if (!visiblePreviewRecipe) return;
+          const entry = entries.find((e) => e.recipeId === visiblePreviewRecipe.id);
           if (entry) handleStarToggle(entry);
         }}
         onCourseUpdate={(id, course) =>
@@ -299,6 +370,7 @@ function GridCard({
   entry,
   recipe,
   missing,
+  error,
   colors,
   onPress,
   onStar,
@@ -307,12 +379,13 @@ function GridCard({
   entry: CookbookEntry;
   recipe: Recipe | undefined;
   missing: boolean;
+  error: boolean;
   colors: (typeof Colors)['light'];
   onPress: () => void;
   onStar: () => void;
   onRemove: () => void;
 }) {
-  const presentation = getRecipePresentation(recipe, missing);
+  const presentation = getRecipePresentation(recipe, missing, error);
   const initials = recipe?.title
     ? recipe.title
         .split(' ')
@@ -322,65 +395,70 @@ function GridCard({
     : '…';
 
   return (
-    <TouchableOpacity
+    <View
       style={[s.gridCard, { backgroundColor: colors.surface, width: GRID_CARD_WIDTH }, Shadows.sm]}
-      onPress={onPress}
-      disabled={presentation.status === 'loading'}
-      activeOpacity={0.8}
     >
-      {/* Top-half image (falls back to initials when no imageUrl) */}
-      {recipe?.imageUrl ? (
-        <Image source={{ uri: recipe.imageUrl }} style={s.cardImage} resizeMode="cover" />
-      ) : (
-        <View style={[s.cardImage, s.cardImageFallback, { backgroundColor: colors.primaryLight }]}>
-          {recipe ? (
-            <Text style={[s.avatarText, { color: colors.primary }]}>{initials}</Text>
-          ) : missing ? (
-            <Ionicons name="alert-circle-outline" size={24} color={colors.textTertiary} />
-          ) : (
-            <ActivityIndicator size="small" color={colors.primary} />
-          )}
-        </View>
-      )}
+      <TouchableOpacity
+        onPress={onPress}
+        disabled={presentation.status === 'loading' || presentation.status === 'unavailable'}
+        activeOpacity={0.8}
+      >
+        {recipe?.imageUrl ? (
+          <Image source={{ uri: recipe.imageUrl }} style={s.cardImage} resizeMode="cover" />
+        ) : (
+          <View style={[s.cardImage, s.cardImageFallback, { backgroundColor: colors.primaryLight }]}>
+            {recipe ? (
+              <Text style={[s.avatarText, { color: colors.primary }]}>{initials}</Text>
+            ) : missing ? (
+              <Ionicons name="alert-circle-outline" size={24} color={colors.textTertiary} />
+            ) : error ? (
+              <Ionicons name="refresh-circle-outline" size={24} color={colors.error} />
+            ) : (
+              <ActivityIndicator size="small" color={colors.primary} />
+            )}
+          </View>
+        )}
 
-      <View style={s.cardBody}>
-        <View style={s.cardTitleRow}>
+        <View style={s.cardBody}>
           <Text
             style={[
               s.cardTitle,
-              s.cardTitleFlex,
-              { color: missing ? colors.textTertiary : colors.text },
+              { color: presentation.status === 'available' ? colors.text : colors.textTertiary },
             ]}
             numberOfLines={2}
           >
             {presentation.title}
           </Text>
-          <View style={s.cardActions}>
-            <TouchableOpacity
-              onPress={onStar}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={entry.starred ? 'star' : 'star-outline'}
-                size={18}
-                color={entry.starred ? colors.warning : colors.textTertiary}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onRemove}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="trash-outline" size={17} color={colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
+          {recipe && (
+            <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
+              {recipe.prepTime} · {recipe.cookTime}
+            </Text>
+          )}
         </View>
-        {recipe && (
-          <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
-            {recipe.prepTime} · {recipe.cookTime}
-          </Text>
-        )}
+      </TouchableOpacity>
+      <View style={[s.cardActions, s.cardActionFooter]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={entry.starred ? 'Remove from favourites' : 'Add to favourites'}
+          onPress={onStar}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={entry.starred ? 'star' : 'star-outline'}
+            size={18}
+            color={entry.starred ? colors.warning : colors.textTertiary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Remove from cookbook"
+          onPress={onRemove}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="trash-outline" size={17} color={colors.textTertiary} />
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -390,6 +468,7 @@ function ListRow({
   entry,
   recipe,
   missing,
+  error,
   colors,
   onPress,
   onStar,
@@ -398,51 +477,56 @@ function ListRow({
   entry: CookbookEntry;
   recipe: Recipe | undefined;
   missing: boolean;
+  error: boolean;
   colors: (typeof Colors)['light'];
   onPress: () => void;
   onStar: () => void;
   onRemove: () => void;
 }) {
-  const presentation = getRecipePresentation(recipe, missing);
+  const presentation = getRecipePresentation(recipe, missing, error);
   const initial = recipe?.title?.[0]?.toUpperCase() ?? '…';
 
   return (
-    <TouchableOpacity
-      style={[s.listRow, { backgroundColor: colors.surface }, Shadows.sm]}
-      onPress={onPress}
-      disabled={presentation.status === 'loading'}
-      activeOpacity={0.8}
-    >
-      {recipe?.imageUrl ? (
-        <Image source={{ uri: recipe.imageUrl }} style={s.listAvatar} resizeMode="cover" />
-      ) : (
-        <View style={[s.listAvatar, s.listAvatarFallback, { backgroundColor: colors.primaryLight }]}>
-          {recipe ? (
-            <Text style={[s.listAvatarText, { color: colors.primary }]}>{initial}</Text>
-          ) : missing ? (
-            <Ionicons name="alert-circle-outline" size={22} color={colors.textTertiary} />
-          ) : (
-            <ActivityIndicator size="small" color={colors.primary} />
+    <View style={[s.listRow, { backgroundColor: colors.surface }, Shadows.sm]}>
+      <TouchableOpacity
+        style={s.listPreview}
+        onPress={onPress}
+        disabled={presentation.status === 'loading' || presentation.status === 'unavailable'}
+        activeOpacity={0.8}
+      >
+        {recipe?.imageUrl ? (
+          <Image source={{ uri: recipe.imageUrl }} style={s.listAvatar} resizeMode="cover" />
+        ) : (
+          <View style={[s.listAvatar, s.listAvatarFallback, { backgroundColor: colors.primaryLight }]}>
+            {recipe ? (
+              <Text style={[s.listAvatarText, { color: colors.primary }]}>{initial}</Text>
+            ) : missing ? (
+              <Ionicons name="alert-circle-outline" size={22} color={colors.textTertiary} />
+            ) : error ? (
+              <Ionicons name="refresh-circle-outline" size={22} color={colors.error} />
+            ) : (
+              <ActivityIndicator size="small" color={colors.primary} />
+            )}
+          </View>
+        )}
+        <View style={s.listInfo}>
+          <Text
+            style={[s.cardTitle, { color: presentation.status === 'available' ? colors.text : colors.textTertiary }]}
+            numberOfLines={1}
+          >
+            {presentation.title}
+          </Text>
+          {recipe && (
+            <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
+              {recipe.prepTime} prep · {recipe.cookTime} cook · {recipe.nutrition.calories} kcal
+            </Text>
           )}
         </View>
-      )}
-
-      <View style={s.listInfo}>
-        <Text
-          style={[s.cardTitle, { color: missing ? colors.textTertiary : colors.text }]}
-          numberOfLines={1}
-        >
-          {presentation.title}
-        </Text>
-        {recipe && (
-          <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
-            {recipe.prepTime} prep · {recipe.cookTime} cook · {recipe.nutrition.calories} kcal
-          </Text>
-        )}
-      </View>
-
+      </TouchableOpacity>
       <View style={s.cardActions}>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={entry.starred ? 'Remove from favourites' : 'Add to favourites'}
           onPress={onStar}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
@@ -453,13 +537,15 @@ function ListRow({
           />
         </TouchableOpacity>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Remove from cookbook"
           onPress={onRemove}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Ionicons name="trash-outline" size={19} color={colors.textTertiary} />
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -547,15 +633,13 @@ const s = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   cardBody: { padding: Spacing.md, flex: 1 },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-  },
   cardTitle: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, lineHeight: 18 },
-  cardTitleFlex: { flex: 1 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  cardActionFooter: {
+    justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
   cardMeta: { fontSize: FontSizes.xs, marginTop: Spacing.xs },
 
   // List
@@ -571,6 +655,12 @@ const s = StyleSheet.create({
     gap: Spacing.md,
     padding: Spacing.md,
     borderRadius: Radius.xl,
+  },
+  listPreview: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   listAvatar: {
     width: 44,

@@ -1,10 +1,17 @@
 import { readFileSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  applyRecipeFetchResults,
+  beginRecipeLoads,
+  createRecipeHistoryState,
+  executeOwnedHistoryAction,
   getRecipePresentation,
-  reconcileRecipeAvailability,
+  isCurrentHistorySession,
+  pruneRecipeHistory,
+  recipeIdsToLoad,
+  retryRecipeLoad,
 } from '../services/recipeAvailability';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -41,74 +48,181 @@ describe('catalogue data safety', () => {
 
     expect(service).toMatch(/export async function deleteMealPlanEntry/);
     expect(service).toMatch(/export async function removeFromCookbook/);
-    expect(calendar).toContain('onLongPress={() => handleDelete(entry)}');
-    expect(calendar).toContain('deleteMealPlanEntry(householdId, entry.id!)');
-    expect(cookbook).toContain('removeFromCookbook(householdId, entry.recipeId)');
+    expect(calendar).toContain('onPress={() => handleDelete(entry)}');
+    expect(calendar).toContain('deleteMealPlanEntry(ownerHouseholdId, entry.id!)');
+    expect(cookbook).toContain('removeFromCookbook(ownerHouseholdId, entry.recipeId)');
     expect(cookbook).toContain('onRemove={() => handleRemove(entry)}');
   });
 
-  it('wires distinct loading and unavailable presentation into both history screens', () => {
+  it('wires owned settled loading into both history screens', () => {
     const calendar = read('app/(tabs)/index.tsx');
     const cookbook = read('app/(tabs)/cookbook.tsx');
 
     for (const screen of [calendar, cookbook]) {
-      expect(screen).toContain('reconcileRecipeAvailability');
+      expect(screen).toContain('createRecipeHistoryState');
+      expect(screen).toContain('Promise.allSettled');
+      expect(screen).toContain('isCurrentHistorySession');
+      expect(screen).toContain('executeOwnedHistoryAction');
       expect(screen).toContain('getRecipePresentation');
-      expect(screen).toContain('setMissingRecipeIds');
+      expect(screen).not.toContain('reconcileRecipeAvailability');
     }
 
-    expect(calendar).toContain('getRecipePresentation(recipe, missingRecipeIds.has(entry.recipeId))');
-    expect(calendar).toContain("disabled={presentation.status === 'loading'}");
-    expect(cookbook).toContain('missing={missingRecipeIds.has(entry.recipeId)}');
-    expect(cookbook).toContain("disabled={presentation.status === 'loading'}");
+    expect(calendar).toContain('accessibilityLabel="Remove meal"');
+    expect(calendar).not.toContain('const firstRecipe =');
+    expect(cookbook).toContain('accessibilityLabel="Remove from cookbook"');
+    expect(cookbook).toContain('accessibilityLabel={entry.starred ? \'Remove from favourites\' : \'Add to favourites\'}');
+    expect(cookbook.match(/accessibilityRole="button"/g)?.length).toBeGreaterThanOrEqual(2);
+    for (const screen of [calendar, cookbook]) {
+      expect(
+        screen.match(/executeOwnedHistoryAction\(\s*snapshotHouseholdId,\s*currentHouseholdRef\.current,/g)?.length,
+      ).toBeGreaterThanOrEqual(2);
+    }
   });
 });
 
-describe('recipe availability behavior', () => {
-  it('marks a missing fetch unavailable without changing historical references', () => {
-    const references = [{ id: 'meal-1', recipeId: 'missing-recipe' }];
+describe('recipe history state', () => {
+  it('keeps successful reads when another read rejects', () => {
+    const initial = beginRecipeLoads(
+      createRecipeHistoryState<{ title: string }>('household-a', 4),
+      ['recipe-a', 'recipe-b'],
+    );
+    const request = {
+      householdId: 'household-a',
+      generation: 4,
+      recipeIds: ['recipe-a', 'recipe-b'],
+    };
 
-    const result = reconcileRecipeAvailability(
+    const result = applyRecipeFetchResults(initial, request, [
+      { status: 'fulfilled', value: { title: 'Pasta' } },
+      { status: 'rejected', reason: new Error('temporary') },
+    ]);
+
+    expect(result.recipes).toEqual({ 'recipe-a': { title: 'Pasta' } });
+    expect([...result.errorRecipeIds]).toEqual(['recipe-b']);
+    expect([...result.missingRecipeIds]).toEqual([]);
+    expect([...result.loadedRecipeIds]).toEqual(['recipe-a']);
+  });
+
+  it('marks only a confirmed null read unavailable', () => {
+    const initial = beginRecipeLoads(
+      createRecipeHistoryState<{ title: string }>('household-a', 1),
       ['missing-recipe'],
-      [null],
-      {},
-      new Set<string>(),
+    );
+    const result = applyRecipeFetchResults(
+      initial,
+      { householdId: 'household-a', generation: 1, recipeIds: ['missing-recipe'] },
+      [{ status: 'fulfilled', value: null }],
+    );
+
+    expect([...result.missingRecipeIds]).toEqual(['missing-recipe']);
+    expect([...result.errorRecipeIds]).toEqual([]);
+  });
+
+  it('ignores a late fetch result from an older household generation', () => {
+    const current = createRecipeHistoryState<{ title: string }>('household-b', 8);
+    const result = applyRecipeFetchResults(
+      current,
+      { householdId: 'household-a', generation: 7, recipeIds: ['old-recipe'] },
+      [{ status: 'fulfilled', value: { title: 'Old recipe' } }],
+    );
+
+    expect(result).toBe(current);
+    expect(result.recipes).toEqual({});
+  });
+
+  it('makes a rejected read eligible after an explicit retry', () => {
+    const loading = beginRecipeLoads(
+      createRecipeHistoryState<{ title: string }>('household-a', 1),
+      ['recipe-a'],
+    );
+    const failed = applyRecipeFetchResults(
+      loading,
+      { householdId: 'household-a', generation: 1, recipeIds: ['recipe-a'] },
+      [{ status: 'rejected', reason: new Error('temporary') }],
+    );
+
+    expect(recipeIdsToLoad(['recipe-a'], failed)).toEqual([]);
+    expect(failed.loadedRecipeIds.has('recipe-a')).toBe(false);
+    expect(recipeIdsToLoad(['recipe-a'], retryRecipeLoad(failed, 'recipe-a'))).toEqual(['recipe-a']);
+  });
+
+  it('forgets removed IDs so a remove and re-add fetches again', () => {
+    const loaded = beginRecipeLoads(
+      createRecipeHistoryState<{ title: string }>('household-a', 1),
+      ['recipe-a'],
+    );
+    const pruned = pruneRecipeHistory(loaded, []);
+
+    expect(pruned.loadedRecipeIds.has('recipe-a')).toBe(false);
+    expect(recipeIdsToLoad(['recipe-a'], pruned)).toEqual(['recipe-a']);
+  });
+
+  it('ignores a fetch completion after its reference was removed', () => {
+    const loading = beginRecipeLoads(
+      createRecipeHistoryState<{ title: string }>('household-a', 1),
+      ['recipe-a'],
+    );
+    const pruned = pruneRecipeHistory(loading, []);
+    const result = applyRecipeFetchResults(
+      pruned,
+      { householdId: 'household-a', generation: 1, recipeIds: ['recipe-a'] },
+      [{ status: 'fulfilled', value: { title: 'Late recipe' } }],
     );
 
     expect(result.recipes).toEqual({});
-    expect([...result.missingRecipeIds]).toEqual(['missing-recipe']);
-    expect(references).toEqual([{ id: 'meal-1', recipeId: 'missing-recipe' }]);
+    expect(result.loadedRecipeIds.has('recipe-a')).toBe(false);
   });
 
-  it('records an available fetch and clears an earlier unavailable state', () => {
-    const recipe = { title: 'Tomato pasta' };
-
-    const result = reconcileRecipeAvailability(
-      ['recipe-1'],
-      [recipe],
-      {},
-      new Set(['recipe-1']),
-    );
-
-    expect(result.recipes).toEqual({ 'recipe-1': recipe });
-    expect(result.missingRecipeIds.size).toBe(0);
-  });
-
-  it('returns stable and distinct loading, unavailable, and available presentations', () => {
-    expect(getRecipePresentation(undefined, false)).toEqual({
+  it('distinguishes loading, unavailable, transient error, and available states', () => {
+    expect(getRecipePresentation(undefined, false, false)).toEqual({
       status: 'loading',
       title: 'Loading…',
-      disabled: true,
     });
-    expect(getRecipePresentation(undefined, true)).toEqual({
+    expect(getRecipePresentation(undefined, true, false)).toEqual({
       status: 'unavailable',
       title: 'Recipe unavailable',
-      disabled: true,
     });
-    expect(getRecipePresentation({ title: 'Tomato pasta' }, true)).toEqual({
+    expect(getRecipePresentation(undefined, false, true)).toEqual({
+      status: 'error',
+      title: 'Could not load recipe — tap to retry',
+    });
+    expect(getRecipePresentation({ title: 'Tomato pasta' }, true, true)).toEqual({
       status: 'available',
       title: 'Tomato pasta',
-      disabled: false,
     });
+  });
+});
+
+describe('household history ownership', () => {
+  it('rejects an old row action after the current household changes', async () => {
+    const action = vi.fn(async () => undefined);
+    const onError = vi.fn();
+
+    await expect(
+      executeOwnedHistoryAction('household-a', 'household-b', action, onError),
+    ).resolves.toBe('blocked');
+    expect(action).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reports an owned action failure without leaking a rejection', async () => {
+    const failure = new Error('permission denied');
+    const onError = vi.fn();
+
+    await expect(
+      executeOwnedHistoryAction(
+        'household-a',
+        'household-a',
+        async () => { throw failure; },
+        onError,
+      ),
+    ).resolves.toBe('failed');
+    expect(onError).toHaveBeenCalledWith(failure);
+  });
+
+  it('accepts callbacks only for the active household generation', () => {
+    expect(isCurrentHistorySession('household-a', 3, 'household-a', 3)).toBe(true);
+    expect(isCurrentHistorySession('household-a', 3, 'household-b', 4)).toBe(false);
+    expect(isCurrentHistorySession('household-a', 3, 'household-a', 4)).toBe(false);
   });
 });
