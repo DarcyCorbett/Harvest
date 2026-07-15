@@ -73,7 +73,7 @@
     {
       "id": 9,
       "subject": "Task 9: Secure operator tooling and scans",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [
         8
       ],
@@ -211,7 +211,23 @@
         "Recipe fetches settle independently, distinguish unavailable from transient failure, and use per-recipe load tokens so stale remove/re-add completions are ignored.",
         "Preview and action controls are separate and accessible, and destructive/star failures show user feedback."
       ]
+    },
+    {
+      "taskId": 9,
+      "reason": "Independent quality review found undeclared nested runtime dependencies, non-atomic random-ID cache persistence, unbound AI response identifiers, and scanner symlink false negatives. Live least-privilege IAM verification remains deliberately assigned to Task 10 alongside the one-item schedule smoke test.",
+      "filesAdded": [
+        "functions/src/shared/recipeIdentity.ts",
+        "scripts/lib/taggedRecipePersistence.ts",
+        "tests/taggedRecipePersistence.test.ts"
+      ],
+      "acceptanceCriteriaAdded": [
+        "Operator AI tooling has root-owned runtime dependencies and imports no Firebase Functions implementation modules.",
+        "Tag/cache persistence uses the canonical normalized-source deterministic ID, preflights existing cache records, and atomically commits cache and index state so retries converge without false processed markers.",
+        "Tag and shopping responses must contain exactly one result for every requested identifier and no unrequested identifier.",
+        "Client/export scanning fails closed on symlinked content instead of silently reporting a clean scan.",
+        "Task 10 grants the scheduled identity access only to the Gemini secret and captures a live one-item Secret Manager smoke test before Phase 0 can complete."
+      ]
     }
   ],
-  "lastUpdated": "2026-07-16T00:17:00+03:00"
+  "lastUpdated": "2026-07-16T00:53:25+03:00"
 }
