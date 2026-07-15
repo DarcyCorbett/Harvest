@@ -69,7 +69,11 @@ const forbidden = [
 
 function filesAt(path) {
   const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) return [];
+  if (stat.isSymbolicLink()) {
+    throw new Error(
+      `Symbolic links are not allowed: ${relative(process.cwd(), path)}`,
+    );
+  }
   if (stat.isFile()) return [path];
   if (!stat.isDirectory()) return [];
 
@@ -86,16 +90,22 @@ if (missing.length > 0) {
 }
 
 const findings = [];
-for (const target of targets) {
-  for (const file of filesAt(target)) {
-    if (!textExtensions.has(extname(file).toLowerCase())) continue;
-    const text = readFileSync(file, 'utf8');
-    for (const { label, pattern } of forbidden) {
-      if (pattern.test(text)) {
-        findings.push(`${relative(process.cwd(), file)}: ${label}`);
+try {
+  for (const target of targets) {
+    for (const file of filesAt(target)) {
+      if (!textExtensions.has(extname(file).toLowerCase())) continue;
+      const text = readFileSync(file, 'utf8');
+      for (const { label, pattern } of forbidden) {
+        if (pattern.test(text)) {
+          findings.push(`${relative(process.cwd(), file)}: ${label}`);
+        }
       }
     }
   }
+} catch (error) {
+  const message = error instanceof Error ? error.message : 'Client secret scan failed';
+  console.error(message);
+  process.exit(1);
 }
 
 if (findings.length > 0) {

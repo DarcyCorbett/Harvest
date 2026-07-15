@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -74,6 +75,61 @@ describe('client secret scanner', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Client secret scan clean');
+  });
+
+  it('fails closed on a symbolic-link file', (context) => {
+    const directory = mkdtempSync(join(tmpdir(), 'mealwizard-secret-scan-'));
+    directories.push(directory);
+    const target = join(directory, 'target.js');
+    const link = join(directory, 'linked.js');
+    writeFileSync(target, 'const endpoint = "tagRecipes"');
+    try {
+      symlinkSync(target, link, 'file');
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined;
+      if (code === 'EPERM' || code === 'EACCES' || code === 'UNKNOWN') {
+        context.skip();
+        return;
+      }
+      throw error;
+    }
+
+    const result = spawnSync(process.execPath, [
+      'scripts/scanClientSecrets.mjs',
+      directory,
+    ], { cwd: process.cwd(), encoding: 'utf8' });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Symbolic links are not allowed');
+    expect(result.stderr).toContain('linked.js');
+  });
+
+  it('fails closed on a symbolic-link directory', (context) => {
+    const directory = mkdtempSync(join(tmpdir(), 'mealwizard-secret-scan-'));
+    directories.push(directory);
+    const target = join(directory, 'target');
+    const link = join(directory, 'linked');
+    mkdirSync(target);
+    writeFileSync(join(target, 'bundle.js'), 'const endpoint = "tagRecipes"');
+    try {
+      symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined;
+      if (code === 'EPERM' || code === 'EACCES' || code === 'UNKNOWN') {
+        context.skip();
+        return;
+      }
+      throw error;
+    }
+
+    const result = spawnSync(process.execPath, [
+      'scripts/scanClientSecrets.mjs',
+      directory,
+    ], { cwd: process.cwd(), encoding: 'utf8' });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Symbolic links are not allowed');
+    expect(result.stderr).toContain('linked');
   });
 });
 
@@ -181,6 +237,67 @@ describe('operator Gemini adapter', () => {
       'Gemini tagging response failed validation',
     );
   });
+
+  it.each([
+    ['missing', [{ id: 'recipe-0', tags: ['Dinner'] }]],
+    ['duplicate', [
+      { id: 'recipe-0', tags: ['Dinner'] },
+      { id: 'recipe-0', tags: ['Dinner'] },
+    ]],
+    ['unrelated', [
+      { id: 'recipe-0', tags: ['Dinner'] },
+      { id: 'private-unrelated-recipe', tags: ['Dinner'] },
+    ]],
+  ])('rejects %s tagging response IDs without exposing them', async (_case, results) => {
+    const adapter = createGeminiAdminAdapter({
+      projectId: 'test-project',
+      accessSecretVersion: async () => 'operator-secret',
+      requestJson: async () => ({ results }),
+    });
+
+    const error = await adapter.tagRecipes(recipes.slice(0, 2)).catch((value) => value);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe('Gemini tagging response failed validation');
+    expect(error.message).not.toContain('private-unrelated-recipe');
+  });
+
+  it.each([
+    ['missing', [{ canonicalName: 'onion', category: 'Produce', sourceIds: [0] }]],
+    ['duplicate', [{ canonicalName: 'onion', category: 'Produce', sourceIds: [0, 0] }]],
+    ['unrelated', [{ canonicalName: 'onion', category: 'Produce', sourceIds: [0, 999] }]],
+  ])('rejects %s shopping source IDs without exposing them', async (_case, groups) => {
+    const adapter = createGeminiAdminAdapter({
+      projectId: 'test-project',
+      accessSecretVersion: async () => 'operator-secret',
+      requestJson: async () => groups,
+    });
+
+    const error = await adapter.getShoppingGroups([
+      { id: 0, name: 'private-onion', quantity: 1, unit: '' },
+      { id: 1, name: 'private-garlic', quantity: 1, unit: '' },
+    ]).catch((value) => value);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe('Gemini shopping response failed validation');
+    expect(error.message).not.toContain('private-onion');
+    expect(error.message).not.toContain('private-garlic');
+  });
+
+  it('imports with root-owned runtime dependencies only', () => {
+    const source = readFileSync('scripts/lib/geminiAdmin.ts', 'utf8');
+    expect(source).not.toContain('../../functions/');
+    expect(source).not.toContain('firebase-functions');
+    expect(source).not.toMatch(/from ['"]zod['"]/);
+
+    const result = spawnSync(process.execPath, [
+      'node_modules/tsx/dist/cli.mjs',
+      '-e',
+      'import("./scripts/lib/geminiAdmin.ts").then(() => process.stdout.write("operator-import-ok"))',
+    ], { cwd: process.cwd(), encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('operator-import-ok');
+  });
 });
 
 describe('operator migration guardrails', () => {
@@ -204,6 +321,10 @@ describe('operator migration guardrails', () => {
 
     expect(source).toContain(".where('geminiTaggedAt', '==', null)");
     expect(source).toContain('if (tags === undefined)');
+    expect(source).toContain('reconcileCached');
+    expect(source.indexOf('reconcileCached')).toBeLessThan(
+      source.indexOf('// ── Fetch + parse HTML'),
+    );
   });
 
   it('does not log ingredient names or provider payload details', () => {

@@ -17,6 +17,10 @@ import 'dotenv/config';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tagRecipesWithAdminGemini } from './lib/geminiAdmin';
+import {
+  createTaggedRecipePersistence,
+  type TaggedRecipeTransactionStore,
+} from './lib/taggedRecipePersistence';
 import { fetchRawHtml } from '../services/scraper/http';
 import { parseRecipe } from '../services/scraper/parse';
 import { INDEXED_SITES } from '../services/scraper/sites';
@@ -71,6 +75,7 @@ interface SiteStats {
   cached: number;
   failed: number;
   skippedEmpty: number;
+  skippedCached: number;
   geminiCalls: number;
   durationMs: number;
 }
@@ -103,13 +108,64 @@ function parseMinutesField(s: string | undefined): number | null {
   return null;
 }
 
+function cachedRecipeIndexUpdate(cache: Record<string, unknown>) {
+  const ingredients = Array.isArray(cache.ingredients)
+    ? cache.ingredients.flatMap((ingredient) => {
+        if (
+          typeof ingredient === 'object'
+          && ingredient !== null
+          && 'name' in ingredient
+          && typeof ingredient.name === 'string'
+        ) {
+          return [ingredient.name.toLowerCase()];
+        }
+        return [];
+      })
+    : [];
+  return {
+    title: typeof cache.title === 'string' ? cache.title : '',
+    ingredients,
+    cuisine: typeof cache.cuisine === 'string' ? cache.cuisine : null,
+    prepMinutes: parseMinutesField(
+      typeof cache.prepTime === 'string' ? cache.prepTime : undefined,
+    ),
+    totalMinutes: parseMinutesField(
+      typeof cache.totalTime === 'string' ? cache.totalTime : undefined,
+    ),
+    imageUrl: typeof cache.imageUrl === 'string' ? cache.imageUrl : null,
+    tags: Array.isArray(cache.tags)
+      ? cache.tags.filter((tag): tag is string => typeof tag === 'string')
+      : [],
+  };
+}
+
 async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.Firestore): Promise<SiteStats> {
   const t0 = Date.now();
-  const stats: SiteStats = { tagged: 0, cached: 0, failed: 0, skippedEmpty: 0, geminiCalls: 0, durationMs: 0 };
+  const stats: SiteStats = { tagged: 0, cached: 0, failed: 0, skippedEmpty: 0, skippedCached: 0, geminiCalls: 0, durationMs: 0 };
   const recipesCache = db.collection('recipes');
 
   console.log(`\n[Tagger] ── ${site} ── (limit: ${writeLimit})`);
   const recipesCol = db.collection('recipeIndex').doc(site).collection('recipes');
+  const transactionStore: TaggedRecipeTransactionStore = {
+    runTransaction: (work) => db.runTransaction(async (transaction) => work({
+      async getCache(recipeId) {
+        const snapshot = await transaction.get(recipesCache.doc(recipeId));
+        return snapshot.exists
+          ? (snapshot.data() as Record<string, unknown>)
+          : null;
+      },
+      createCache(recipeId, value) {
+        transaction.create(recipesCache.doc(recipeId), value);
+      },
+      updateIndex(indexId, value) {
+        transaction.update(recipesCol.doc(indexId), value);
+      },
+    })),
+  };
+  const persistence = createTaggedRecipePersistence(transactionStore, {
+    now: () => new Date(),
+    indexUpdateFromCache: cachedRecipeIndexUpdate,
+  });
 
   let processedCount = 0;
 
@@ -122,17 +178,40 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
       .limit(currentBatchSize)
       .get();
 
-    const untagged: IndexEntry[] = untaggedSnap.docs
+    const selected: IndexEntry[] = untaggedSnap.docs
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((d: any) => ({ id: d.id, url: (d.data() as { url?: string }).url ?? '' }))
       .filter((d: IndexEntry) => d.url);
 
-    if (untagged.length === 0) {
+    if (selected.length === 0) {
       console.log(`[Tagger] ${site}: No more untagged URLs — site fully tagged.`);
       break;
     }
 
-    console.log(`[Tagger] ${site}: Batch of ${untagged.length} untagged URL(s)`);
+    console.log(`[Tagger] ${site}: Batch of ${selected.length} untagged URL(s)`);
+
+    // Preflight the deterministic cache before any network scrape. An existing
+    // cache needs one index write; a newly cached recipe later commits two
+    // writes atomically (cache create + index marker).
+    const untagged: IndexEntry[] = [];
+    for (const entry of selected) {
+      try {
+        if (await persistence.reconcileCached(entry.id, entry.url)) {
+          stats.tagged++;
+          stats.skippedCached++;
+        } else {
+          untagged.push(entry);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Cache preflight failed';
+        console.log(`[Tagger] Cache preflight failed — ${message}`);
+        stats.failed++;
+      }
+    }
+    if (untagged.length === 0) {
+      processedCount += selected.length;
+      continue;
+    }
 
     // ── Fetch + parse HTML (with Playwright fallback) ──
     const tFetch = Date.now();
@@ -243,8 +322,7 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
             return;
           }
           try {
-            // 1. Update the index entry with tags + lightweight metadata
-            await recipesCol.doc(v.id).update({
+            const indexUpdate = {
               title: v.recipe.title,
               ingredients: v.recipe.ingredients.map((i) => i.name.toLowerCase()).filter(Boolean),
               cuisine: v.recipe.cuisine ?? null,
@@ -252,12 +330,11 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
               totalMinutes: parseMinutesField(v.recipe.totalTime),
               imageUrl: v.recipe.imageUrl ?? null,
               tags,
-              geminiTaggedAt: new Date(),
-            });
+            };
 
-            // 2. Cache the full recipe in /recipes/ so generation gets
-            //    an immediate hit from getCachedRecipeByUrl — no second
-            //    web fetch needed.
+            // The deterministic cache create and tagged index marker commit in
+            // one transaction. A new recipe costs two writes; a concurrent or
+            // already-cached recipe costs one index write and is not overwritten.
             const recipeDoc = {
               title: v.recipe.title,
               sourceUrl: v.recipe.sourceUrl,
@@ -279,8 +356,12 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
               nutrition: v.recipe.nutrition ?? { calories: 0, protein: 0, carbs: 0, fat: 0 },
               scrapedAt: new Date(),
             };
-            await recipesCache.add(recipeDoc);
-            stats.cached++;
+            const persisted = await persistence.persist(
+              v.id,
+              recipeDoc,
+              indexUpdate,
+            );
+            if (persisted.created) stats.cached++;
 
             stats.tagged++;
           } catch (err) {
@@ -292,13 +373,13 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
       );
     }
 
-    processedCount += untagged.length;
+    processedCount += selected.length;
   }
 
   stats.durationMs = Date.now() - t0;
   console.log(
     `[Tagger] ${site}: Done — tagged=${stats.tagged}, cached=${stats.cached}, failed=${stats.failed}, ` +
-    `skippedEmpty=${stats.skippedEmpty}, geminiCalls=${stats.geminiCalls}, ` +
+    `skippedEmpty=${stats.skippedEmpty}, skippedCached=${stats.skippedCached}, geminiCalls=${stats.geminiCalls}, ` +
     `duration=${(stats.durationMs / 1000).toFixed(1)}s`
   );
   return stats;

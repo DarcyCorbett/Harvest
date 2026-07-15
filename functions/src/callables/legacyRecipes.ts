@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
@@ -8,6 +6,10 @@ import {
   updateLegacyRecipeMetadataRequest,
   type QuotaEndpoint,
 } from '../ai/contracts.js';
+import {
+  deterministicLegacyRecipeId,
+  normalizeLegacySourceUrl,
+} from '../shared/recipeIdentity.js';
 
 const TRUSTED_HOSTS = new Set([
   'www.recipetineats.com',
@@ -55,19 +57,6 @@ export interface LegacyRecipeDocuments {
     recipe: LegacyRecipe,
   ): Promise<{ sourceUrl: unknown }>;
   update(recipeId: string, metadata: LegacyMetadata): Promise<void>;
-}
-
-function normalizeLegacySourceUrl(sourceUrl: string): string {
-  const normalized = new URL(sourceUrl);
-  normalized.hash = '';
-  return normalized.toString();
-}
-
-function deterministicLegacyRecipeId(normalizedSourceUrl: string): string {
-  const digest = createHash('sha256')
-    .update(normalizedSourceUrl, 'utf8')
-    .digest('hex');
-  return `legacy_${digest}`;
 }
 
 export function createLegacyRecipeStore(

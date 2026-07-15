@@ -45,7 +45,8 @@ $env:GOOGLE_CLOUD_PROJECT = 'meal-wizard-ad202'
 # Conservative daily allocation: 12,000 discovery + 4,000 tag/cache = 16,000
 # worst-case writes. This leaves at least 2,000 writes below the approved
 # 18,000 ingestion ceiling. The tagger visits four sites and performs at most
-# two writes per successful recipe (500 x 4 x 2).
+# two writes per newly cached recipe (500 x 4 x 2). An already-cached recipe
+# consumes only the one index-marker write and is never rewritten.
 $DailyWriteCeiling = 18000
 $DiscoveryWriteLimit = 12000
 $TagLimitPerSite = 500
