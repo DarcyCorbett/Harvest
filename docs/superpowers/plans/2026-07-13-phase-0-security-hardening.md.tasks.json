@@ -37,7 +37,7 @@
     {
       "id": 5,
       "subject": "Task 5: Move household membership mutations server-side",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         4
       ],
@@ -160,7 +160,25 @@
         "Task 4 finishes with root tests, lint, and TypeScript checks all exiting zero.",
         "The working scheduled tagger is preserved through a script-only temporary adapter and no operator script imports a mobile callable adapter."
       ]
+    },
+    {
+      "taskId": 5,
+      "reason": "Independent quality review found that permissive Firestore rules still allowed clients to bypass the new household callables, and that cleanup failures could mask onboarding results or leave local state busy.",
+      "filesAdded": [
+        "app/register.tsx",
+        "app/login.tsx",
+        "firestore.rules",
+        "tests/firestore.rules.test.ts",
+        "package.json",
+        "package-lock.json",
+        ".gitignore"
+      ],
+      "acceptanceCriteriaAdded": [
+        "Household documents, user profiles, and invite reservations are backend-write-only and verified by the local Firestore emulator.",
+        "Invalid invites preserve the Auth account and pending intent so the user can safely correct the invite through registration.",
+        "Firebase sign-out failures do not mask actionable onboarding results or prevent local auth and busy-state cleanup."
+      ]
     }
   ],
-  "lastUpdated": "2026-07-14T22:33:42+03:00"
+  "lastUpdated": "2026-07-15T22:39:00+03:00"
 }

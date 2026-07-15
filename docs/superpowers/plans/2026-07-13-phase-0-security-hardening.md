@@ -1554,15 +1554,22 @@ git commit -m "refactor: route mobile AI through callables"
 - Modify: `app/register.tsx`
 - Modify: `app/login.tsx`
 - Modify: `services/firestoreService.ts`
+- Modify: `firestore.rules`
+- Create: `tests/firestore.rules.test.ts`
+- Modify: `package.json`
+- Modify: `package-lock.json`
+- Modify: `.gitignore`
 
 **Acceptance Criteria:**
 - [ ] Create, join, and switch require an authenticated, allowlisted identity with `email_verified === true`.
 - [ ] Join/switch accept only an exact normalized invite code and atomically update both household members and `users/{uid}.householdId`.
 - [ ] The mobile app performs no household collection query or membership-array write.
-- [ ] Invalid invites preserve the existing user-facing registration cleanup/error behavior.
+- [ ] Invalid invites preserve the Auth account and pending intent so the user can safely return to registration and correct the invite.
 - [ ] Google first sign-in creates the profile and household through the backend.
 - [ ] Password registration sends a Firebase verification email and cannot create/join a household until a refreshed verified token is present; unverified sessions are signed out with a stable, actionable message.
 - [ ] After verification, password users can resume their intended create-or-join onboarding without bypassing the allowlist or verified backend guard.
+- [ ] Household documents, user profiles, and invite reservations are backend-write-only and covered by local Firestore emulator tests.
+- [ ] Firebase sign-out failures cannot mask the original onboarding result or leave local auth/busy state uncleared.
 
 **Verify:** `npm --prefix functions test -- households.test.ts && npm test -- householdClient.test.ts && npx tsc --noEmit` → all tests pass and TypeScript exits 0.
 
@@ -2406,6 +2413,8 @@ git commit -m "feat: protect legacy recipe writes"
 
 **Goal:** Prove that clients cannot list households, mutate membership, write/delete global recipes or the legacy index, or access another household's data.
 
+**Pulled forward in Task 5:** Emulator support and the household, profile, invite-reservation, and allowlist rules matrix are already implemented and passing. Task 7 must retain those cases and expand the matrix for recipe/index writes plus non-member household subcollection access.
+
 **Files:**
 - Modify: `firestore.rules`
 - Create: `tests/firestore.rules.test.ts`
@@ -2435,7 +2444,7 @@ Add to root `package.json`:
     "test:rules": "firebase emulators:exec --only firestore \"npm run test:rules:vitest\""
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^4.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "firebase-tools": "^14.9.0"
   }
 }
