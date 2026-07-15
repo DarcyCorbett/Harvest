@@ -90,6 +90,12 @@ describe('Firestore household security boundary', () => {
     await assertFails(getDoc(doc(database, 'households/household-1')));
   });
 
+  it('rejects unauthenticated household document reads', async () => {
+    const database = environment.unauthenticatedContext().firestore();
+
+    await assertFails(getDoc(doc(database, 'households/household-1')));
+  });
+
   it.each(HOUSEHOLD_SUBCOLLECTIONS)(
     'allows members to read and write the %s subcollection',
     async (subcollection) => {
@@ -150,6 +156,12 @@ describe('Firestore household security boundary', () => {
       members: ['member-1', 'outsider-1'],
     }));
     await assertFails(deleteDoc(doc(database, 'households/household-1')));
+  });
+
+  it('rejects unauthenticated household listing', async () => {
+    const database = environment.unauthenticatedContext().firestore();
+
+    await assertFails(getDocs(collection(database, 'households')));
   });
 
   it('allows an owner to get their profile but rejects all client profile writes', async () => {
