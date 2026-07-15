@@ -31,6 +31,10 @@ import {
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, MealPlanEntry, Recipe, MealType } from '@/services/types';
+import {
+  getRecipePresentation,
+  reconcileRecipeAvailability,
+} from '@/services/recipeAvailability';
 
 // ─── Layout constants ─────────────────────────────────────────
 
@@ -124,6 +128,7 @@ export default function CalendarScreen() {
 
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
+  const [missingRecipeIds, setMissingRecipeIds] = useState<Set<string>>(new Set());
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
   const [previewEntry, setPreviewEntry] = useState<{
@@ -152,8 +157,6 @@ export default function CalendarScreen() {
   }, [householdId]);
 
   // ── Lazy recipe loading ──
-  // Also self-heals orphaned meal plan entries whose recipe was deleted
-  // (e.g. after "Clear Recipe Cache" in Settings).
   useEffect(() => {
     const toLoad = [...new Set(entries.map((e) => e.recipeId))].filter(
       (id) => !loadedIdsRef.current.has(id)
@@ -161,28 +164,14 @@ export default function CalendarScreen() {
     if (!toLoad.length) return;
     toLoad.forEach((id) => loadedIdsRef.current.add(id));
     Promise.all(toLoad.map(getRecipe)).then((fetched) => {
-      const missingIds = new Set<string>();
-      setRecipes((prev) => {
-        const next = { ...prev };
-        fetched.forEach((r, i) => {
-          if (r) next[toLoad[i]] = r;
-          else missingIds.add(toLoad[i]);
-        });
-        return next;
-      });
-      if (missingIds.size && householdId) {
-        const orphans = entries.filter((e) => e.id && missingIds.has(e.recipeId));
-        if (orphans.length) {
-          console.log(`[Home] Self-healing ${orphans.length} orphan meal plan entries`);
-          orphans.forEach((e) =>
-            deleteMealPlanEntry(householdId, e.id!).catch((err) =>
-              console.warn(`[Home] Failed to remove orphan ${e.id}:`, err)
-            )
-          );
-        }
-      }
+      setRecipes((previous) =>
+        reconcileRecipeAvailability(toLoad, fetched, previous, new Set()).recipes
+      );
+      setMissingRecipeIds((previous) =>
+        reconcileRecipeAvailability<Recipe>(toLoad, fetched, {}, previous).missingRecipeIds
+      );
     });
-  }, [entries, householdId]);
+  }, [entries]);
 
   const forDate = useCallback(
     (dateStr: string) =>
@@ -377,6 +366,7 @@ export default function CalendarScreen() {
                     <View style={s.cardMeals}>
                       {dayEntries.map((entry) => {
                         const recipe = recipes[entry.recipeId];
+                        const presentation = getRecipePresentation(recipe, missingRecipeIds.has(entry.recipeId));
                         const { bg, fg } = mealBadge(entry.mealType, colors);
                         return (
                           <TouchableOpacity
@@ -393,6 +383,7 @@ export default function CalendarScreen() {
                               });
                             }}
                             onLongPress={() => handleDelete(entry)}
+                            disabled={presentation.status === 'loading'}
                             activeOpacity={0.7}
                           >
                             <View style={[s.mealBadge, { backgroundColor: bg }]}>
@@ -400,9 +391,18 @@ export default function CalendarScreen() {
                                 {MEAL_LABELS[entry.mealType]}
                               </Text>
                             </View>
+                            {presentation.status === 'unavailable' && (
+                              <Ionicons name="alert-circle-outline" size={18} color={colors.textTertiary} />
+                            )}
                             <View style={s.cardMealInfo}>
-                              <Text style={[s.cardMealTitle, { color: colors.text }]} numberOfLines={2}>
-                                {recipe?.title ?? '…'}
+                              <Text
+                                style={[
+                                  s.cardMealTitle,
+                                  { color: presentation.status === 'unavailable' ? colors.textTertiary : colors.text },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {presentation.title}
                               </Text>
                               {recipe && (
                                 <View style={s.cardMealMetaRow}>
@@ -523,12 +523,13 @@ export default function CalendarScreen() {
                         {day.getDate()}
                       </Text>
                       {shown.map((entry, idx) => {
-                        const title = recipes[entry.recipeId]?.title ?? '…';
+                        const recipe = recipes[entry.recipeId];
+                        const presentation = getRecipePresentation(recipe, missingRecipeIds.has(entry.recipeId));
                         const { bg, fg } = mealBadge(entry.mealType, colors);
                         return (
                           <View key={idx} style={[s.gridMealPill, { backgroundColor: bg }]}>
                             <Text style={[s.gridMealText, { color: fg }]} numberOfLines={1}>
-                              {abbreviateTitle(title)}
+                              {abbreviateTitle(presentation.title)}
                             </Text>
                           </View>
                         );

@@ -8,7 +8,6 @@ import { FontSizes, Fonts, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import TimePickerModal from './TimePickerModal';
 import {
-  clearAllCachedRecipes,
   getHouseholdSettings,
   saveHouseholdSettings,
 } from '@/services/firestoreService';
@@ -609,40 +608,6 @@ export default function SettingsModal({
 
             <View style={styles.divider} />
 
-            {/* ── Cache ── */}
-            <Text style={styles.sectionTitle}>Cache</Text>
-            <Text style={styles.sectionHint}>
-              Recipes are cached after first scrape. Clear the cache to force fresh scrapes on the next generation.
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  'Clear Recipe Cache',
-                  'Delete all cached recipes so they are re-scraped on next generation. Continue?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Clear',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          const count = await clearAllCachedRecipes();
-                          Alert.alert('Cache Cleared', `${count} cached recipe${count !== 1 ? 's' : ''} deleted.`);
-                        } catch {
-                          Alert.alert('Error', 'Failed to clear cache.');
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              activeOpacity={0.7}
-              style={styles.clearCacheBtn}
-            >
-              <Ionicons name="trash-outline" size={16} color={colors.error} />
-              <Text style={styles.clearCacheText}>Clear Recipe Cache</Text>
-            </TouchableOpacity>
-
             {/* Hidden debug-log opener — tap 5x */}
             <TouchableOpacity
               onPress={onVersionTap}
@@ -772,24 +737,6 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     height: 1,
     backgroundColor: colors.border,
     marginVertical: Spacing.xl,
-  },
-
-  // Cache section
-  clearCacheBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  clearCacheText: {
-    fontSize: FontSizes.sm,
-    fontFamily: Fonts.medium,
-    color: colors.error,
   },
 
   // Source rows

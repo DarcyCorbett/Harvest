@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
 } from 'react-native';
@@ -30,6 +31,10 @@ import {
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, Recipe } from '@/services/types';
+import {
+  getRecipePresentation,
+  reconcileRecipeAvailability,
+} from '@/services/recipeAvailability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING = Spacing.xl;
@@ -47,6 +52,7 @@ export default function CookbookScreen() {
 
   const [entries, setEntries] = useState<CookbookEntry[]>([]);
   const [recipes, setRecipes] = useState<Record<string, Recipe>>({});
+  const [missingRecipeIds, setMissingRecipeIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
@@ -73,28 +79,14 @@ export default function CookbookScreen() {
     if (!toLoad.length) return;
     toLoad.forEach((id) => loadedIdsRef.current.add(id));
     Promise.all(toLoad.map(getRecipe)).then((fetched) => {
-      const missingIds: string[] = [];
-      setRecipes((prev) => {
-        const next = { ...prev };
-        fetched.forEach((r, i) => {
-          if (r) next[toLoad[i]] = r;
-          else missingIds.push(toLoad[i]);
-        });
-        return next;
-      });
-      // Self-heal orphan cookbook entries whose recipe no longer exists
-      // (typically after "Clear Recipe Cache"). The real-time cookbook
-      // listener will drop the entry from `entries` once the delete commits.
-      if (missingIds.length && householdId) {
-        console.log(`[Cookbook] Self-healing ${missingIds.length} orphan entries`);
-        missingIds.forEach((id) =>
-          removeFromCookbook(householdId, id).catch((err) =>
-            console.warn(`[Cookbook] Failed to remove orphan ${id}:`, err)
-          )
-        );
-      }
+      setRecipes((previous) =>
+        reconcileRecipeAvailability(toLoad, fetched, previous, new Set()).recipes
+      );
+      setMissingRecipeIds((previous) =>
+        reconcileRecipeAvailability<Recipe>(toLoad, fetched, {}, previous).missingRecipeIds
+      );
     });
-  }, [entries, householdId]);
+  }, [entries]);
 
   // ── Filtered + sorted list ──
   const filtered = useMemo(() => {
@@ -113,6 +105,22 @@ export default function CookbookScreen() {
       toggleStarred(householdId, entry.recipeId, !entry.starred);
     },
     [householdId]
+  );
+
+  const handleRemove = useCallback(
+    (entry: CookbookEntry) => {
+      if (!householdId) return;
+      const title = recipes[entry.recipeId]?.title ?? 'this recipe';
+      Alert.alert('Remove recipe', `Remove "${title}" from your cookbook?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => removeFromCookbook(householdId, entry.recipeId),
+        },
+      ]);
+    },
+    [householdId, recipes]
   );
 
   if (loading) {
@@ -242,17 +250,21 @@ export default function CookbookScreen() {
               <GridCard
                 entry={entry}
                 recipe={recipe}
+                missing={missingRecipeIds.has(entry.recipeId)}
                 colors={colors}
                 onPress={() => recipe && setPreviewRecipe(recipe)}
                 onStar={() => handleStarToggle(entry)}
+                onRemove={() => handleRemove(entry)}
               />
             ) : (
               <ListRow
                 entry={entry}
                 recipe={recipe}
+                missing={missingRecipeIds.has(entry.recipeId)}
                 colors={colors}
                 onPress={() => recipe && setPreviewRecipe(recipe)}
                 onStar={() => handleStarToggle(entry)}
+                onRemove={() => handleRemove(entry)}
               />
             );
           }}
@@ -286,16 +298,21 @@ export default function CookbookScreen() {
 function GridCard({
   entry,
   recipe,
+  missing,
   colors,
   onPress,
   onStar,
+  onRemove,
 }: {
   entry: CookbookEntry;
   recipe: Recipe | undefined;
+  missing: boolean;
   colors: (typeof Colors)['light'];
   onPress: () => void;
   onStar: () => void;
+  onRemove: () => void;
 }) {
+  const presentation = getRecipePresentation(recipe, missing);
   const initials = recipe?.title
     ? recipe.title
         .split(' ')
@@ -308,6 +325,7 @@ function GridCard({
     <TouchableOpacity
       style={[s.gridCard, { backgroundColor: colors.surface, width: GRID_CARD_WIDTH }, Shadows.sm]}
       onPress={onPress}
+      disabled={presentation.status === 'loading'}
       activeOpacity={0.8}
     >
       {/* Top-half image (falls back to initials when no imageUrl) */}
@@ -317,6 +335,8 @@ function GridCard({
         <View style={[s.cardImage, s.cardImageFallback, { backgroundColor: colors.primaryLight }]}>
           {recipe ? (
             <Text style={[s.avatarText, { color: colors.primary }]}>{initials}</Text>
+          ) : missing ? (
+            <Ionicons name="alert-circle-outline" size={24} color={colors.textTertiary} />
           ) : (
             <ActivityIndicator size="small" color={colors.primary} />
           )}
@@ -325,19 +345,34 @@ function GridCard({
 
       <View style={s.cardBody}>
         <View style={s.cardTitleRow}>
-          <Text style={[s.cardTitle, s.cardTitleFlex, { color: colors.text }]} numberOfLines={2}>
-            {recipe?.title ?? 'Loading…'}
-          </Text>
-          <TouchableOpacity
-            onPress={onStar}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          <Text
+            style={[
+              s.cardTitle,
+              s.cardTitleFlex,
+              { color: missing ? colors.textTertiary : colors.text },
+            ]}
+            numberOfLines={2}
           >
-            <Ionicons
-              name={entry.starred ? 'star' : 'star-outline'}
-              size={18}
-              color={entry.starred ? colors.warning : colors.textTertiary}
-            />
-          </TouchableOpacity>
+            {presentation.title}
+          </Text>
+          <View style={s.cardActions}>
+            <TouchableOpacity
+              onPress={onStar}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={entry.starred ? 'star' : 'star-outline'}
+                size={18}
+                color={entry.starred ? colors.warning : colors.textTertiary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onRemove}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="trash-outline" size={17} color={colors.textTertiary} />
+            </TouchableOpacity>
+          </View>
         </View>
         {recipe && (
           <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
@@ -354,22 +389,28 @@ function GridCard({
 function ListRow({
   entry,
   recipe,
+  missing,
   colors,
   onPress,
   onStar,
+  onRemove,
 }: {
   entry: CookbookEntry;
   recipe: Recipe | undefined;
+  missing: boolean;
   colors: (typeof Colors)['light'];
   onPress: () => void;
   onStar: () => void;
+  onRemove: () => void;
 }) {
+  const presentation = getRecipePresentation(recipe, missing);
   const initial = recipe?.title?.[0]?.toUpperCase() ?? '…';
 
   return (
     <TouchableOpacity
       style={[s.listRow, { backgroundColor: colors.surface }, Shadows.sm]}
       onPress={onPress}
+      disabled={presentation.status === 'loading'}
       activeOpacity={0.8}
     >
       {recipe?.imageUrl ? (
@@ -378,6 +419,8 @@ function ListRow({
         <View style={[s.listAvatar, s.listAvatarFallback, { backgroundColor: colors.primaryLight }]}>
           {recipe ? (
             <Text style={[s.listAvatarText, { color: colors.primary }]}>{initial}</Text>
+          ) : missing ? (
+            <Ionicons name="alert-circle-outline" size={22} color={colors.textTertiary} />
           ) : (
             <ActivityIndicator size="small" color={colors.primary} />
           )}
@@ -385,8 +428,11 @@ function ListRow({
       )}
 
       <View style={s.listInfo}>
-        <Text style={[s.cardTitle, { color: colors.text }]} numberOfLines={1}>
-          {recipe?.title ?? 'Loading…'}
+        <Text
+          style={[s.cardTitle, { color: missing ? colors.textTertiary : colors.text }]}
+          numberOfLines={1}
+        >
+          {presentation.title}
         </Text>
         {recipe && (
           <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
@@ -395,16 +441,24 @@ function ListRow({
         )}
       </View>
 
-      <TouchableOpacity
-        onPress={onStar}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons
-          name={entry.starred ? 'star' : 'star-outline'}
-          size={20}
-          color={entry.starred ? colors.warning : colors.textTertiary}
-        />
-      </TouchableOpacity>
+      <View style={s.cardActions}>
+        <TouchableOpacity
+          onPress={onStar}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons
+            name={entry.starred ? 'star' : 'star-outline'}
+            size={20}
+            color={entry.starred ? colors.warning : colors.textTertiary}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onRemove}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="trash-outline" size={19} color={colors.textTertiary} />
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -501,6 +555,7 @@ const s = StyleSheet.create({
   },
   cardTitle: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, lineHeight: 18 },
   cardTitleFlex: { flex: 1 },
+  cardActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   cardMeta: { fontSize: FontSizes.xs, marginTop: Spacing.xs },
 
   // List

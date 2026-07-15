@@ -202,31 +202,6 @@ export async function updateRecipeTags(
 
 // ─── Recipe Cache Operations ────────────────────────────────
 
-/**
- * Delete ALL documents in the root recipes collection.
- * Use to force a full re-scrape after a parsing code update.
- * Batches deletes in groups of 400 to stay within Firestore write limits.
- * Returns the number of documents deleted.
- *
- * IMPORTANT: This must NEVER touch /recipeIndex/. The discovery index
- * (built by scripts/buildRecipeIndex.ts and lazily tagged at generation
- * time by services/scraper/recipeIndex.ts) is permanent infrastructure
- * — wiping it would force a fresh sitemap walk + a re-tag of every
- * indexed recipe. Only the user-visible recipe cache is cleared here.
- */
-export async function clearAllCachedRecipes(): Promise<number> {
-  const snapshot = await getDocs(collection(db, 'recipes'));
-  const BATCH_SIZE = 400;
-  let count = 0;
-  for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    snapshot.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-    count += Math.min(BATCH_SIZE, snapshot.docs.length - i);
-  }
-  return count;
-}
-
 // ─── Meal Plan Operations ──────────────────────────────────
 
 /** Add a meal plan entry */
