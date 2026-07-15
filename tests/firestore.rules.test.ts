@@ -18,6 +18,14 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 const PROJECT_ID = 'demo-meal-wizard-rules';
+const HOUSEHOLD_SUBCOLLECTIONS = [
+  'mealPlan',
+  'shoppingList',
+  'cookbook',
+  'settings',
+  'generationResult',
+  'state',
+] as const;
 
 describe('Firestore household security boundary', () => {
   let environment: RulesTestEnvironment;
@@ -49,6 +57,16 @@ describe('Firestore household security boundary', () => {
       await setDoc(doc(database, 'allowlist/member@example.com'), {
         active: true,
       });
+      await Promise.all(HOUSEHOLD_SUBCOLLECTIONS.map((subcollection) => setDoc(
+        doc(database, `households/household-1/${subcollection}/existing`),
+        { value: subcollection },
+      )));
+      await setDoc(doc(database, 'recipes/recipe-1'), {
+        title: 'Soup',
+      });
+      await setDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1'), {
+        url: 'https://example.com/recipe-1',
+      });
     });
   });
 
@@ -71,6 +89,54 @@ describe('Firestore household security boundary', () => {
 
     await assertFails(getDoc(doc(database, 'households/household-1')));
   });
+
+  it.each(HOUSEHOLD_SUBCOLLECTIONS)(
+    'allows members to read and write the %s subcollection',
+    async (subcollection) => {
+      const database = environment.authenticatedContext('member-1').firestore();
+
+      await assertSucceeds(getDoc(doc(
+        database,
+        `households/household-1/${subcollection}/existing`,
+      )));
+      await assertSucceeds(setDoc(doc(
+        database,
+        `households/household-1/${subcollection}/new`,
+      ), { value: 'member-write' }));
+    },
+  );
+
+  it.each(HOUSEHOLD_SUBCOLLECTIONS)(
+    'rejects non-member reads and writes in the %s subcollection',
+    async (subcollection) => {
+      const database = environment.authenticatedContext('outsider-1').firestore();
+
+      await assertFails(getDoc(doc(
+        database,
+        `households/household-1/${subcollection}/existing`,
+      )));
+      await assertFails(setDoc(doc(
+        database,
+        `households/household-1/${subcollection}/new`,
+      ), { value: 'outsider-write' }));
+    },
+  );
+
+  it.each(HOUSEHOLD_SUBCOLLECTIONS)(
+    'rejects unauthenticated reads and writes in the %s subcollection',
+    async (subcollection) => {
+      const database = environment.unauthenticatedContext().firestore();
+
+      await assertFails(getDoc(doc(
+        database,
+        `households/household-1/${subcollection}/existing`,
+      )));
+      await assertFails(setDoc(doc(
+        database,
+        `households/household-1/${subcollection}/new`,
+      ), { value: 'anonymous-write' }));
+    },
+  );
 
   it('rejects all client household list and document mutations', async () => {
     const database = environment.authenticatedContext('member-1').firestore();
@@ -117,5 +183,36 @@ describe('Firestore household security boundary', () => {
     await assertFails(setDoc(doc(anonymousDatabase, 'allowlist/new@example.com'), {
       active: true,
     }));
+  });
+
+  it('allows authenticated recipe reads but rejects all recipe mutations', async () => {
+    const database = environment.authenticatedContext('member-1').firestore();
+
+    await assertSucceeds(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertFails(setDoc(doc(database, 'recipes/recipe-2'), { title: 'New' }));
+    await assertFails(updateDoc(doc(database, 'recipes/recipe-1'), { title: 'Changed' }));
+    await assertFails(deleteDoc(doc(database, 'recipes/recipe-1')));
+  });
+
+  it('allows authenticated recipe-index reads but rejects all index mutations', async () => {
+    const database = environment.authenticatedContext('member-1').firestore();
+
+    await assertSucceeds(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
+    await assertFails(setDoc(
+      doc(database, 'recipeIndex/site-1/recipes/recipe-2'),
+      { url: 'https://example.com/recipe-2' },
+    ));
+    await assertFails(updateDoc(
+      doc(database, 'recipeIndex/site-1/recipes/recipe-1'),
+      { url: 'https://example.com/changed' },
+    ));
+    await assertFails(deleteDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
+  });
+
+  it('rejects unauthenticated reads of recipes and the recipe index', async () => {
+    const database = environment.unauthenticatedContext().firestore();
+
+    await assertFails(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertFails(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
   });
 });

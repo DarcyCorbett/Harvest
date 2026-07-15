@@ -50,15 +50,17 @@ service cloud.firestore {
     }
 
     // ─── Recipes (Global Cache) ──────────────────────────
-    // Any authenticated user can read/write recipes
+    // Authenticated clients can read recipes. Server callables own all writes.
     match /recipes/{recipeId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
     }
 
     // ─── Recipe Discovery Index ──────────────────────────
-    // Authenticated users can read/write the lazy-tagged recipe index pool
+    // Authenticated clients can read the legacy index. Server callables own all writes.
     match /recipeIndex/{site}/recipes/{recipeId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
     }
 
     // ─── Allowlist (pre-auth read for email gating) ──────
