@@ -153,6 +153,7 @@ describe('createHouseholdHandlers', () => {
 
 function mutationStore(overrides: Partial<HouseholdMutationStore> = {}): HouseholdMutationStore {
   return {
+    getExisting: vi.fn(async () => null),
     findExactInvite: vi.fn(async () => []),
     createAtomic: vi.fn(async (_uid, _email, inviteCode) => ({
       status: 'created' as const,
@@ -207,15 +208,15 @@ describe('createHouseholdMutations', () => {
 
   it('returns an existing mutually consistent household idempotently', async () => {
     const store = mutationStore({
-      createAtomic: vi.fn(async () => ({
-        status: 'existing' as const,
+      getExisting: vi.fn(async () => ({
         householdId: 'existing-household',
         inviteCode: 'MNP789',
       })),
     });
+    const generate = vi.fn(() => 'ABC234');
 
     await expect(
-      createHouseholdMutations(store, () => 'ABC234').create(
+      createHouseholdMutations(store, generate).create(
         'user-1',
         'member@example.com',
       ),
@@ -223,6 +224,9 @@ describe('createHouseholdMutations', () => {
       householdId: 'existing-household',
       inviteCode: 'MNP789',
     });
+    expect(generate).not.toHaveBeenCalled();
+    expect(store.findExactInvite).not.toHaveBeenCalled();
+    expect(store.createAtomic).not.toHaveBeenCalled();
   });
 
   it('fails closed after bounded invite collision attempts', async () => {
@@ -325,9 +329,15 @@ describe('createFirestoreHouseholdStore', () => {
     expect(limit).toHaveBeenCalledWith(2);
   });
 
-  it('uses the collision-safe invite reservation without listing households', async () => {
-    const queryGet = vi.fn();
-    const where = vi.fn(() => ({ limit: vi.fn(() => ({ get: queryGet })) }));
+  it('combines the reservation and exact legacy matches to fail closed on ambiguity', async () => {
+    const queryGet = vi.fn(async () => ({
+      docs: [
+        { id: 'household-1' },
+        { id: 'legacy-duplicate' },
+      ],
+    }));
+    const limit = vi.fn(() => ({ get: queryGet }));
+    const where = vi.fn(() => ({ limit }));
     const db = {
       collection: vi.fn((name: string) => {
         if (name === 'householdInvites') {
@@ -347,9 +357,10 @@ describe('createFirestoreHouseholdStore', () => {
 
     await expect(
       createFirestoreHouseholdStore(db as never).findExactInvite('ABC234'),
-    ).resolves.toEqual(['household-1']);
-    expect(where).not.toHaveBeenCalled();
-    expect(queryGet).not.toHaveBeenCalled();
+    ).resolves.toEqual(['household-1', 'legacy-duplicate']);
+    expect(where).toHaveBeenCalledWith('inviteCode', '==', 'ABC234');
+    expect(limit).toHaveBeenCalledWith(2);
+    expect(queryGet).toHaveBeenCalledOnce();
   });
 
   it('creates the household, invite reservation, and profile in one transaction', async () => {

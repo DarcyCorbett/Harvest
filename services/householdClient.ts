@@ -56,6 +56,7 @@ interface PasswordHouseholds {
 
 export interface PasswordOnboardingDependencies {
   isEmailAllowed(email: string): Promise<boolean>;
+  hasUserProfile(uid: string): Promise<boolean>;
   createUser(email: string, password: string): Promise<PasswordOnboardingUser>;
   signIn(email: string, password: string): Promise<PasswordOnboardingUser>;
   sendVerification(user: PasswordOnboardingUser): Promise<void>;
@@ -231,6 +232,11 @@ export function createPasswordOnboarding(
           || pending.uid !== user.uid
           || pending.email !== authenticatedEmail
         ) {
+          return { user, household: null };
+        }
+
+        if (await dependencies.hasUserProfile(user.uid)) {
+          await dependencies.pendingIntents.clear();
           return { user, household: null };
         }
 

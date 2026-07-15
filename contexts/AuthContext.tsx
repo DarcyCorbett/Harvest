@@ -56,6 +56,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const passwordOnboarding = createPasswordOnboarding({
   isEmailAllowed,
+  async hasUserProfile(uid) {
+    return (await getUserProfile(uid)) !== null;
+  },
   async createUser(email, password) {
     return (await createUserWithEmailAndPassword(auth, email, password)).user;
   },

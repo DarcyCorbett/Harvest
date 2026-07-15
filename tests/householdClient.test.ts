@@ -134,6 +134,7 @@ function onboardingDependencies(
   const user = onboardingUser();
   return {
     isEmailAllowed: vi.fn(async () => true),
+    hasUserProfile: vi.fn(async () => false),
     createUser: vi.fn(async () => user),
     signIn: vi.fn(async () => user),
     sendVerification: vi.fn(async () => undefined),
@@ -391,6 +392,39 @@ describe('createPasswordOnboarding login and resume', () => {
     ).rejects.toBe(failure);
     expect(store.clear).not.toHaveBeenCalled();
     expect(user.delete).not.toHaveBeenCalled();
+  });
+
+  it('clears a matching stale intent without mutation or deletion when a profile exists', async () => {
+    const user = onboardingUser({ emailVerified: true });
+    const store = pendingStore({
+      version: 1,
+      uid: 'new-user',
+      email: 'member@example.com',
+      action: 'join',
+      inviteCode: 'bad234',
+    });
+    const dependencies = onboardingDependencies({
+      signIn: vi.fn(async () => user),
+      hasUserProfile: vi.fn(async () => true),
+      pendingIntents: store,
+      households: {
+        create: vi.fn(),
+        join: vi.fn(),
+        switch: vi.fn(),
+      },
+    });
+
+    await expect(
+      createPasswordOnboarding(dependencies).login(
+        'member@example.com',
+        'private-password',
+      ),
+    ).resolves.toEqual({ user, household: null });
+    expect(dependencies.hasUserProfile).toHaveBeenCalledWith('new-user');
+    expect(dependencies.households.join).not.toHaveBeenCalled();
+    expect(dependencies.households.create).not.toHaveBeenCalled();
+    expect(user.delete).not.toHaveBeenCalled();
+    expect(store.clear).toHaveBeenCalledOnce();
   });
 });
 

@@ -31,6 +31,10 @@ export type AtomicCreateResult = {
 };
 
 export interface HouseholdMutationStore {
+  getExisting(uid: string, email: string): Promise<{
+    householdId: string;
+    inviteCode: string;
+  } | null>;
   findExactInvite(inviteCode: string): Promise<string[]>;
   createAtomic(
     uid: string,
@@ -61,6 +65,9 @@ export function createHouseholdMutations(
 ): HouseholdMutations {
   return {
     async create(uid, email) {
+      const existingHousehold = await store.getExisting(uid, email);
+      if (existingHousehold) return existingHousehold;
+
       for (let attempt = 0; attempt < maxCreateAttempts; attempt += 1) {
         const inviteCode = normalizeInviteCode(generateInviteCode());
         if (!inviteCode) continue;
@@ -103,24 +110,64 @@ export function createFirestoreHouseholdStore(
   db: Firestore = getFirestore(),
 ): HouseholdMutationStore {
   return {
+    async getExisting(uid, email) {
+      const userRef = db.collection('users').doc(uid);
+      return db.runTransaction(async (transaction) => {
+        const userSnapshot = await transaction.get(userRef);
+        if (!userSnapshot.exists) return null;
+
+        const householdId: unknown = userSnapshot.get('householdId');
+        const profileEmail: unknown = userSnapshot.get('email');
+        if (
+          typeof householdId !== 'string'
+          || householdId.length === 0
+          || typeof profileEmail !== 'string'
+          || profileEmail.trim().toLowerCase() !== email
+        ) {
+          throw storageFailure();
+        }
+
+        const household = await transaction.get(
+          db.collection('households').doc(householdId),
+        );
+        const members: unknown = household.exists
+          ? household.get('members')
+          : undefined;
+        const inviteCode: unknown = household.exists
+          ? household.get('inviteCode')
+          : undefined;
+        if (
+          !household.exists
+          || !Array.isArray(members)
+          || !members.every((member) => typeof member === 'string')
+          || !members.includes(uid)
+          || typeof inviteCode !== 'string'
+          || normalizeInviteCode(inviteCode) !== inviteCode
+        ) {
+          throw storageFailure();
+        }
+        return { householdId, inviteCode };
+      });
+    },
+
     async findExactInvite(inviteCode) {
       const reservation = await db
         .collection('householdInvites')
         .doc(inviteCode)
         .get();
-      if (reservation.exists) {
-        const householdId: unknown = reservation.get('householdId');
-        return typeof householdId === 'string' && householdId.length > 0
-          ? [householdId]
-          : [];
-      }
-
       const matches = await db
         .collection('households')
         .where('inviteCode', '==', inviteCode)
         .limit(2)
         .get();
-      return matches.docs.map((snapshot) => snapshot.id);
+      const householdIds = new Set(matches.docs.map((snapshot) => snapshot.id));
+      if (reservation.exists) {
+        const householdId: unknown = reservation.get('householdId');
+        if (typeof householdId === 'string' && householdId.length > 0) {
+          householdIds.add(householdId);
+        }
+      }
+      return [...householdIds];
     },
 
     async createAtomic(uid, email, inviteCode) {
