@@ -46,7 +46,7 @@
     {
       "id": 6,
       "subject": "Task 6: Bridge legacy recipe writes through the backend",
-      "status": "pending",
+      "status": "in_progress",
       "blockedBy": [
         5
       ],
@@ -180,5 +180,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-15T22:39:00+03:00"
+  "lastUpdated": "2026-07-15T22:41:00+03:00"
 }
