@@ -1944,6 +1944,10 @@ git commit -m "feat: protect household membership mutations"
 - [ ] The bridge cannot delete recipes, bulk-update recipes, choose a document ID, write membership fields, or accept arbitrary Firestore fields.
 - [ ] Current runtime generation, manual label editing, and reminder caching use the bridge and no longer call Firestore recipe writes directly.
 - [ ] The bridge is quota-limited and explicitly removed in Phase 5 when catalogue-only generation cuts over.
+- [ ] Callable responses are exact-shape validated, and metadata updates must echo the requested recipe ID.
+- [ ] Repeated, concurrent, and timeout-retried saves for one normalized source URL converge on one server-derived ID without overwriting an existing recipe.
+- [ ] Root and instruction media URLs are HTTPS-only; aggregate ingredients and UTF-8 payload size are rejected below Firestore limits before authorization or quota.
+- [ ] A recursive whitespace-tolerant client scan guards against direct recipe writes across the scoped mobile source tree.
 
 **Verify:** `npm --prefix functions test -- legacyRecipes.test.ts && npm test -- legacyRecipeClient.test.ts && npx tsc --noEmit` → bridge tests pass and TypeScript exits 0.
 

@@ -46,7 +46,7 @@
     {
       "id": 6,
       "subject": "Task 6: Bridge legacy recipe writes through the backend",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [
         5
       ],
@@ -178,7 +178,18 @@
         "Invalid invites preserve the Auth account and pending intent so the user can safely correct the invite through registration.",
         "Firebase sign-out failures do not mask actionable onboarding results or prevent local auth and busy-state cleanup."
       ]
+    },
+    {
+      "taskId": 6,
+      "reason": "Independent quality review identified malformed callable-response handling, retry/concurrency duplication, unsafe media schemes, oversized schema-valid payloads, and weak direct-write scan coverage.",
+      "filesAdded": [],
+      "acceptanceCriteriaAdded": [
+        "Callable responses are exact-shape validated, and metadata updates must echo the requested recipe ID.",
+        "Repeated, concurrent, and timeout-retried saves for one normalized source URL converge on one server-derived ID without overwriting an existing recipe.",
+        "Root and instruction media URLs are HTTPS-only; aggregate ingredients and UTF-8 payload size are rejected below Firestore limits before authorization or quota.",
+        "A recursive whitespace-tolerant client scan guards against direct recipe writes across the scoped mobile source tree."
+      ]
     }
   ],
-  "lastUpdated": "2026-07-15T22:41:00+03:00"
+  "lastUpdated": "2026-07-15T23:14:00+03:00"
 }
