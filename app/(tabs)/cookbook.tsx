@@ -41,6 +41,7 @@ import {
   pruneRecipeHistory,
   recipeIdsToLoad,
   retryRecipeLoad,
+  type HistoryOwnershipToken,
 } from '@/services/recipeAvailability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -61,7 +62,7 @@ export default function CookbookScreen() {
   const { householdId } = useAuth();
 
   const [snapshotEntries, setSnapshotEntries] = useState<CookbookEntry[]>([]);
-  const [snapshotHouseholdId, setSnapshotHouseholdId] = useState<string | null>(null);
+  const [snapshotOwnership, setSnapshotOwnership] = useState<HistoryOwnershipToken | null>(null);
   const [recipeHistory, setRecipeHistory] = useState(() =>
     createRecipeHistoryState<Recipe>(null, 0)
   );
@@ -73,9 +74,13 @@ export default function CookbookScreen() {
   const [loading, setLoading] = useState(true);
 
   const sessionGenerationRef = useRef(0);
+  const snapshotRevisionRef = useRef(0);
   const currentHouseholdRef = useRef<string | null>(householdId);
   currentHouseholdRef.current = householdId;
-  const ownsSnapshot = !!householdId && snapshotHouseholdId === householdId;
+  const ownsSnapshot = !!householdId
+    && snapshotOwnership?.householdId === householdId
+    && snapshotOwnership.generation === sessionGenerationRef.current
+    && snapshotOwnership.snapshotRevision === snapshotRevisionRef.current;
   const entries = ownsSnapshot ? snapshotEntries : EMPTY_COOKBOOK_ENTRIES;
   const ownsRecipeHistory = ownsSnapshot && recipeHistory.householdId === householdId;
   const recipes = ownsRecipeHistory ? recipeHistory.recipes : EMPTY_RECIPES;
@@ -89,7 +94,7 @@ export default function CookbookScreen() {
     sessionGenerationRef.current = generation;
     currentHouseholdRef.current = householdId;
     setSnapshotEntries([]);
-    setSnapshotHouseholdId(null);
+    setSnapshotOwnership(null);
     setPreviewRecipe(null);
     setLoading(!!householdId);
     setRecipeHistory(createRecipeHistoryState<Recipe>(householdId, generation));
@@ -102,8 +107,10 @@ export default function CookbookScreen() {
         currentHouseholdRef.current,
         sessionGenerationRef.current,
       )) return;
+      const snapshotRevision = snapshotRevisionRef.current + 1;
+      snapshotRevisionRef.current = snapshotRevision;
       setSnapshotEntries(nextEntries);
-      setSnapshotHouseholdId(householdId);
+      setSnapshotOwnership({ householdId, generation, snapshotRevision });
       setRecipeHistory((previous) =>
         pruneRecipeHistory(previous, nextEntries.map((entry) => entry.recipeId))
       );
@@ -116,12 +123,16 @@ export default function CookbookScreen() {
     if (!householdId || !ownsSnapshot || recipeHistory.householdId !== householdId) return;
     const toLoad = recipeIdsToLoad(entries.map((entry) => entry.recipeId), recipeHistory);
     if (!toLoad.length) return;
+    const loadingHistory = beginRecipeLoads(recipeHistory, toLoad);
     const request = {
       householdId,
       generation: recipeHistory.generation,
       recipeIds: toLoad,
+      loadTokens: Object.fromEntries(
+        toLoad.map((recipeId) => [recipeId, loadingHistory.activeLoadTokens[recipeId]])
+      ),
     };
-    setRecipeHistory((previous) => beginRecipeLoads(previous, toLoad));
+    setRecipeHistory(loadingHistory);
     Promise.allSettled(toLoad.map(getRecipe)).then((results) => {
       if (!isCurrentHistorySession(
         request.householdId,
@@ -132,6 +143,16 @@ export default function CookbookScreen() {
       setRecipeHistory((previous) => applyRecipeFetchResults(previous, request, results));
     });
   }, [entries, householdId, ownsSnapshot, recipeHistory]);
+
+  const getCurrentOwnership = useCallback((): HistoryOwnershipToken | null => {
+    const currentHouseholdId = currentHouseholdRef.current;
+    if (!currentHouseholdId) return null;
+    return {
+      householdId: currentHouseholdId,
+      generation: sessionGenerationRef.current,
+      snapshotRevision: snapshotRevisionRef.current,
+    };
+  }, []);
 
   // ── Filtered + sorted list ──
   const filtered = useMemo(() => {
@@ -147,8 +168,8 @@ export default function CookbookScreen() {
   const handleStarToggle = useCallback(
     async (entry: CookbookEntry) => {
       const result = await executeOwnedHistoryAction(
-        snapshotHouseholdId,
-        currentHouseholdRef.current,
+        snapshotOwnership,
+        getCurrentOwnership(),
         (ownerHouseholdId) => toggleStarred(ownerHouseholdId, entry.recipeId, !entry.starred),
         () => Alert.alert('Could not update favourite', 'Please try again.'),
       );
@@ -156,7 +177,7 @@ export default function CookbookScreen() {
         Alert.alert('Household changed', 'Wait for the current cookbook to finish loading.');
       }
     },
-    [snapshotHouseholdId]
+    [getCurrentOwnership, snapshotOwnership]
   );
 
   const handleRemove = useCallback(
@@ -169,8 +190,8 @@ export default function CookbookScreen() {
           style: 'destructive',
           onPress: async () => {
             const result = await executeOwnedHistoryAction(
-              snapshotHouseholdId,
-              currentHouseholdRef.current,
+              snapshotOwnership,
+              getCurrentOwnership(),
               (ownerHouseholdId) => removeFromCookbook(ownerHouseholdId, entry.recipeId),
               () => Alert.alert('Could not remove recipe', 'Please try again.'),
             );
@@ -181,7 +202,7 @@ export default function CookbookScreen() {
         },
       ]);
     },
-    [recipes, snapshotHouseholdId]
+    [getCurrentOwnership, recipes, snapshotOwnership]
   );
 
   if (loading || (!!householdId && !ownsSnapshot)) {

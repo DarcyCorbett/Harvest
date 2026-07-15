@@ -6,12 +6,21 @@ export type RecipeHistoryState<T> = {
   errorRecipeIds: Set<string>;
   loadedRecipeIds: Set<string>;
   referencedRecipeIds: Set<string>;
+  activeLoadTokens: Record<string, number>;
+  nextLoadToken: number;
 };
 
 export type RecipeFetchRequest = {
   householdId: string;
   generation: number;
   recipeIds: string[];
+  loadTokens: Record<string, number>;
+};
+
+export type HistoryOwnershipToken = {
+  householdId: string;
+  generation: number;
+  snapshotRevision: number;
 };
 
 export function createRecipeHistoryState<T>(
@@ -26,6 +35,8 @@ export function createRecipeHistoryState<T>(
     errorRecipeIds: new Set(),
     loadedRecipeIds: new Set(),
     referencedRecipeIds: new Set(),
+    activeLoadTokens: {},
+    nextLoadToken: 0,
   };
 }
 
@@ -57,9 +68,21 @@ export function beginRecipeLoads<T>(
 ): RecipeHistoryState<T> {
   const loadedRecipeIds = new Set(state.loadedRecipeIds);
   const referencedRecipeIds = new Set(state.referencedRecipeIds);
-  recipeIds.forEach((recipeId) => loadedRecipeIds.add(recipeId));
-  recipeIds.forEach((recipeId) => referencedRecipeIds.add(recipeId));
-  return { ...state, loadedRecipeIds, referencedRecipeIds };
+  const activeLoadTokens = { ...state.activeLoadTokens };
+  let nextLoadToken = state.nextLoadToken;
+  [...new Set(recipeIds)].forEach((recipeId) => {
+    loadedRecipeIds.add(recipeId);
+    referencedRecipeIds.add(recipeId);
+    nextLoadToken += 1;
+    activeLoadTokens[recipeId] = nextLoadToken;
+  });
+  return {
+    ...state,
+    loadedRecipeIds,
+    referencedRecipeIds,
+    activeLoadTokens,
+    nextLoadToken,
+  };
 }
 
 export function applyRecipeFetchResults<T>(
@@ -82,6 +105,7 @@ export function applyRecipeFetchResults<T>(
   const loadedRecipeIds = new Set(state.loadedRecipeIds);
 
   request.recipeIds.forEach((recipeId, index) => {
+    if (state.activeLoadTokens[recipeId] !== request.loadTokens[recipeId]) return;
     if (!state.referencedRecipeIds.has(recipeId)) {
       loadedRecipeIds.delete(recipeId);
       return;
@@ -133,6 +157,9 @@ export function pruneRecipeHistory<T>(
   const recipes = Object.fromEntries(
     Object.entries(state.recipes).filter(([recipeId]) => referenced.has(recipeId)),
   ) as Record<string, T>;
+  const activeLoadTokens = Object.fromEntries(
+    Object.entries(state.activeLoadTokens).filter(([recipeId]) => referenced.has(recipeId)),
+  );
   return {
     ...state,
     recipes,
@@ -140,6 +167,7 @@ export function pruneRecipeHistory<T>(
     errorRecipeIds: new Set([...state.errorRecipeIds].filter((id) => referenced.has(id))),
     loadedRecipeIds: new Set([...state.loadedRecipeIds].filter((id) => referenced.has(id))),
     referencedRecipeIds: referenced,
+    activeLoadTokens,
   };
 }
 
@@ -157,14 +185,20 @@ export function getRecipePresentation(
 }
 
 export async function executeOwnedHistoryAction(
-  snapshotHouseholdId: string | null,
-  currentHouseholdId: string | null,
+  capturedOwnership: HistoryOwnershipToken | null,
+  currentOwnership: HistoryOwnershipToken | null,
   action: (householdId: string) => Promise<unknown>,
   onError: (error: unknown) => void,
 ): Promise<'completed' | 'blocked' | 'failed'> {
-  if (!snapshotHouseholdId || snapshotHouseholdId !== currentHouseholdId) return 'blocked';
+  if (
+    !capturedOwnership
+    || !currentOwnership
+    || capturedOwnership.householdId !== currentOwnership.householdId
+    || capturedOwnership.generation !== currentOwnership.generation
+    || capturedOwnership.snapshotRevision !== currentOwnership.snapshotRevision
+  ) return 'blocked';
   try {
-    await action(snapshotHouseholdId);
+    await action(capturedOwnership.householdId);
     return 'completed';
   } catch (error) {
     onError(error);

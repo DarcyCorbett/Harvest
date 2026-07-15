@@ -63,6 +63,10 @@ describe('catalogue data safety', () => {
       expect(screen).toContain('Promise.allSettled');
       expect(screen).toContain('isCurrentHistorySession');
       expect(screen).toContain('executeOwnedHistoryAction');
+      expect(screen).toContain('snapshotRevisionRef');
+      expect(screen).toContain('snapshotOwnership');
+      expect(screen).toContain('activeLoadTokens');
+      expect(screen).toContain('loadTokens: Object.fromEntries');
       expect(screen).toContain('getRecipePresentation');
       expect(screen).not.toContain('reconcileRecipeAvailability');
     }
@@ -74,7 +78,7 @@ describe('catalogue data safety', () => {
     expect(cookbook.match(/accessibilityRole="button"/g)?.length).toBeGreaterThanOrEqual(2);
     for (const screen of [calendar, cookbook]) {
       expect(
-        screen.match(/executeOwnedHistoryAction\(\s*snapshotHouseholdId,\s*currentHouseholdRef\.current,/g)?.length,
+        screen.match(/executeOwnedHistoryAction\(\s*snapshotOwnership,\s*getCurrentOwnership\(\),/g)?.length,
       ).toBeGreaterThanOrEqual(2);
     }
   });
@@ -90,6 +94,7 @@ describe('recipe history state', () => {
       householdId: 'household-a',
       generation: 4,
       recipeIds: ['recipe-a', 'recipe-b'],
+      loadTokens: { 'recipe-a': 1, 'recipe-b': 2 },
     };
 
     const result = applyRecipeFetchResults(initial, request, [
@@ -110,7 +115,12 @@ describe('recipe history state', () => {
     );
     const result = applyRecipeFetchResults(
       initial,
-      { householdId: 'household-a', generation: 1, recipeIds: ['missing-recipe'] },
+      {
+        householdId: 'household-a',
+        generation: 1,
+        recipeIds: ['missing-recipe'],
+        loadTokens: { 'missing-recipe': 1 },
+      },
       [{ status: 'fulfilled', value: null }],
     );
 
@@ -122,7 +132,12 @@ describe('recipe history state', () => {
     const current = createRecipeHistoryState<{ title: string }>('household-b', 8);
     const result = applyRecipeFetchResults(
       current,
-      { householdId: 'household-a', generation: 7, recipeIds: ['old-recipe'] },
+      {
+        householdId: 'household-a',
+        generation: 7,
+        recipeIds: ['old-recipe'],
+        loadTokens: { 'old-recipe': 1 },
+      },
       [{ status: 'fulfilled', value: { title: 'Old recipe' } }],
     );
 
@@ -137,7 +152,12 @@ describe('recipe history state', () => {
     );
     const failed = applyRecipeFetchResults(
       loading,
-      { householdId: 'household-a', generation: 1, recipeIds: ['recipe-a'] },
+      {
+        householdId: 'household-a',
+        generation: 1,
+        recipeIds: ['recipe-a'],
+        loadTokens: { 'recipe-a': 1 },
+      },
       [{ status: 'rejected', reason: new Error('temporary') }],
     );
 
@@ -165,12 +185,55 @@ describe('recipe history state', () => {
     const pruned = pruneRecipeHistory(loading, []);
     const result = applyRecipeFetchResults(
       pruned,
-      { householdId: 'household-a', generation: 1, recipeIds: ['recipe-a'] },
+      {
+        householdId: 'household-a',
+        generation: 1,
+        recipeIds: ['recipe-a'],
+        loadTokens: { 'recipe-a': 1 },
+      },
       [{ status: 'fulfilled', value: { title: 'Late recipe' } }],
     );
 
     expect(result.recipes).toEqual({});
     expect(result.loadedRecipeIds.has('recipe-a')).toBe(false);
+  });
+
+  it('ignores request 1 after remove, re-add, and a successful request 2', () => {
+    const initial = createRecipeHistoryState<{ title: string }>('household-a', 1);
+    const request1State = beginRecipeLoads(initial, ['recipe-a']);
+    const request1 = {
+      householdId: 'household-a',
+      generation: 1,
+      recipeIds: ['recipe-a'],
+      loadTokens: { 'recipe-a': 1 },
+    };
+    const removed = pruneRecipeHistory(request1State, []);
+    const request2State = beginRecipeLoads(removed, ['recipe-a']);
+    const request2 = {
+      householdId: 'household-a',
+      generation: 1,
+      recipeIds: ['recipe-a'],
+      loadTokens: { 'recipe-a': 2 },
+    };
+    const fresh = applyRecipeFetchResults(
+      request2State,
+      request2,
+      [{ status: 'fulfilled', value: { title: 'Fresh recipe' } }],
+    );
+
+    const afterLateData = applyRecipeFetchResults(
+      fresh,
+      request1,
+      [{ status: 'fulfilled', value: { title: 'Stale recipe' } }],
+    );
+    const afterLateNull = applyRecipeFetchResults(
+      afterLateData,
+      request1,
+      [{ status: 'fulfilled', value: null }],
+    );
+
+    expect(afterLateNull.recipes).toEqual({ 'recipe-a': { title: 'Fresh recipe' } });
+    expect(afterLateNull.missingRecipeIds.has('recipe-a')).toBe(false);
   });
 
   it('distinguishes loading, unavailable, transient error, and available states', () => {
@@ -194,12 +257,23 @@ describe('recipe history state', () => {
 });
 
 describe('household history ownership', () => {
+  const token = (householdId: string, generation: number, snapshotRevision: number) => ({
+    householdId,
+    generation,
+    snapshotRevision,
+  });
+
   it('rejects an old row action after the current household changes', async () => {
     const action = vi.fn(async () => undefined);
     const onError = vi.fn();
 
     await expect(
-      executeOwnedHistoryAction('household-a', 'household-b', action, onError),
+      executeOwnedHistoryAction(
+        token('household-a', 2, 5),
+        token('household-b', 3, 6),
+        action,
+        onError,
+      ),
     ).resolves.toBe('blocked');
     expect(action).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
@@ -211,13 +285,55 @@ describe('household history ownership', () => {
 
     await expect(
       executeOwnedHistoryAction(
-        'household-a',
-        'household-a',
+        token('household-a', 2, 5),
+        token('household-a', 2, 5),
         async () => { throw failure; },
         onError,
       ),
     ).resolves.toBe('failed');
     expect(onError).toHaveBeenCalledWith(failure);
+  });
+
+  it('allows an action only when the complete ownership token still matches', async () => {
+    const action = vi.fn(async () => undefined);
+
+    await expect(
+      executeOwnedHistoryAction(
+        token('household-a', 2, 5),
+        token('household-a', 2, 5),
+        action,
+        vi.fn(),
+      ),
+    ).resolves.toBe('completed');
+    expect(action).toHaveBeenCalledWith('household-a');
+  });
+
+  it('blocks an A to B to A confirmation with a stale session generation', async () => {
+    const action = vi.fn(async () => undefined);
+
+    await expect(
+      executeOwnedHistoryAction(
+        token('household-a', 2, 5),
+        token('household-a', 4, 7),
+        action,
+        vi.fn(),
+      ),
+    ).resolves.toBe('blocked');
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('blocks a confirmation after a newer same-household snapshot replaces the row', async () => {
+    const action = vi.fn(async () => undefined);
+
+    await expect(
+      executeOwnedHistoryAction(
+        token('household-a', 2, 5),
+        token('household-a', 2, 6),
+        action,
+        vi.fn(),
+      ),
+    ).resolves.toBe('blocked');
+    expect(action).not.toHaveBeenCalled();
   });
 
   it('accepts callbacks only for the active household generation', () => {

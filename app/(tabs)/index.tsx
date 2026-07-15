@@ -41,6 +41,7 @@ import {
   pruneRecipeHistory,
   recipeIdsToLoad,
   retryRecipeLoad,
+  type HistoryOwnershipToken,
 } from '@/services/recipeAvailability';
 
 // ─── Layout constants ─────────────────────────────────────────
@@ -137,7 +138,7 @@ export default function CalendarScreen() {
   });
 
   const [snapshotEntries, setSnapshotEntries] = useState<MealPlanEntry[]>([]);
-  const [snapshotHouseholdId, setSnapshotHouseholdId] = useState<string | null>(null);
+  const [snapshotOwnership, setSnapshotOwnership] = useState<HistoryOwnershipToken | null>(null);
   const [recipeHistory, setRecipeHistory] = useState(() =>
     createRecipeHistoryState<Recipe>(null, 0)
   );
@@ -151,11 +152,15 @@ export default function CalendarScreen() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const sessionGenerationRef = useRef(0);
+  const snapshotRevisionRef = useRef(0);
   const currentHouseholdRef = useRef<string | null>(householdId);
   const carouselRef = useRef<FlatList<Date>>(null);
 
   currentHouseholdRef.current = householdId;
-  const ownsSnapshot = !!householdId && snapshotHouseholdId === householdId;
+  const ownsSnapshot = !!householdId
+    && snapshotOwnership?.householdId === householdId
+    && snapshotOwnership.generation === sessionGenerationRef.current
+    && snapshotOwnership.snapshotRevision === snapshotRevisionRef.current;
   const entries = ownsSnapshot ? snapshotEntries : EMPTY_MEAL_PLAN_ENTRIES;
   const ownsRecipeHistory = ownsSnapshot && recipeHistory.householdId === householdId;
   const recipes = ownsRecipeHistory ? recipeHistory.recipes : EMPTY_RECIPES;
@@ -169,7 +174,7 @@ export default function CalendarScreen() {
     sessionGenerationRef.current = generation;
     currentHouseholdRef.current = householdId;
     setSnapshotEntries([]);
-    setSnapshotHouseholdId(null);
+    setSnapshotOwnership(null);
     setCookbook([]);
     setPreviewRecipe(null);
     setPreviewEntry(null);
@@ -184,8 +189,10 @@ export default function CalendarScreen() {
         currentHouseholdRef.current,
         sessionGenerationRef.current,
       )) return;
+      const snapshotRevision = snapshotRevisionRef.current + 1;
+      snapshotRevisionRef.current = snapshotRevision;
       setSnapshotEntries(nextEntries);
-      setSnapshotHouseholdId(householdId);
+      setSnapshotOwnership({ householdId, generation, snapshotRevision });
       setRecipeHistory((previous) =>
         pruneRecipeHistory(previous, nextEntries.map((entry) => entry.recipeId))
       );
@@ -210,12 +217,16 @@ export default function CalendarScreen() {
     if (!householdId || !ownsSnapshot || recipeHistory.householdId !== householdId) return;
     const toLoad = recipeIdsToLoad(entries.map((entry) => entry.recipeId), recipeHistory);
     if (!toLoad.length) return;
+    const loadingHistory = beginRecipeLoads(recipeHistory, toLoad);
     const request = {
       householdId,
       generation: recipeHistory.generation,
       recipeIds: toLoad,
+      loadTokens: Object.fromEntries(
+        toLoad.map((recipeId) => [recipeId, loadingHistory.activeLoadTokens[recipeId]])
+      ),
     };
-    setRecipeHistory((previous) => beginRecipeLoads(previous, toLoad));
+    setRecipeHistory(loadingHistory);
     Promise.allSettled(toLoad.map(getRecipe)).then((results) => {
       if (!isCurrentHistorySession(
         request.householdId,
@@ -226,6 +237,16 @@ export default function CalendarScreen() {
       setRecipeHistory((previous) => applyRecipeFetchResults(previous, request, results));
     });
   }, [entries, householdId, ownsSnapshot, recipeHistory]);
+
+  const getCurrentOwnership = useCallback((): HistoryOwnershipToken | null => {
+    const currentHouseholdId = currentHouseholdRef.current;
+    if (!currentHouseholdId) return null;
+    return {
+      householdId: currentHouseholdId,
+      generation: sessionGenerationRef.current,
+      snapshotRevision: snapshotRevisionRef.current,
+    };
+  }, []);
 
   const forDate = useCallback(
     (dateStr: string) =>
@@ -246,8 +267,8 @@ export default function CalendarScreen() {
           style: 'destructive',
           onPress: async () => {
             const result = await executeOwnedHistoryAction(
-              snapshotHouseholdId,
-              currentHouseholdRef.current,
+              snapshotOwnership,
+              getCurrentOwnership(),
               (ownerHouseholdId) => deleteMealPlanEntry(ownerHouseholdId, entry.id!),
               () => Alert.alert('Could not remove meal', 'Please try again.'),
             );
@@ -258,7 +279,7 @@ export default function CalendarScreen() {
         },
       ]);
     },
-    [recipes, snapshotHouseholdId]
+    [getCurrentOwnership, recipes, snapshotOwnership]
   );
 
   const today = toISO(new Date());
@@ -642,8 +663,8 @@ export default function CalendarScreen() {
           const recipeId = visiblePreviewRecipe.id;
           const current = cookbook.find((e) => e.recipeId === recipeId)?.starred ?? false;
           const result = await executeOwnedHistoryAction(
-            snapshotHouseholdId,
-            currentHouseholdRef.current,
+            snapshotOwnership,
+            getCurrentOwnership(),
             (ownerHouseholdId) => toggleStarred(
               ownerHouseholdId,
               recipeId,
