@@ -97,50 +97,71 @@ describe('Firestore household security boundary', () => {
   });
 
   it.each(HOUSEHOLD_SUBCOLLECTIONS)(
-    'allows members to read and write the %s subcollection',
+    'allows members to query and fully mutate the %s subcollection',
     async (subcollection) => {
       const database = environment.authenticatedContext('member-1').firestore();
-
-      await assertSucceeds(getDoc(doc(
+      const existingDocument = doc(
         database,
         `households/household-1/${subcollection}/existing`,
+      );
+
+      await assertSucceeds(getDocs(collection(
+        database,
+        `households/household-1/${subcollection}`,
       )));
+      await assertSucceeds(getDoc(existingDocument));
       await assertSucceeds(setDoc(doc(
         database,
         `households/household-1/${subcollection}/new`,
       ), { value: 'member-write' }));
+      await assertSucceeds(updateDoc(existingDocument, { value: 'member-update' }));
+      await assertSucceeds(deleteDoc(existingDocument));
     },
   );
 
   it.each(HOUSEHOLD_SUBCOLLECTIONS)(
-    'rejects non-member reads and writes in the %s subcollection',
+    'rejects non-member queries and all mutations in the %s subcollection',
     async (subcollection) => {
       const database = environment.authenticatedContext('outsider-1').firestore();
-
-      await assertFails(getDoc(doc(
+      const existingDocument = doc(
         database,
         `households/household-1/${subcollection}/existing`,
+      );
+
+      await assertFails(getDocs(collection(
+        database,
+        `households/household-1/${subcollection}`,
       )));
+      await assertFails(getDoc(existingDocument));
       await assertFails(setDoc(doc(
         database,
         `households/household-1/${subcollection}/new`,
       ), { value: 'outsider-write' }));
+      await assertFails(updateDoc(existingDocument, { value: 'outsider-update' }));
+      await assertFails(deleteDoc(existingDocument));
     },
   );
 
   it.each(HOUSEHOLD_SUBCOLLECTIONS)(
-    'rejects unauthenticated reads and writes in the %s subcollection',
+    'rejects unauthenticated queries and all mutations in the %s subcollection',
     async (subcollection) => {
       const database = environment.unauthenticatedContext().firestore();
-
-      await assertFails(getDoc(doc(
+      const existingDocument = doc(
         database,
         `households/household-1/${subcollection}/existing`,
+      );
+
+      await assertFails(getDocs(collection(
+        database,
+        `households/household-1/${subcollection}`,
       )));
+      await assertFails(getDoc(existingDocument));
       await assertFails(setDoc(doc(
         database,
         `households/household-1/${subcollection}/new`,
       ), { value: 'anonymous-write' }));
+      await assertFails(updateDoc(existingDocument, { value: 'anonymous-update' }));
+      await assertFails(deleteDoc(existingDocument));
     },
   );
 
@@ -201,6 +222,7 @@ describe('Firestore household security boundary', () => {
     const database = environment.authenticatedContext('member-1').firestore();
 
     await assertSucceeds(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertSucceeds(getDocs(collection(database, 'recipes')));
     await assertFails(setDoc(doc(database, 'recipes/recipe-2'), { title: 'New' }));
     await assertFails(updateDoc(doc(database, 'recipes/recipe-1'), { title: 'Changed' }));
     await assertFails(deleteDoc(doc(database, 'recipes/recipe-1')));
@@ -210,6 +232,7 @@ describe('Firestore household security boundary', () => {
     const database = environment.authenticatedContext('member-1').firestore();
 
     await assertSucceeds(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
+    await assertSucceeds(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
     await assertFails(setDoc(
       doc(database, 'recipeIndex/site-1/recipes/recipe-2'),
       { url: 'https://example.com/recipe-2' },
@@ -225,6 +248,8 @@ describe('Firestore household security boundary', () => {
     const database = environment.unauthenticatedContext().firestore();
 
     await assertFails(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertFails(getDocs(collection(database, 'recipes')));
     await assertFails(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
+    await assertFails(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
   });
 });
