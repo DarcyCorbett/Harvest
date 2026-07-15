@@ -14,6 +14,7 @@ vi.mock('firebase-admin/firestore', () => ({
 }));
 
 import {
+  authorizeAllowlistedUser,
   authorizeHouseholdMember,
   firestoreAuthzLookups,
   type AuthzLookups,
@@ -191,5 +192,36 @@ describe('authorizeHouseholdMember', () => {
     ).resolves.toEqual({ uid: 'user-1', email: 'member@example.com' });
     expect(injected.isAllowlisted).toHaveBeenCalledWith('member@example.com');
     expect(injected.getMembers).toHaveBeenCalledWith('household-1');
+  });
+});
+
+describe('authorizeAllowlistedUser', () => {
+  it('rejects an unverified identity before any allowlist or membership lookup', async () => {
+    const injected = lookups();
+
+    await expect(
+      authorizeAllowlistedUser(
+        auth('user-1', 'member@example.com', false),
+        injected,
+      ),
+    ).rejects.toMatchObject({
+      code: 'permission-denied',
+      message: 'Permission denied.',
+    });
+    expect(injected.isAllowlisted).not.toHaveBeenCalled();
+    expect(injected.getMembers).not.toHaveBeenCalled();
+  });
+
+  it('returns the verified allowlisted identity without reading a household', async () => {
+    const injected = lookups();
+
+    await expect(
+      authorizeAllowlistedUser(
+        auth('user-1', '  MEMBER@EXAMPLE.COM  '),
+        injected,
+      ),
+    ).resolves.toEqual({ uid: 'user-1', email: 'member@example.com' });
+    expect(injected.isAllowlisted).toHaveBeenCalledWith('member@example.com');
+    expect(injected.getMembers).not.toHaveBeenCalled();
   });
 });

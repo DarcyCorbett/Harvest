@@ -22,7 +22,6 @@ import {
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
-import * as Crypto from 'expo-crypto';
 import { logEvent } from './devLog';
 import type {
   GenerateConfig,
@@ -53,62 +52,7 @@ export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promis
   ]);
 }
 
-/** Generate a short uppercase invite code */
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
-  let code = '';
-  const bytes = Crypto.getRandomBytes(6);
-  for (let i = 0; i < 6; i++) {
-    code += chars[bytes[i] % chars.length];
-  }
-  return code;
-}
-
 // ─── Household Operations ──────────────────────────────────
-
-/**
- * Create a new household for the first user.
- * Returns the householdId and inviteCode.
- */
-export async function createHousehold(userId: string): Promise<{ householdId: string; inviteCode: string }> {
-  const inviteCode = generateInviteCode();
-  const householdRef = doc(collection(db, 'households'));
-  const household: Household = {
-    members: [userId],
-    inviteCode,
-  };
-  await setDoc(householdRef, household);
-  return { householdId: householdRef.id, inviteCode };
-}
-
-/**
- * Join an existing household using an invite code.
- * Returns the householdId or null if code is invalid.
- */
-export async function joinHousehold(userId: string, inviteCode: string): Promise<string | null> {
-  const q = query(
-    collection(db, 'households'),
-    where('inviteCode', '==', inviteCode.toUpperCase())
-  );
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) return null;
-
-  const householdDoc = snapshot.docs[0];
-  const data = householdDoc.data() as Household;
-
-  if (data.members.includes(userId)) {
-    // Already a member
-    return householdDoc.id;
-  }
-
-  // Add user to household
-  await updateDoc(householdDoc.ref, {
-    members: [...data.members, userId],
-  });
-
-  return householdDoc.id;
-}
 
 /** Fetch household data */
 export async function getHousehold(householdId: string): Promise<Household | null> {
@@ -116,23 +60,7 @@ export async function getHousehold(householdId: string): Promise<Household | nul
   return snap.exists() ? (snap.data() as Household) : null;
 }
 
-/**
- * Join a new household by invite code and update the user's profile to point at it.
- * Returns the new householdId, or null if the invite code was invalid.
- */
-export async function switchHousehold(userId: string, inviteCode: string): Promise<string | null> {
-  const newId = await joinHousehold(userId, inviteCode);
-  if (!newId) return null;
-  await updateDoc(doc(db, 'users', userId), { householdId: newId });
-  return newId;
-}
-
 // ─── User Profile Operations ──────────────────────────────
-
-/** Save user profile */
-export async function saveUserProfile(userId: string, profile: UserProfile): Promise<void> {
-  await setDoc(doc(db, 'users', userId), profile);
-}
 
 /** Get user profile */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {

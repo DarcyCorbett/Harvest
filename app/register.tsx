@@ -16,6 +16,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { VERIFICATION_REQUIRED_CODE } from '@/services/householdClient';
 import { Colors, FontSizes, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';
 import * as Clipboard from 'expo-clipboard';
 
@@ -41,6 +42,14 @@ export default function RegisterScreen() {
     try {
       await signInWithGoogle();
     } catch (error: any) {
+      if (error.code === VERIFICATION_REQUIRED_CODE) {
+        Alert.alert(
+          'Check Your Email',
+          'We sent you a verification link. Verify your email, then log in to finish setting up your household.',
+        );
+        router.replace('/login');
+        return;
+      }
       if (error.message === 'Access Denied') {
         Alert.alert('Access Denied', 'Your email is not authorized to use this app. Please request an invitation.');
       } else if (error.code === 'auth/account-exists-with-different-credential') {

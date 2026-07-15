@@ -16,6 +16,10 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  INVALID_INVITE_CODE,
+  VERIFICATION_REQUIRED_CODE,
+} from '@/services/householdClient';
 import { Colors, FontSizes, FontWeights, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';
 import * as Clipboard from 'expo-clipboard';
 
@@ -65,6 +69,20 @@ export default function LoginScreen() {
     try {
       await login(email.trim(), password);
     } catch (error: any) {
+      if (error.code === VERIFICATION_REQUIRED_CODE) {
+        Alert.alert(
+          'Check Your Email',
+          'We sent you a verification link. Verify your email, then log in again.',
+        );
+        return;
+      }
+      if (error.code === INVALID_INVITE_CODE) {
+        Alert.alert(
+          'Invalid Invite Code',
+          'The invite code is not valid. Please check it and register again.',
+        );
+        return;
+      }
       if (error.message === 'Access Denied') {
         Alert.alert('Access Denied', 'Your email is not authorized to use this app. Please request an invitation.');
         return;

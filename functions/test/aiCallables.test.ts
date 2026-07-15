@@ -17,6 +17,10 @@ const indexMocks = vi.hoisted(() => {
   const secret = { value: vi.fn(() => 'unit-test-secret') };
   const quotaStore = { kind: 'quota-store' };
   return {
+    authorizeAllowlistedUser: vi.fn(async () => ({
+      uid: 'user-1',
+      email: 'member@example.com',
+    })),
     authorizeHouseholdMember: vi.fn(async () => ({
       uid: 'user-1',
       email: 'member@example.com',
@@ -28,6 +32,10 @@ const indexMocks = vi.hoisted(() => {
     requestGeminiJson: vi.fn(),
     reserveQuota: vi.fn(async () => 1),
     secret,
+    householdMutations: {
+      create: vi.fn(),
+      join: vi.fn(),
+    },
   };
 });
 
@@ -47,7 +55,17 @@ vi.mock('../src/config.js', () => ({
 }));
 
 vi.mock('../src/authz.js', () => ({
+  authorizeAllowlistedUser: indexMocks.authorizeAllowlistedUser,
   authorizeHouseholdMember: indexMocks.authorizeHouseholdMember,
+}));
+
+vi.mock('../src/callables/households.js', () => ({
+  firestoreHouseholdMutations: vi.fn(() => indexMocks.householdMutations),
+  createHouseholdHandlers: vi.fn(() => ({
+    create: vi.fn(),
+    join: vi.fn(),
+    switch: vi.fn(),
+  })),
 }));
 
 vi.mock('../src/quota.js', () => ({
@@ -396,26 +414,33 @@ describe('createAiHandlers', () => {
 });
 
 describe('Functions entrypoint', () => {
-  it('registers exactly four secret-bound AI callables and no generic export', async () => {
+  it('registers four secret-bound AI callables and three non-secret household callables', async () => {
     vi.resetModules();
 
     const entrypoint = await import('../src/index.js');
 
     expect(Object.keys(entrypoint).sort()).toEqual([
+      'createHousehold',
+      'joinHousehold',
       'reminderFlags',
       'shoppingGroups',
       'substitutions',
+      'switchHousehold',
       'tagRecipes',
     ]);
     expect(indexMocks.initializeApp).toHaveBeenCalledOnce();
     expect(indexMocks.firestoreQuotaStore).toHaveBeenCalledOnce();
-    expect(indexMocks.onCall).toHaveBeenCalledTimes(4);
-    for (const [options] of indexMocks.onCall.mock.calls) {
+    expect(indexMocks.onCall).toHaveBeenCalledTimes(7);
+    for (const [options] of indexMocks.onCall.mock.calls.slice(0, 4)) {
       expect(options).toEqual({
         secrets: [indexMocks.secret],
         enforceAppCheck: false,
         consumeAppCheckToken: false,
       });
+    }
+    for (const call of indexMocks.onCall.mock.calls.slice(4)) {
+      expect(call).toHaveLength(1);
+      expect(call[0]).toEqual(expect.any(Function));
     }
     expect(indexMocks.secret.value).not.toHaveBeenCalled();
     expect(entrypoint).not.toHaveProperty('callAi');

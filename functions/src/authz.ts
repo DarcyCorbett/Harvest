@@ -37,6 +37,20 @@ export async function authorizeHouseholdMember(
   householdId: string,
   lookups: AuthzLookups = firestoreAuthzLookups(),
 ): Promise<AuthorizedIdentity> {
+  const identity = await authorizeAllowlistedUser(auth, lookups);
+
+  const members = await lookups.getMembers(householdId);
+  if (!members?.includes(identity.uid)) {
+    throw new HttpsError('permission-denied', 'Permission denied.');
+  }
+
+  return identity;
+}
+
+export async function authorizeAllowlistedUser(
+  auth: AuthData,
+  lookups: AuthzLookups = firestoreAuthzLookups(),
+): Promise<AuthorizedIdentity> {
   if (!auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
@@ -48,11 +62,6 @@ export async function authorizeHouseholdMember(
     ? auth.token.email.trim().toLowerCase()
     : '';
   if (!email || !(await lookups.isAllowlisted(email))) {
-    throw new HttpsError('permission-denied', 'Permission denied.');
-  }
-
-  const members = await lookups.getMembers(householdId);
-  if (!members?.includes(auth.uid)) {
     throw new HttpsError('permission-denied', 'Permission denied.');
   }
 

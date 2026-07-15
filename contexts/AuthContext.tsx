@@ -5,26 +5,30 @@
 
 import { auth } from '@/config/firebase';
 import {
-  createHousehold,
-  switchHousehold as firestoreSwitchHousehold,
   getHousehold,
   getUserProfile,
-  joinHousehold,
-  saveUserProfile,
   isEmailAllowed,
 } from '@/services/firestoreService';
+import {
+  createAsyncStoragePendingIntentStore,
+  createPasswordOnboarding,
+  householdClient,
+  type PasswordOnboardingUser,
+} from '@/services/householdClient';
 import type { Household } from '@/services/types';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
   User,
 } from 'firebase/auth';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 
 
@@ -50,6 +54,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const passwordOnboarding = createPasswordOnboarding({
+  isEmailAllowed,
+  async createUser(email, password) {
+    return (await createUserWithEmailAndPassword(auth, email, password)).user;
+  },
+  async signIn(email, password) {
+    return (await signInWithEmailAndPassword(auth, email, password)).user;
+  },
+  sendVerification(user: PasswordOnboardingUser) {
+    return sendEmailVerification(user as User);
+  },
+  signOut() {
+    return signOut(auth);
+  },
+  pendingIntents: createAsyncStoragePendingIntentStore(AsyncStorage),
+  households: householdClient,
+});
+
 // ─── Provider ──────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -59,62 +81,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
+  const authFlowInProgress = useRef(false);
+
+  const clearLocalAuth = useCallback(() => {
+    setUser(null);
+    setHouseholdId(null);
+    setHousehold(null);
+    setInviteCode(null);
+  }, []);
+
+  const loadAuthenticatedUser = useCallback(async (
+    firebaseUser: User,
+    householdOverride?: { householdId: string; inviteCode?: string } | null,
+  ) => {
+    setUser(firebaseUser);
+    const profile = householdOverride
+      ? null
+      : await getUserProfile(firebaseUser.uid);
+    const hId = householdOverride?.householdId ?? profile?.householdId ?? null;
+    if (!hId) {
+      setHouseholdId(null);
+      setHousehold(null);
+      setInviteCode(null);
+      return;
+    }
+
+    setHouseholdId(hId);
+    const hh = await getHousehold(hId);
+    if (hh) {
+      setHousehold(hh);
+      setInviteCode(hh.inviteCode);
+    } else {
+      setHousehold(null);
+      setInviteCode(null);
+    }
+    if (householdOverride?.inviteCode) {
+      setPendingInviteCode(householdOverride.inviteCode);
+    }
+  }, []);
 
   // Listen for auth state changes (handles persistence)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (authFlowInProgress.current || passwordOnboarding.isBusy()) return;
       if (firebaseUser) {
+        if (firebaseUser.emailVerified !== true) {
+          try {
+            await sendEmailVerification(firebaseUser);
+          } finally {
+            await signOut(auth);
+            clearLocalAuth();
+            setLoading(false);
+          }
+          return;
+        }
+
         // Enforce allowlist for active sessions
         const email = firebaseUser.email;
         if (email) {
           const allowed = await isEmailAllowed(email);
           if (!allowed) {
             await signOut(auth);
-            setUser(null);
-            setHouseholdId(null);
-            setHousehold(null);
-            setInviteCode(null);
+            clearLocalAuth();
             setLoading(false);
             return;
           }
         }
 
-        setUser(firebaseUser);
         // Load user profile to get householdId
         try {
-          const profile = await getUserProfile(firebaseUser.uid);
-          if (profile) {
-            setHouseholdId(profile.householdId);
-            const hh = await getHousehold(profile.householdId);
-            if (hh) {
-              setHousehold(hh);
-              setInviteCode(hh.inviteCode);
-            }
-          }
+          await loadAuthenticatedUser(firebaseUser);
         } catch (err) {
           console.error('Error loading user profile:', err);
         }
       } else {
-        setUser(null);
-        setHouseholdId(null);
-        setHousehold(null);
-        setInviteCode(null);
+        clearLocalAuth();
       }
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [clearLocalAuth, loadAuthenticatedUser]);
 
   // ── Login ──
   const login = useCallback(async (email: string, password: string) => {
-    const allowed = await isEmailAllowed(email);
-    if (!allowed) {
-      throw new Error('Access Denied');
+    authFlowInProgress.current = true;
+    try {
+      const result = await passwordOnboarding.login(email, password);
+      await loadAuthenticatedUser(result.user as User, result.household);
+    } catch (error) {
+      clearLocalAuth();
+      throw error;
+    } finally {
+      authFlowInProgress.current = false;
     }
-    await signInWithEmailAndPassword(auth, email, password);
-    // onAuthStateChanged will handle the rest
-  }, []);
+  }, [clearLocalAuth, loadAuthenticatedUser]);
 
   // ── Register ──
   const register = useCallback(async (
@@ -122,48 +183,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     existingInviteCode?: string
   ): Promise<{ inviteCode?: string }> => {
-    const allowed = await isEmailAllowed(email);
-    if (!allowed) {
-      throw new Error('Access Denied');
+    authFlowInProgress.current = true;
+    try {
+      await passwordOnboarding.register(email, password, existingInviteCode);
+      return {};
+    } finally {
+      clearLocalAuth();
+      authFlowInProgress.current = false;
     }
-
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-    const uid = credential.user.uid;
-
-    let hId: string;
-    let code: string | undefined;
-
-    if (existingInviteCode && existingInviteCode.trim().length > 0) {
-      // Join existing household
-      const joinedId = await joinHousehold(uid, existingInviteCode.trim());
-      if (!joinedId) {
-        // Invalid invite code — delete the account and throw
-        await credential.user.delete();
-        throw new Error('Invalid invite code. Please check and try again.');
-      }
-      hId = joinedId;
-    } else {
-      // Create new household
-      const result = await createHousehold(uid);
-      hId = result.householdId;
-      code = result.inviteCode;
-    }
-
-    // Save user profile
-    await saveUserProfile(uid, { email, householdId: hId });
-
-    // Update local state immediately so the router logic knows the user has a household
-    setHouseholdId(hId);
-
-    // Fetch and set the full household object
-    const hh = await getHousehold(hId);
-    if (hh) {
-      setHousehold(hh);
-      setInviteCode(hh.inviteCode);
-    }
-
-    return { inviteCode: code };
-  }, []);
+  }, [clearLocalAuth]);
 
   // ── Logout ──
   const logout = useCallback(async () => {
@@ -173,7 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Switch Household ──
   const switchHousehold = useCallback(async (code: string): Promise<boolean> => {
     if (!user) return false;
-    const newId = await firestoreSwitchHousehold(user.uid, code.trim());
+    const newId = await householdClient.switch(code);
     if (!newId) return false;
     const hh = await getHousehold(newId);
     if (hh) {
@@ -185,6 +213,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const signInWithGoogle = useCallback(async () => {
+    authFlowInProgress.current = true;
+    try {
     // Lazy-load native module — avoids crash in Expo Go where RNGoogleSignin isn't available
     const { GoogleSignin } = require('@react-native-google-signin/google-signin');
     GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID });
@@ -214,17 +244,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = await getUserProfile(uid);
     if (!profile?.householdId) {
       // New Google user — auto-create a household
-      const { householdId: hId, inviteCode: code } = await createHousehold(uid);
-      await saveUserProfile(uid, { email: result.user.email ?? '', householdId: hId });
-      setHouseholdId(hId);
-      const hh = await getHousehold(hId);
-      if (hh) {
-        setHousehold(hh);
-        setInviteCode(hh.inviteCode);
-      }
+      const { householdId: hId, inviteCode: code } = await householdClient.create();
+      await loadAuthenticatedUser(result.user, { householdId: hId, inviteCode: code });
       setPendingInviteCode(code);
+    } else {
+      await loadAuthenticatedUser(result.user);
     }
-  }, []);
+    } finally {
+      authFlowInProgress.current = false;
+    }
+  }, [loadAuthenticatedUser]);
 
   const clearPendingInviteCode = useCallback(() => {
     setPendingInviteCode(null);

@@ -3,8 +3,12 @@ import { onCall } from 'firebase-functions/v2/https';
 
 import { requestGeminiJson } from './ai/geminiProvider.js';
 import { createAiService } from './ai/service.js';
-import { authorizeHouseholdMember } from './authz.js';
+import { authorizeAllowlistedUser, authorizeHouseholdMember } from './authz.js';
 import { createAiHandlers } from './callables/ai.js';
+import {
+  createHouseholdHandlers,
+  firestoreHouseholdMutations,
+} from './callables/households.js';
 import { GEMINI_API_KEY } from './config.js';
 import { firestoreQuotaStore, reserveQuota } from './quota.js';
 
@@ -28,6 +32,12 @@ const handlers = createAiHandlers({
   },
   service,
 });
+const householdMutations = firestoreHouseholdMutations();
+const householdHandlers = createHouseholdHandlers({
+  authorize: authorizeAllowlistedUser,
+  create: householdMutations.create,
+  join: householdMutations.join,
+});
 
 const aiOptions = {
   secrets: [GEMINI_API_KEY] as [typeof GEMINI_API_KEY],
@@ -39,3 +49,6 @@ export const tagRecipes = onCall(aiOptions, handlers.tagRecipes);
 export const reminderFlags = onCall(aiOptions, handlers.reminderFlags);
 export const shoppingGroups = onCall(aiOptions, handlers.shoppingGroups);
 export const substitutions = onCall(aiOptions, handlers.substitutions);
+export const createHousehold = onCall(householdHandlers.create);
+export const joinHousehold = onCall(householdHandlers.join);
+export const switchHousehold = onCall(householdHandlers.switch);
