@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { tagRecipesWithGemini } from './lib/legacyGeminiOperator';
+import { tagRecipesWithAdminGemini } from './lib/geminiAdmin';
 import { fetchRawHtml } from '../services/scraper/http';
 import { parseRecipe } from '../services/scraper/parse';
 import { INDEXED_SITES } from '../services/scraper/sites';
@@ -57,8 +57,8 @@ async function loadAdmin(): Promise<any> {
 }
 
 
-/** Recipes sent per Gemini API call. 100 keeps input well under context limits. */
-const BATCH_SIZE = 100;
+/** Match the callable contract's maximum recipe batch. */
+const BATCH_SIZE = 25;
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 interface IndexEntry {
@@ -190,8 +190,20 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
       const tGemini = Date.now();
       let tagsById = new Map<string, string[]>();
       try {
-        tagsById = await tagRecipesWithGemini(
-          valid.map((v) => ({ recipeId: v.id, recipe: v.recipe })),
+        const aiInput = valid.map(({ id: recipeId, recipe }) => ({
+          recipeId,
+          title: recipe.title.slice(0, 160),
+          totalMinutes: parseMinutesField(recipe.totalTime),
+          ingredients: recipe.ingredients
+            .slice(0, 100)
+            .map((ingredient) => ingredient.name.slice(0, 200)),
+          steps: recipe.instructions
+            .slice(0, 40)
+            .map((step) => step.text.slice(0, 300)),
+          existingTags: (recipe.tags ?? []).slice(0, 30),
+        }));
+        tagsById = await tagRecipesWithAdminGemini(
+          aiInput,
           GEMINI_MODEL
         );
         stats.geminiCalls++;

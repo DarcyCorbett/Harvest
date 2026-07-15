@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tagRecipesWithGemini } from './lib/legacyGeminiOperator';
+import { tagRecipesWithAdminGemini } from './lib/geminiAdmin';
 import type { Recipe } from '../services/types';
 
 async function main() {
@@ -22,15 +22,29 @@ async function main() {
 
   const proModel = 'gemini-3.1-pro-preview';
   const flashLiteModel = 'gemini-3.1-flash-lite';
+  const aiInput = recipes.map(({ recipeId, recipe }) => ({
+    recipeId,
+    title: recipe.title.slice(0, 160),
+    totalMinutes: recipe.totalTime
+      ? Number.parseInt(recipe.totalTime, 10) || null
+      : null,
+    ingredients: recipe.ingredients
+      .slice(0, 100)
+      .map((ingredient) => ingredient.name.slice(0, 200)),
+    steps: recipe.instructions
+      .slice(0, 40)
+      .map((step) => step.text.slice(0, 300)),
+    existingTags: (recipe.tags ?? []).slice(0, 30),
+  }));
 
   console.log(`\n--- Tagging with ${proModel} ---`);
   const t0 = Date.now();
-  const proResults = await tagRecipesWithGemini(recipes, proModel);
+  const proResults = await tagRecipesWithAdminGemini(aiInput, proModel);
   console.log(`Time: ${Date.now() - t0}ms`);
 
   console.log(`\n--- Tagging with ${flashLiteModel} ---`);
   const t1 = Date.now();
-  const flashLiteResults = await tagRecipesWithGemini(recipes, flashLiteModel);
+  const flashLiteResults = await tagRecipesWithAdminGemini(aiInput, flashLiteModel);
   console.log(`Time: ${Date.now() - t1}ms`);
 
   console.log('\n--- Comparison ---');
@@ -55,4 +69,8 @@ async function main() {
   console.log(`\nSummary: ${recipes.length - diffCount}/${recipes.length} identical matches.`);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  const message = error instanceof Error ? error.message : 'Unknown operator error';
+  console.error(`[Tagger Test] Failed: ${message}`);
+  process.exitCode = 1;
+});

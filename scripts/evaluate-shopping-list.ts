@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  getGeminiGroupings,
-  type LegacyGeminiGroup,
-} from './lib/legacyGeminiOperator';
+import { getAdminShoppingGroups } from './lib/geminiAdmin';
 import { aggregateByGeminiGroups, type RawIngredient } from '../services/shoppingList';
 import type { Recipe, Ingredient, ShoppingItem } from '../services/types';
+
+type AdminShoppingGroup = Awaited<
+  ReturnType<typeof getAdminShoppingGroups>
+>[number];
 
 // Standalone implementation of applyServingScale to avoid importing React Native dependencies
 function applyServingScale(recipe: Recipe, requiredServings: number): Recipe {
@@ -91,7 +92,7 @@ async function main() {
   const evaluationResults: Record<string, {
     latencyMs: number;
     groupCount: number;
-    groups: LegacyGeminiGroup[];
+    groups: AdminShoppingGroup[];
     finalItems: Omit<ShoppingItem, 'id'>[];
     error?: string;
   }> = {};
@@ -101,7 +102,15 @@ async function main() {
     console.log(`\n[3] Evaluating ${model.name} (${model.id})...`);
     const t0 = Date.now();
     try {
-      const groups = await getGeminiGroupings(rawIngredients, model.id);
+      const groups = await getAdminShoppingGroups(
+        rawIngredients.map(({ id, name, quantity, unit }) => ({
+          id,
+          name,
+          quantity,
+          unit,
+        })),
+        model.id,
+      );
       const latencyMs = Date.now() - t0;
       
       // Collate with programmatic aggregator to see the final outputs
@@ -155,64 +164,24 @@ async function main() {
 
     console.log(`\n>>> ${model.name} (${model.id})`);
     
-    // Check some key grouping test cases:
-    // Case A: Poultry distinction (chicken thighs vs chicken breast vs whole chicken)
-    const chickenGroups = res.groups.filter(g => g.canonicalName.toLowerCase().includes('chicken'));
-    console.log(`  • Poultry Separation Check:`);
-    if (chickenGroups.length > 0) {
-      chickenGroups.forEach(g => {
-        const memberNames = g.sourceIds.map(id => rawIngredients.find(r => r.id === id)?.name);
-        console.log(`    - Group "${g.canonicalName}" (Category: ${g.category}, Unit: "${g.unit || ''}"):`);
-        console.log(`      Members: ${JSON.stringify(memberNames)}`);
-      });
-    } else {
-      console.log('    - No chicken groups found!');
-    }
+    // Keep operator logs useful without exposing ingredient names or lists.
+    const coveredIds = new Set(res.groups.flatMap((group) => group.sourceIds));
+    const mergedGroups = res.groups.filter((group) => group.sourceIds.length > 1);
+    const countUnitGroups = res.groups.filter(
+      (group) => typeof group.unit === 'string' && group.unit.length > 0,
+    );
+    const categoryCounts = res.finalItems.reduce<Record<string, number>>(
+      (counts, item) => ({
+        ...counts,
+        [item.category]: (counts[item.category] ?? 0) + 1,
+      }),
+      {},
+    );
 
-    // Case B: Onion / Garlic consolidation (diced onion, minced garlic, garlic cloves etc.)
-    const garlicGroup = res.groups.find(g => g.canonicalName.toLowerCase() === 'garlic');
-    const onionGroup = res.groups.find(g => g.canonicalName.toLowerCase() === 'onion' || g.canonicalName.toLowerCase() === 'onions');
-    console.log(`  • Consolidation & Normalization Check:`);
-    if (garlicGroup) {
-      const members = garlicGroup.sourceIds.map(id => rawIngredients.find(r => r.id === id)?.name);
-      console.log(`    - Garlic Group members: ${JSON.stringify(members)}`);
-    } else {
-      console.log('    - No "garlic" canonical group found.');
-    }
-    if (onionGroup) {
-      const members = onionGroup.sourceIds.map(id => rawIngredients.find(r => r.id === id)?.name);
-      console.log(`    - Onion Group members: ${JSON.stringify(members)}`);
-    } else {
-      console.log('    - No "onion/onions" canonical group found.');
-    }
-
-    // Case C: Standard Supermarket Units (Plural counting units)
-    console.log(`  • Supermarket Counting Units (e.g. lemons -> "lemons", eggs -> "eggs"):`);
-    const countGroups = res.groups.filter(g => g.unit && g.unit.length > 0).slice(0, 4);
-    if (countGroups.length > 0) {
-      countGroups.forEach(g => {
-        console.log(`    - "${g.canonicalName}" is counted as "${g.unit}"`);
-      });
-    } else {
-      console.log('    - No custom supermarket counting units returned.');
-    }
-
-    // List top 5 aggregated shopping list items by category
-    console.log(`  • Sample Aggregated Items:`);
-    const sortedItems = [...res.finalItems].sort((a, b) => a.category.localeCompare(b.category));
-    let lastCat = '';
-    let count = 0;
-    for (const item of sortedItems) {
-      if (item.category !== lastCat) {
-        lastCat = item.category;
-        console.log(`    [${lastCat}]`);
-        count = 0;
-      }
-      if (count < 3) {
-        console.log(`      - ${item.quantity} ${item.unit} ${item.name} (from ${item.sources?.length ?? 0} recipe(s))`);
-        count++;
-      }
-    }
+    console.log(`  • Source coverage: ${coveredIds.size}/${rawIngredients.length}`);
+    console.log(`  • Multi-source groups: ${mergedGroups.length}`);
+    console.log(`  • Count-unit groups: ${countUnitGroups.length}`);
+    console.log(`  • Final items by category: ${JSON.stringify(categoryCounts)}`);
   }
 
   // 6. Qualitative Assessment & Conclusion
@@ -223,4 +192,8 @@ async function main() {
   console.log('3. Gemini 3.5 Flash represents the next-generation option, combining the low latency of Flash models with near-Pro quality for complex text processing and JSON structuring.');
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  const message = error instanceof Error ? error.message : 'Unknown operator error';
+  console.error(`[Shopping Evaluation] Failed: ${message}`);
+  process.exitCode = 1;
+});

@@ -32,9 +32,23 @@ $ErrorActionPreference = 'Continue'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-# Per-run write cap. Spark tier free quota = 20K writes/day total. Reserve
-# 2K headroom for app-side writes (recipe cache, meal plans, etc).
-$WriteLimit = 18000
+# This scheduled tagger is a temporary Phase 0 bridge. It uses the same local
+# service-account identity for Firestore and Secret Manager via ADC. Task 10
+# verifies that this identity has secretAccessor on only the Gemini secret.
+$ServiceAccountPath = Join-Path $ProjectRoot 'service-account.json'
+if (-not (Test-Path -LiteralPath $ServiceAccountPath)) {
+  throw "service-account.json is required for Firestore and Secret Manager access."
+}
+$env:GOOGLE_APPLICATION_CREDENTIALS = $ServiceAccountPath
+$env:GOOGLE_CLOUD_PROJECT = 'meal-wizard-ad202'
+
+# Conservative daily allocation: 12,000 discovery + 4,000 tag/cache = 16,000
+# worst-case writes. This leaves at least 2,000 writes below the approved
+# 18,000 ingestion ceiling. The tagger visits four sites and performs at most
+# two writes per successful recipe (500 x 4 x 2).
+$DailyWriteCeiling = 18000
+$DiscoveryWriteLimit = 12000
+$TagLimitPerSite = 500
 
 # Pick site. Force-override env var for manual testing wins; otherwise
 # rotate by ISO day-of-week (1=Mon..7=Sun).
@@ -69,7 +83,8 @@ $LogFile = Join-Path $LogDir "recipe-index-$site-$timestamp.log"
 Write-Host "[CRON] === MealWizard Recipe Index Daily Crawl ==="
 Write-Host "[CRON] Project: $ProjectRoot"
 Write-Host "[CRON] Site:    $site"
-Write-Host "[CRON] Limit:   $WriteLimit new writes"
+Write-Host "[CRON] Discovery limit: $DiscoveryWriteLimit new writes"
+Write-Host "[CRON] Tag limit:       $TagLimitPerSite recipes/site"
 Write-Host "[CRON] Log:     $LogFile"
 Write-Host "[CRON] Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
@@ -78,7 +93,7 @@ $exitCode = 0
 if (-not $isRestDay) {
   # Run the scraper. Tee-Object captures both stdout and stderr (via *>&1)
   # into the log while still echoing to the console.
-  & npx -y tsx scripts/buildRecipeIndex.ts --site $site --limit $WriteLimit *>&1 |
+  & npx -y tsx scripts/buildRecipeIndex.ts --site $site --limit $DiscoveryWriteLimit *>&1 |
     Tee-Object -FilePath $LogFile
   $exitCode = $LASTEXITCODE
 } else {
@@ -88,7 +103,7 @@ if (-not $isRestDay) {
 Write-Host "[CRON] === MealWizard Recipe Tagger ===" *>&1 | Tee-Object -FilePath $LogFile -Append
 Write-Host "[CRON] Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" *>&1 | Tee-Object -FilePath $LogFile -Append
 
-& npx -y tsx scripts/tagRecipeIndex.ts --limit 500 *>&1 |
+& npx -y tsx scripts/tagRecipeIndex.ts --limit $TagLimitPerSite *>&1 |
   Tee-Object -FilePath $LogFile -Append
 
 if ($LASTEXITCODE -ne 0) {

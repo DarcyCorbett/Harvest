@@ -18,6 +18,7 @@ fix*.js
 .expo/
 dist/
 web-build/
+.phase0-dist/
 expo-env.d.ts
 
 # Native

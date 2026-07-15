@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "test": "vitest run --exclude tests/firestore.rules.test.ts",
     "test:rules:vitest": "vitest run tests/firestore.rules.test.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-meal-wizard-rules \"npm run test:rules:vitest\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-meal-wizard-rules \"npm run test:rules:vitest\"",
+    "scan:client-secrets": "node scripts/scanClientSecrets.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",
@@ -54,12 +55,14 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
+    "@google-cloud/secret-manager": "^6.1.0",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "firebase-admin": "^13.9.0",
     "firebase-tools": "^14.9.0",
     "playwright": "^1.59.1",
+    "tsx": "^4.20.3",
     "typescript": "~5.9.2",
     "vitest": "^3.2.4"
   },
