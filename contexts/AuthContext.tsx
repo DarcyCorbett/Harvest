@@ -10,7 +10,9 @@ import {
   isEmailAllowed,
 } from '@/services/firestoreService';
 import {
+  clearAuthenticatedFailureState,
   createAsyncStoragePendingIntentStore,
+  completeGoogleHouseholdOnboarding,
   createPasswordOnboarding,
   householdClient,
   type PasswordOnboardingUser,
@@ -75,6 +77,14 @@ const passwordOnboarding = createPasswordOnboarding({
   households: householdClient,
 });
 
+const googleOnboardingDependencies = {
+  isEmailAllowed,
+  async hasUserProfile(uid: string) {
+    return (await getUserProfile(uid)) !== null;
+  },
+  households: householdClient,
+};
+
 // ─── Provider ──────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -132,8 +142,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             await sendEmailVerification(firebaseUser);
           } finally {
-            await signOut(auth);
-            clearLocalAuth();
+            await clearAuthenticatedFailureState(
+              () => signOut(auth),
+              clearLocalAuth,
+            );
             setLoading(false);
           }
           return;
@@ -144,8 +156,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (email) {
           const allowed = await isEmailAllowed(email);
           if (!allowed) {
-            await signOut(auth);
-            clearLocalAuth();
+            await clearAuthenticatedFailureState(
+              () => signOut(auth),
+              clearLocalAuth,
+            );
             setLoading(false);
             return;
           }
@@ -217,46 +231,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     authFlowInProgress.current = true;
+    let authenticatedUser: User | null = null;
     try {
-    // Lazy-load native module — avoids crash in Expo Go where RNGoogleSignin isn't available
-    const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-    GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID });
-    await GoogleSignin.hasPlayServices();
-    const response = await GoogleSignin.signIn();
-    if (response.type !== 'success') {
-      throw new Error('Google sign-in cancelled');
-    }
-    const idToken = response.data.idToken;
-    if (!idToken) {
-      throw new Error('Google sign-in did not return an idToken');
-    }
-
-    const credential = GoogleAuthProvider.credential(idToken);
-    const result = await signInWithCredential(auth, credential);
-
-    const email = result.user.email;
-    if (email) {
-      const allowed = await isEmailAllowed(email);
-      if (!allowed) {
-        await signOut(auth);
-        throw new Error('Access Denied');
+      // Lazy-load native module — avoids crash in Expo Go where RNGoogleSignin isn't available
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID });
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (response.type !== 'success') {
+        throw new Error('Google sign-in cancelled');
       }
-    }
+      const idToken = response.data.idToken;
+      if (!idToken) {
+        throw new Error('Google sign-in did not return an idToken');
+      }
 
-    const uid = result.user.uid;
-    const profile = await getUserProfile(uid);
-    if (!profile?.householdId) {
-      // New Google user — auto-create a household
-      const { householdId: hId, inviteCode: code } = await householdClient.create();
-      await loadAuthenticatedUser(result.user, { householdId: hId, inviteCode: code });
-      setPendingInviteCode(code);
-    } else {
-      await loadAuthenticatedUser(result.user);
-    }
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result = await signInWithCredential(auth, credential);
+      authenticatedUser = result.user;
+      const onboarding = await completeGoogleHouseholdOnboarding(
+        result.user,
+        googleOnboardingDependencies,
+      );
+
+      if (onboarding.household && 'inviteCode' in onboarding.household) {
+        // New Google user — auto-create a household
+        await loadAuthenticatedUser(result.user, onboarding.household);
+        setPendingInviteCode(onboarding.household.inviteCode);
+      } else {
+        await loadAuthenticatedUser(result.user);
+      }
+    } catch (error) {
+      if (authenticatedUser) {
+        await clearAuthenticatedFailureState(
+          () => signOut(auth),
+          clearLocalAuth,
+        );
+      } else {
+        clearLocalAuth();
+      }
+      throw error;
     } finally {
       authFlowInProgress.current = false;
     }
-  }, [loadAuthenticatedUser]);
+  }, [clearLocalAuth, loadAuthenticatedUser]);
 
   const clearPendingInviteCode = useCallback(() => {
     setPendingInviteCode(null);

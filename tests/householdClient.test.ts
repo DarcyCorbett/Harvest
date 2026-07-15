@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   INVALID_INVITE_CODE,
+  ONBOARDING_RESUME_CODE,
   VERIFICATION_REQUIRED_CODE,
+  clearAuthenticatedFailureState,
   createAsyncStoragePendingIntentStore,
+  completeGoogleHouseholdOnboarding,
   createPasswordOnboarding,
   createHouseholdClient,
   type PasswordOnboardingDependencies,
@@ -221,6 +224,98 @@ describe('createPasswordOnboarding registration', () => {
     expect(dependencies.createUser).not.toHaveBeenCalled();
     expect(dependencies.pendingIntents.save).not.toHaveBeenCalled();
   });
+
+  it('deletes the just-created Auth account and signs out when intent persistence fails', async () => {
+    const user = onboardingUser();
+    const storageFailure = new Error('storage unavailable');
+    const store = pendingStore();
+    vi.mocked(store.save).mockRejectedValue(storageFailure);
+    const dependencies = onboardingDependencies({
+      createUser: vi.fn(async () => user),
+      pendingIntents: store,
+    });
+
+    await expect(
+      createPasswordOnboarding(dependencies).register(
+        'member@example.com',
+        'private-password',
+      ),
+    ).rejects.toBe(storageFailure);
+    expect(user.delete).toHaveBeenCalledOnce();
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
+    expect(dependencies.sendVerification).not.toHaveBeenCalled();
+    expect(dependencies.households.create).not.toHaveBeenCalled();
+    expect(dependencies.households.join).not.toHaveBeenCalled();
+  });
+
+  it('preserves the onboarding result and releases busy state when sign-out fails', async () => {
+    const cleanupFailure = new Error('sign-out unavailable');
+    const dependencies = onboardingDependencies({
+      signOut: vi.fn(async () => { throw cleanupFailure; }),
+    });
+    const onboarding = createPasswordOnboarding(dependencies);
+
+    await expect(
+      onboarding.register('member@example.com', 'private-password'),
+    ).rejects.toMatchObject({ code: VERIFICATION_REQUIRED_CODE });
+    expect(onboarding.isBusy()).toBe(false);
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('lets a verified profile-less account replace its intent and resume safely', async () => {
+    const emailExists = Object.assign(new Error('email exists'), {
+      code: 'auth/email-already-in-use',
+    });
+    const user = onboardingUser({ emailVerified: true });
+    const store = pendingStore();
+    const dependencies = onboardingDependencies({
+      createUser: vi.fn(async () => { throw emailExists; }),
+      signIn: vi.fn(async () => user),
+      pendingIntents: store,
+    });
+
+    await expect(
+      createPasswordOnboarding(dependencies).register(
+        'member@example.com',
+        'private-password',
+        'new234',
+      ),
+    ).rejects.toMatchObject({ code: ONBOARDING_RESUME_CODE });
+    expect(dependencies.hasUserProfile).toHaveBeenCalledWith('new-user');
+    expect(store.save).toHaveBeenCalledWith({
+      version: 1,
+      uid: 'new-user',
+      email: 'member@example.com',
+      action: 'join',
+      inviteCode: 'new234',
+    });
+    expect(dependencies.sendVerification).not.toHaveBeenCalled();
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('does not replace onboarding state for an established profile', async () => {
+    const emailExists = Object.assign(new Error('email exists'), {
+      code: 'auth/email-already-in-use',
+    });
+    const user = onboardingUser({ emailVerified: true });
+    const store = pendingStore();
+    const dependencies = onboardingDependencies({
+      createUser: vi.fn(async () => { throw emailExists; }),
+      signIn: vi.fn(async () => user),
+      hasUserProfile: vi.fn(async () => true),
+      pendingIntents: store,
+    });
+
+    await expect(
+      createPasswordOnboarding(dependencies).register(
+        'member@example.com',
+        'private-password',
+        'new234',
+      ),
+    ).rejects.toBe(emailExists);
+    expect(store.save).not.toHaveBeenCalled();
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
+  });
 });
 
 describe('createPasswordOnboarding login and resume', () => {
@@ -243,6 +338,18 @@ describe('createPasswordOnboarding login and resume', () => {
     expect(dependencies.pendingIntents.load).not.toHaveBeenCalled();
     expect(dependencies.households.create).not.toHaveBeenCalled();
     expect(dependencies.households.join).not.toHaveBeenCalled();
+  });
+
+  it('preserves the login result when failure cleanup cannot sign out', async () => {
+    const dependencies = onboardingDependencies({
+      signOut: vi.fn(async () => { throw new Error('sign-out unavailable'); }),
+    });
+    const onboarding = createPasswordOnboarding(dependencies);
+
+    await expect(
+      onboarding.login('member@example.com', 'private-password'),
+    ).rejects.toMatchObject({ code: VERIFICATION_REQUIRED_CODE });
+    expect(onboarding.isBusy()).toBe(false);
   });
 
   it('resumes exactly the verified create intent and clears it only after success', async () => {
@@ -303,7 +410,7 @@ describe('createPasswordOnboarding login and resume', () => {
     expect(store.clear).toHaveBeenCalledOnce();
   });
 
-  it('cleans up only the matching newly-created account after an invalid resumed join', async () => {
+  it('keeps an invalid join recoverable without deleting the Auth account or intent', async () => {
     const user = onboardingUser({ emailVerified: true });
     const store = pendingStore({
       version: 1,
@@ -328,8 +435,9 @@ describe('createPasswordOnboarding login and resume', () => {
         'private-password',
       ),
     ).rejects.toMatchObject({ code: INVALID_INVITE_CODE });
-    expect(user.delete).toHaveBeenCalledOnce();
-    expect(store.clear).toHaveBeenCalledOnce();
+    expect(user.delete).not.toHaveBeenCalled();
+    expect(store.clear).not.toHaveBeenCalled();
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -392,6 +500,7 @@ describe('createPasswordOnboarding login and resume', () => {
     ).rejects.toBe(failure);
     expect(store.clear).not.toHaveBeenCalled();
     expect(user.delete).not.toHaveBeenCalled();
+    expect(dependencies.signOut).toHaveBeenCalledOnce();
   });
 
   it('clears a matching stale intent without mutation or deletion when a profile exists', async () => {
@@ -425,6 +534,96 @@ describe('createPasswordOnboarding login and resume', () => {
     expect(dependencies.households.create).not.toHaveBeenCalled();
     expect(user.delete).not.toHaveBeenCalled();
     expect(store.clear).toHaveBeenCalledOnce();
+  });
+});
+
+describe('completeGoogleHouseholdOnboarding', () => {
+  function googleDependencies(overrides: Record<string, unknown> = {}) {
+    return {
+      isEmailAllowed: vi.fn(async () => true),
+      hasUserProfile: vi.fn(async () => false),
+      households: {
+        create: vi.fn(async () => ({
+          householdId: 'google-household',
+          inviteCode: 'ABC234',
+        })),
+        join: vi.fn(),
+        switch: vi.fn(),
+      },
+      ...overrides,
+    };
+  }
+
+  it('creates a first Google household through the fixed callable', async () => {
+    const user = onboardingUser({ emailVerified: true });
+    const dependencies = googleDependencies();
+
+    await expect(
+      completeGoogleHouseholdOnboarding(user, dependencies),
+    ).resolves.toEqual({
+      user,
+      household: {
+        householdId: 'google-household',
+        inviteCode: 'ABC234',
+      },
+    });
+    expect(dependencies.households.create).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an existing Google profile without creating another household', async () => {
+    const user = onboardingUser({ emailVerified: true });
+    const dependencies = googleDependencies({
+      hasUserProfile: vi.fn(async () => true),
+    });
+
+    await expect(
+      completeGoogleHouseholdOnboarding(user, dependencies),
+    ).resolves.toEqual({ user, household: null });
+    expect(dependencies.households.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unverified identity', { emailVerified: false }, {}],
+    ['non-allowlisted identity', { emailVerified: true }, {
+      isEmailAllowed: vi.fn(async () => false),
+    }],
+  ])('rejects a %s before it can create a household', async (_name, userOverrides, depOverrides) => {
+    const user = onboardingUser(userOverrides);
+    const dependencies = googleDependencies(depOverrides);
+
+    await expect(
+      completeGoogleHouseholdOnboarding(user, dependencies),
+    ).rejects.toThrow('Access Denied');
+    expect(dependencies.households.create).not.toHaveBeenCalled();
+  });
+
+  it('preserves a first-household creation failure for the context cleanup owner', async () => {
+    const user = onboardingUser({ emailVerified: true });
+    const failure = new Error('backend unavailable');
+    const dependencies = googleDependencies({
+      households: {
+        create: vi.fn(async () => { throw failure; }),
+        join: vi.fn(),
+        switch: vi.fn(),
+      },
+    });
+
+    await expect(
+      completeGoogleHouseholdOnboarding(user, dependencies),
+    ).rejects.toBe(failure);
+  });
+});
+
+describe('clearAuthenticatedFailureState', () => {
+  it('always clears local auth state when Firebase sign-out rejects', async () => {
+    const signOut = vi.fn(async () => { throw new Error('sign-out unavailable'); });
+    const clearLocalAuth = vi.fn();
+
+    await expect(
+      clearAuthenticatedFailureState(signOut, clearLocalAuth),
+    ).resolves.toBeUndefined();
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(clearLocalAuth).toHaveBeenCalledOnce();
   });
 });
 
@@ -507,13 +706,27 @@ describe('mobile household mutation boundary', () => {
 
     expect(source).toContain('passwordOnboarding.register(');
     expect(source).toContain('passwordOnboarding.login(');
-    expect(source).toContain('householdClient.create()');
+    expect(source).toContain('completeGoogleHouseholdOnboarding(');
+    expect(source).toContain('clearAuthenticatedFailureState(');
     expect(source).toContain('householdClient.switch(');
     expect(source).not.toMatch(/\b(saveUserProfile|firestoreSwitchHousehold|joinHousehold)\b/);
   });
 
-  it('shows the stable verification-required result on registration and login', () => {
-    expect(read('app/register.tsx')).toContain('VERIFICATION_REQUIRED_CODE');
+  it('handles password onboarding results in the password registration handler', () => {
+    const source = read('app/register.tsx');
+    const passwordHandler = source.slice(
+      source.indexOf('const handleRegister'),
+      source.indexOf('const handleCopyCode'),
+    );
+    const googleHandler = source.slice(
+      source.indexOf('const handleGoogleSignIn'),
+      source.indexOf('const handleRegister'),
+    );
+
+    expect(passwordHandler).toContain('VERIFICATION_REQUIRED_CODE');
+    expect(passwordHandler).toContain('ONBOARDING_RESUME_CODE');
+    expect(googleHandler).not.toContain('VERIFICATION_REQUIRED_CODE');
+    expect(googleHandler).not.toContain('ONBOARDING_RESUME_CODE');
     expect(read('app/login.tsx')).toContain('VERIFICATION_REQUIRED_CODE');
   });
 });

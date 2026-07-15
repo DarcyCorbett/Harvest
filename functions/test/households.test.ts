@@ -212,6 +212,7 @@ describe('createHouseholdMutations', () => {
         householdId: 'existing-household',
         inviteCode: 'MNP789',
       })),
+      findExactInvite: vi.fn(async () => ['existing-household']),
     });
     const generate = vi.fn(() => 'ABC234');
 
@@ -225,7 +226,32 @@ describe('createHouseholdMutations', () => {
       inviteCode: 'MNP789',
     });
     expect(generate).not.toHaveBeenCalled();
-    expect(store.findExactInvite).not.toHaveBeenCalled();
+    expect(store.findExactInvite).toHaveBeenCalledWith('MNP789');
+    expect(store.createAtomic).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing reservation', []],
+    ['duplicate invite', ['existing-household', 'legacy-duplicate']],
+    ['conflicting reservation', ['different-household']],
+  ])('fails closed when an existing household has a %s', async (_name, matches) => {
+    const store = mutationStore({
+      getExisting: vi.fn(async () => ({
+        householdId: 'existing-household',
+        inviteCode: 'MNP789',
+      })),
+      findExactInvite: vi.fn(async () => matches),
+    });
+
+    await expect(
+      createHouseholdMutations(store, () => 'ABC234').create(
+        'user-1',
+        'member@example.com',
+      ),
+    ).rejects.toMatchObject({
+      code: 'failed-precondition',
+      message: 'Household state is invalid.',
+    });
     expect(store.createAtomic).not.toHaveBeenCalled();
   });
 

@@ -66,7 +66,18 @@ export function createHouseholdMutations(
   return {
     async create(uid, email) {
       const existingHousehold = await store.getExisting(uid, email);
-      if (existingHousehold) return existingHousehold;
+      if (existingHousehold) {
+        const exactMatches = await store.findExactInvite(
+          existingHousehold.inviteCode,
+        );
+        if (
+          exactMatches.length !== 1
+          || exactMatches[0] !== existingHousehold.householdId
+        ) {
+          throw storageFailure();
+        }
+        return existingHousehold;
+      }
 
       for (let attempt = 0; attempt < maxCreateAttempts; attempt += 1) {
         const inviteCode = normalizeInviteCode(generateInviteCode());

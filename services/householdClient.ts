@@ -15,6 +15,7 @@ export interface CreatedHousehold {
 
 export const VERIFICATION_REQUIRED_CODE = 'auth/email-verification-required';
 export const INVALID_INVITE_CODE = 'household/invalid-invite';
+export const ONBOARDING_RESUME_CODE = 'auth/onboarding-resume-required';
 
 export type PendingHouseholdIntent = {
   version: 1;
@@ -54,6 +55,12 @@ interface PasswordHouseholds {
   switch(inviteCode: string): Promise<string | null>;
 }
 
+export interface GoogleOnboardingDependencies {
+  isEmailAllowed(email: string): Promise<boolean>;
+  hasUserProfile(uid: string): Promise<boolean>;
+  households: PasswordHouseholds;
+}
+
 export interface PasswordOnboardingDependencies {
   isEmailAllowed(email: string): Promise<boolean>;
   hasUserProfile(uid: string): Promise<boolean>;
@@ -68,6 +75,19 @@ export interface PasswordOnboardingDependencies {
 export interface PasswordLoginResult {
   user: PasswordOnboardingUser;
   household: CreatedHousehold | { householdId: string } | null;
+}
+
+export async function clearAuthenticatedFailureState(
+  signOut: () => Promise<void>,
+  clearLocalAuth: () => void,
+): Promise<void> {
+  try {
+    await signOut();
+  } catch {
+    // Local authority must still be cleared; the caller preserves the original error.
+  } finally {
+    clearLocalAuth();
+  }
 }
 
 function codedError(code: string, message: string): Error & { code: string } {
@@ -163,13 +183,40 @@ export function createPasswordOnboarding(
       inviteCodeValue?: string,
     ): Promise<never> {
       busy = true;
+      let user: PasswordOnboardingUser | null = null;
+      let createdNewAccount = false;
+      let signedOut = false;
+      const signOutOnce = async () => {
+        if (signedOut) return;
+        await dependencies.signOut();
+        signedOut = true;
+      };
       try {
         const email = normalizedEmail(emailValue);
         if (!email || !(await dependencies.isEmailAllowed(email))) {
           throw new Error('Access Denied');
         }
 
-        const user = await dependencies.createUser(email, password);
+        let createError: unknown;
+        try {
+          user = await dependencies.createUser(email, password);
+          createdNewAccount = true;
+        } catch (error) {
+          if (
+            typeof error !== 'object'
+            || error === null
+            || !('code' in error)
+            || error.code !== 'auth/email-already-in-use'
+          ) {
+            throw error;
+          }
+          createError = error;
+          user = await dependencies.signIn(email, password);
+          await user.reload();
+          await user.getIdToken(true);
+          if (await dependencies.hasUserProfile(user.uid)) throw createError;
+        }
+
         const inviteCode = inviteCodeValue?.trim();
         const intent: PendingHouseholdIntent = inviteCode
           ? {
@@ -185,36 +232,61 @@ export function createPasswordOnboarding(
               email,
               action: 'create',
             };
-        await dependencies.pendingIntents.save(intent);
+        let intentSaved = false;
         try {
-          await dependencies.sendVerification(user);
-        } finally {
-          await dependencies.signOut();
+          await dependencies.pendingIntents.save(intent);
+          intentSaved = true;
+          if (user.emailVerified !== true) {
+            await dependencies.sendVerification(user);
+          }
+        } catch (error) {
+          if (createdNewAccount && !intentSaved) {
+            try {
+              await user.delete();
+            } catch {
+              // Sign-out below still removes local authority if Auth cleanup fails.
+            }
+          }
+          throw error;
         }
-        throw verificationRequired();
+
+        if (user.emailVerified !== true) throw verificationRequired();
+        throw codedError(
+          ONBOARDING_RESUME_CODE,
+          'Household setup updated. Log in to continue.',
+        );
       } finally {
-        busy = false;
+        try {
+          if (user) await signOutOnce();
+        } catch {
+          // Preserve the actionable registration result if Firebase cleanup fails.
+        } finally {
+          busy = false;
+        }
       }
     },
 
     async login(emailValue: string, password: string): Promise<PasswordLoginResult> {
       busy = true;
+      let user: PasswordOnboardingUser | null = null;
+      let signedOut = false;
+      const signOutOnce = async () => {
+        if (signedOut) return;
+        await dependencies.signOut();
+        signedOut = true;
+      };
       try {
         const requestedEmail = normalizedEmail(emailValue);
         if (!requestedEmail || !(await dependencies.isEmailAllowed(requestedEmail))) {
           throw new Error('Access Denied');
         }
 
-        const user = await dependencies.signIn(requestedEmail, password);
+        user = await dependencies.signIn(requestedEmail, password);
         await user.reload();
         await user.getIdToken(true);
 
         if (user.emailVerified !== true) {
-          try {
-            await dependencies.sendVerification(user);
-          } finally {
-            await dependencies.signOut();
-          }
+          await dependencies.sendVerification(user);
           throw verificationRequired();
         }
 
@@ -222,7 +294,6 @@ export function createPasswordOnboarding(
           ? normalizedEmail(user.email)
           : '';
         if (!authenticatedEmail) {
-          await dependencies.signOut();
           throw new Error('Access Denied');
         }
 
@@ -248,21 +319,48 @@ export function createPasswordOnboarding(
 
         const householdId = await dependencies.households.join(pending.inviteCode);
         if (!householdId) {
-          await user.delete();
-          await dependencies.pendingIntents.clear();
           throw codedError(
             INVALID_INVITE_CODE,
-            'Invalid invite code. Please check and register again.',
+            'Invalid invite code. Return to registration to update your household choice.',
           );
         }
 
         await dependencies.pendingIntents.clear();
         return { user, household: { householdId } };
+      } catch (error) {
+        try {
+          if (user) await signOutOnce();
+        } catch {
+          // Preserve the actionable login result if Firebase cleanup fails.
+        }
+        throw error;
       } finally {
         busy = false;
       }
     },
   };
+}
+
+export async function completeGoogleHouseholdOnboarding(
+  user: PasswordOnboardingUser,
+  dependencies: GoogleOnboardingDependencies,
+): Promise<PasswordLoginResult> {
+  const email = typeof user.email === 'string'
+    ? normalizedEmail(user.email)
+    : '';
+  if (
+    user.emailVerified !== true
+    || !email
+    || !(await dependencies.isEmailAllowed(email))
+  ) {
+    throw new Error('Access Denied');
+  }
+
+  if (await dependencies.hasUserProfile(user.uid)) {
+    return { user, household: null };
+  }
+  const household = await dependencies.households.create();
+  return { user, household };
 }
 
 const firebaseInvoke: HouseholdInvoke = async (endpoint, data) => {
