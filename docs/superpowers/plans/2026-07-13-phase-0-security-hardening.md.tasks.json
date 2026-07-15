@@ -55,7 +55,7 @@
     {
       "id": 7,
       "subject": "Task 7: Harden and emulator-test Firestore rules",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [
         6
       ],
@@ -189,7 +189,17 @@
         "Root and instruction media URLs are HTTPS-only; aggregate ingredients and UTF-8 payload size are rejected below Firestore limits before authorization or quota.",
         "A recursive whitespace-tolerant client scan guards against direct recipe writes across the scoped mobile source tree."
       ]
+    },
+    {
+      "taskId": 7,
+      "reason": "Specification and quality review expanded the emulator matrix to prove anonymous root-household denial, full household-subcollection query/CRUD semantics, and recipe/index query behavior rather than inferring them from document gets.",
+      "filesAdded": [],
+      "acceptanceCriteriaAdded": [
+        "Anonymous clients cannot get or list root households.",
+        "For every household subcollection, members can query/get/create/update/delete while outsiders and anonymous clients are denied all five operations.",
+        "Authenticated recipe and recipe-index queries succeed while anonymous document and collection reads fail."
+      ]
     }
   ],
-  "lastUpdated": "2026-07-15T23:15:00+03:00"
+  "lastUpdated": "2026-07-15T23:31:00+03:00"
 }

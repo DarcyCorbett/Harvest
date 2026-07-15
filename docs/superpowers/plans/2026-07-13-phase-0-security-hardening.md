@@ -2432,6 +2432,9 @@ git commit -m "feat: protect legacy recipe writes"
 - [ ] Authenticated clients can read legacy recipes/index documents but cannot create/update/delete them.
 - [ ] A user can read only their own profile; profile writes are backend-only.
 - [ ] Allowlist supports single-document get but denies collection list.
+- [ ] Anonymous clients cannot get or list root households.
+- [ ] Every household subcollection proves member query/get/create/update/delete and outsider/anonymous denial for the same operations.
+- [ ] Authenticated recipe and recipe-index queries succeed while anonymous document and collection reads fail.
 
 **Verify:** `npm run test:rules` → Firebase emulator starts, the authorization matrix passes, and the command exits 0.
 
