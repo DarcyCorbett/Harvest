@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
@@ -47,18 +49,77 @@ export interface LegacyRecipeStore {
   update(recipeId: string, metadata: LegacyMetadata): Promise<void>;
 }
 
-export function firestoreLegacyRecipeStore(): LegacyRecipeStore {
-  const db = getFirestore();
+export interface LegacyRecipeDocuments {
+  createIfMissing(
+    recipeId: string,
+    recipe: LegacyRecipe,
+  ): Promise<{ sourceUrl: unknown }>;
+  update(recipeId: string, metadata: LegacyMetadata): Promise<void>;
+}
 
+function normalizeLegacySourceUrl(sourceUrl: string): string {
+  const normalized = new URL(sourceUrl);
+  normalized.hash = '';
+  return normalized.toString();
+}
+
+function deterministicLegacyRecipeId(normalizedSourceUrl: string): string {
+  const digest = createHash('sha256')
+    .update(normalizedSourceUrl, 'utf8')
+    .digest('hex');
+  return `legacy_${digest}`;
+}
+
+export function createLegacyRecipeStore(
+  documents: LegacyRecipeDocuments,
+): LegacyRecipeStore {
   return {
     async create(recipe) {
-      const reference = db.collection('recipes').doc();
-      await reference.create({
+      const normalizedSourceUrl = normalizeLegacySourceUrl(recipe.sourceUrl);
+      const recipeId = deterministicLegacyRecipeId(normalizedSourceUrl);
+      const existing = await documents.createIfMissing(recipeId, {
         ...recipe,
-        scrapedAt: FieldValue.serverTimestamp(),
-        legacyWriteBridge: true,
+        sourceUrl: normalizedSourceUrl,
       });
-      return reference.id;
+
+      let existingSourceUrl: string;
+      try {
+        if (typeof existing.sourceUrl !== 'string') throw new Error('missing');
+        existingSourceUrl = normalizeLegacySourceUrl(existing.sourceUrl);
+      } catch {
+        throw new HttpsError('internal', 'Recipe storage unavailable.');
+      }
+      if (existingSourceUrl !== normalizedSourceUrl) {
+        throw new HttpsError('internal', 'Recipe storage unavailable.');
+      }
+
+      return recipeId;
+    },
+
+    update(recipeId, metadata) {
+      return documents.update(recipeId, metadata);
+    },
+  };
+}
+
+export function firestoreLegacyRecipeStore(): LegacyRecipeStore {
+  const db = getFirestore();
+  const documents: LegacyRecipeDocuments = {
+    async createIfMissing(recipeId, recipe) {
+      const reference = db.collection('recipes').doc(recipeId);
+      return db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(reference);
+        if (snapshot.exists) {
+          return { sourceUrl: snapshot.get('sourceUrl') };
+        }
+
+        transaction.create(reference, {
+          ...recipe,
+          scrapedAt: FieldValue.serverTimestamp(),
+          legacyWriteBridge: true,
+        });
+        return { sourceUrl: recipe.sourceUrl };
+      });
     },
 
     async update(recipeId, metadata) {
@@ -68,6 +129,8 @@ export function firestoreLegacyRecipeStore(): LegacyRecipeStore {
       });
     },
   };
+
+  return createLegacyRecipeStore(documents);
 }
 
 export function createLegacyRecipeHandlers(dependencies: {

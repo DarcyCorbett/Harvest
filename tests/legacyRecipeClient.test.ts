@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,34 @@ const recipe = {
   nutrition: { calories: 100, protein: 2, carbs: 20, fat: 1 },
   scrapedAt: new Date('2026-07-13T00:00:00Z'),
 };
+
+const DIRECT_RECIPE_WRITE_PATTERNS = [
+  /\b(?:setDoc|updateDoc|deleteDoc)\s*\(\s*doc\s*\(\s*db\s*,\s*['"]recipes['"]/g,
+  /\baddDoc\s*\(\s*collection\s*\(\s*db\s*,\s*['"]recipes['"]/g,
+];
+
+function findDirectRecipeWrites(source: string): string[] {
+  return DIRECT_RECIPE_WRITE_PATTERNS.flatMap((pattern) =>
+    Array.from(source.matchAll(pattern), (match) => match[0]));
+}
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.(?:ts|tsx)$/.test(entry.name) ? [path] : [];
+  });
+}
+
+function findScopedDirectRecipeWrites(): Array<{ file: string; match: string }> {
+  const workspace = process.cwd();
+  return ['app', 'components', 'config', 'contexts', 'services'].flatMap((directory) =>
+    sourceFiles(resolve(workspace, directory)).flatMap((file) =>
+      findDirectRecipeWrites(readFileSync(file, 'utf8')).map((match) => ({
+        file,
+        match,
+      }))));
+}
 
 describe('legacy recipe client', () => {
   it('strips client IDs and dates before saving', async () => {
@@ -55,6 +83,35 @@ describe('legacy recipe client', () => {
     });
   });
 
+  it.each([
+    null,
+    {},
+    { recipeId: '' },
+    { recipeId: 'x'.repeat(161) },
+    { recipeId: 'server-id', extra: true },
+  ])('rejects a malformed save response: %o', async (data) => {
+    const client = createLegacyRecipeClient(vi.fn(async () => ({ data })));
+
+    await expect(client.save('h1', recipe)).rejects.toThrow(
+      'Invalid response from saveLegacyRecipe',
+    );
+  });
+
+  it.each([
+    null,
+    {},
+    { recipeId: '' },
+    { recipeId: 'x'.repeat(161) },
+    { recipeId: 'r1', extra: true },
+    { recipeId: 'different-recipe' },
+  ])('rejects a malformed or mismatched update response: %o', async (data) => {
+    const client = createLegacyRecipeClient(vi.fn(async () => ({ data })));
+
+    await expect(client.update('h1', 'r1', { tags: ['Dinner'] })).rejects.toThrow(
+      'Invalid response from updateLegacyRecipeMetadata',
+    );
+  });
+
   it('rejects missing household context without invoking a callable', async () => {
     const invoke = vi.fn();
     const client = createLegacyRecipeClient(invoke);
@@ -67,10 +124,6 @@ describe('legacy recipe client', () => {
   });
 
   it('routes generation, label editing, and reminder caching through household-aware wrappers', () => {
-    const firestoreService = readFileSync(
-      resolve(process.cwd(), 'services/firestoreService.ts'),
-      'utf8',
-    );
     const scraperService = readFileSync(
       resolve(process.cwd(), 'services/recipeScraperService.ts'),
       'utf8',
@@ -84,12 +137,7 @@ describe('legacy recipe client', () => {
       'utf8',
     );
 
-    expect(firestoreService).not.toMatch(
-      /(?:setDoc|updateDoc|deleteDoc)\(doc\(db, ['"]recipes['"]/,
-    );
-    expect(firestoreService).not.toMatch(
-      /addDoc\(collection\(db, ['"]recipes['"]\)/,
-    );
+    expect(findScopedDirectRecipeWrites()).toEqual([]);
     expect(scraperService).toContain('saveRecipe(request.householdId, recipe)');
     expect(scraperService).toContain('saveRecipe(request.householdId, fallbackRecipe)');
     expect(generatorService).toContain('householdId,');
@@ -98,5 +146,21 @@ describe('legacy recipe client', () => {
     expect(recipeModal).toContain('legacyRecipeClient.update(householdId, recipe.id, {');
     expect(recipeModal).toContain('course: localCourse');
     expect(recipeModal).toContain('tags: localTags');
+  });
+
+  it('detects direct recipe writes even when calls contain arbitrary whitespace', () => {
+    const source = `
+      setDoc (
+        doc ( db , "recipes", recipeId ), data
+      );
+      updateDoc( doc( db,
+        'recipes', recipeId), data);
+      deleteDoc ( doc ( db , 'recipes', recipeId ) );
+      addDoc (
+        collection ( db , "recipes" ), data
+      );
+    `;
+
+    expect(findDirectRecipeWrites(source)).toHaveLength(4);
   });
 });

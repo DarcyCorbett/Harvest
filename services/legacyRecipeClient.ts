@@ -17,6 +17,35 @@ const firebaseInvoke: Invoke = async (endpoint, data) => {
   return { data: response.data };
 };
 
+function parseRecipeIdResponse(
+  endpoint: Endpoint,
+  value: unknown,
+  expectedRecipeId?: string,
+): string {
+  if (
+    typeof value !== 'object'
+    || value === null
+    || Array.isArray(value)
+    || Object.keys(value).length !== 1
+    || !Object.hasOwn(value, 'recipeId')
+  ) {
+    throw new Error(`Invalid response from ${endpoint}`);
+  }
+
+  const { recipeId } = value as { recipeId: unknown };
+  if (
+    typeof recipeId !== 'string'
+    || recipeId.length === 0
+    || recipeId.length > 160
+    || recipeId.trim() !== recipeId
+    || (expectedRecipeId !== undefined && recipeId !== expectedRecipeId)
+  ) {
+    throw new Error(`Invalid response from ${endpoint}`);
+  }
+
+  return recipeId;
+}
+
 export function createLegacyRecipeClient(invoke: Invoke = firebaseInvoke) {
   return {
     async save(householdId: string, recipe: Recipe): Promise<string> {
@@ -26,9 +55,9 @@ export function createLegacyRecipeClient(invoke: Invoke = firebaseInvoke) {
       const result = await invoke('saveLegacyRecipe', {
         householdId,
         recipe: JSON.parse(JSON.stringify(serializable)),
-      }) as { data: { recipeId: string } };
+      });
 
-      return result.data.recipeId;
+      return parseRecipeIdResponse('saveLegacyRecipe', result.data);
     },
 
     async update(
@@ -43,11 +72,16 @@ export function createLegacyRecipeClient(invoke: Invoke = firebaseInvoke) {
     ): Promise<void> {
       if (!householdId.trim()) throw new Error('Household is required');
 
-      await invoke('updateLegacyRecipeMetadata', {
+      const result = await invoke('updateLegacyRecipeMetadata', {
         householdId,
         recipeId,
         ...metadata,
       });
+      parseRecipeIdResponse(
+        'updateLegacyRecipeMetadata',
+        result.data,
+        recipeId,
+      );
     },
   };
 }

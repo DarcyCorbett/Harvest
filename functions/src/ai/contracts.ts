@@ -191,7 +191,15 @@ export type AiEndpoint =
   | 'shoppingGroups'
   | 'substitutions';
 
-const optionalUrl = z.string().url().max(2_048).optional();
+export const MAX_LEGACY_RECIPE_BYTES = 900 * 1024;
+export const MAX_LEGACY_RECIPE_INGREDIENTS = 400;
+
+const httpsUrl = z
+  .string()
+  .url()
+  .max(2_048)
+  .refine((value) => new URL(value).protocol === 'https:', 'HTTPS URL required');
+const optionalHttpsUrl = httpsUrl.optional();
 const legacyIngredient = z
   .object({
     name: ingredientName,
@@ -203,8 +211,8 @@ const legacyIngredient = z
 const legacyInstruction = z
   .object({
     text: z.string().trim().min(1).max(5_000),
-    imageUrl: optionalUrl,
-    videoEmbedUrl: optionalUrl,
+    imageUrl: optionalHttpsUrl,
+    videoEmbedUrl: optionalHttpsUrl,
     isHeader: z.boolean().optional(),
   })
   .strict();
@@ -213,8 +221,8 @@ export const legacyRecipeSchema = z
   .object({
     title: shortText,
     sourceUrl: z.string().url().max(2_048),
-    imageUrl: optionalUrl,
-    videoEmbedUrl: optionalUrl,
+    imageUrl: optionalHttpsUrl,
+    videoEmbedUrl: optionalHttpsUrl,
     prepTime: z.string().max(80),
     cookTime: z.string().max(80),
     totalTime: z.string().max(80).optional(),
@@ -249,7 +257,31 @@ export const legacyRecipeSchema = z
     needsDefrost: z.boolean().optional(),
     needsMarinate: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const aggregateIngredientCount = value.ingredients.length
+      + (value.ingredientGroups ?? []).reduce(
+        (count, group) => count + group.ingredients.length,
+        0,
+      );
+    if (aggregateIngredientCount > MAX_LEGACY_RECIPE_INGREDIENTS) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ingredientGroups'],
+        message: 'Too many aggregate ingredients.',
+      });
+    }
+
+    if (
+      Buffer.byteLength(JSON.stringify(value), 'utf8')
+      > MAX_LEGACY_RECIPE_BYTES
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Recipe payload is too large.',
+      });
+    }
+  });
 
 export const saveLegacyRecipeRequest = householdRequest
   .extend({ recipe: legacyRecipeSchema })
