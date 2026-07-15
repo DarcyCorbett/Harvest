@@ -55,7 +55,7 @@
     {
       "id": 7,
       "subject": "Task 7: Harden and emulator-test Firestore rules",
-      "status": "pending",
+      "status": "in_progress",
       "blockedBy": [
         6
       ],
@@ -191,5 +191,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-15T23:14:00+03:00"
+  "lastUpdated": "2026-07-15T23:15:00+03:00"
 }
