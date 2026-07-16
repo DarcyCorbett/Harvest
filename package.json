@@ -10,9 +10,13 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "vitest run --exclude tests/firestore.rules.test.ts",
+    "test:client": "vitest run tests --exclude tests/firestore.rules.test.ts",
+    "test:functions": "npm --prefix functions test",
+    "build:functions": "npm --prefix functions run build",
     "test:rules:vitest": "vitest run tests/firestore.rules.test.ts",
     "test:rules": "firebase emulators:exec --only firestore --project demo-meal-wizard-rules \"npm run test:rules:vitest\"",
-    "scan:client-secrets": "node scripts/scanClientSecrets.mjs"
+    "scan:client-secrets": "node scripts/scanClientSecrets.mjs",
+    "verify:phase0": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",
