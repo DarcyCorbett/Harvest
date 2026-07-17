@@ -82,7 +82,7 @@
     {
       "id": 10,
       "subject": "Task 10: Deploy, smoke-test, scan, and revoke old keys",
-      "status": "in_progress",
+      "status": "completed",
       "blockedBy": [
         9
       ],
@@ -94,7 +94,7 @@
       "sourceTaskId": 2,
       "targetTaskId": 5,
       "subject": "Complete verified-email password registration before household onboarding",
-      "status": "pending",
+      "status": "completed",
       "required": true,
       "files": [
         "contexts/AuthContext.tsx",
@@ -113,7 +113,7 @@
       "sourceTaskId": 4,
       "targetTaskId": 9,
       "subject": "Replace the temporary script-only Gemini adapter with Secret Manager operator tooling",
-      "status": "pending",
+      "status": "completed",
       "required": true,
       "files": [
         "scripts/lib/legacyGeminiOperator.ts",
@@ -229,5 +229,5 @@
       ]
     }
   ],
-  "lastUpdated": "2026-07-16T00:56:00+03:00"
+  "lastUpdated": "2026-07-17T23:32:00+03:00"
 }
