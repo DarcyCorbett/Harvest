@@ -43,6 +43,9 @@ export interface CanonicalIngredientGroup {
 
 export interface CanonicalInstructionStep {
   text: string;
+  imageUrl?: string;
+  videoEmbedUrl?: string;
+  isHeader?: boolean;
 }
 
 export interface RecipeMetadata {
