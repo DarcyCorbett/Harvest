@@ -654,10 +654,7 @@ export function firestoreCatalogueRunStore(): CatalogueRunStore {
       }, { merge: true });
     },
     async summarize(runId, summary) {
-      await db.collection('catalogueRuns').doc(runId).set({
-        ...summary,
-        completedAt: new Date().toISOString(),
-      }, { merge: true });
+      await db.collection('catalogueRuns').doc(runId).set(summary, { merge: true });
     },
   };
 }

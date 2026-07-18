@@ -32,6 +32,8 @@ const GEMINI_COUNTERS = [
   'candidatesTokenCount',
   'totalTokenCount',
 ];
+const SHA256_DOCUMENT_ID = /^[a-f0-9]{64}$/;
+const PROTECTED_ACCESS_REASON = /^unsupported-(401|402|403)$/;
 
 function object(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -43,6 +45,15 @@ function object(value, label) {
 function nonNegative(value, label) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     throw new Error(`${label} must be a non-negative number`);
+  }
+  return value;
+}
+
+function sampleRecipeIds(value, label) {
+  if (!Array.isArray(value) || value.length > 20
+    || value.some((id) => typeof id !== 'string' || !SHA256_DOCUMENT_ID.test(id))
+    || new Set(value).size !== value.length) {
+    throw new Error(`${label} sample identifiers are invalid`);
   }
   return value;
 }
@@ -67,9 +78,7 @@ export function sanitizeCataloguePilotRun(rawRun) {
       const source = object(bySource[sourceKey], `catalogue run ${sourceKey}`);
       return [sourceKey, {
         ...Object.fromEntries(SOURCE_COUNTERS.map((counter) => [counter, source[counter]])),
-        sampleRecipeIds: Array.isArray(source.sampleRecipeIds)
-          ? source.sampleRecipeIds.filter((id) => typeof id === 'string').slice(0, 20)
-          : [],
+        sampleRecipeIds: sampleRecipeIds(source.sampleRecipeIds, `catalogue run ${sourceKey}`),
       }];
     })),
     telemetry: {
@@ -100,9 +109,16 @@ function validateRunMeasurements(run, label, writeCap) {
     for (const counter of SOURCE_COUNTERS) {
       nonNegative(source[counter], `${label} ${sourceKey}.${counter}`);
     }
-    if (!Array.isArray(source.sampleRecipeIds) || source.sampleRecipeIds.length > 20
-      || source.sampleRecipeIds.some((id) => typeof id !== 'string' || id.length === 0)) {
-      throw new Error(`${label} ${sourceKey} sample identifiers are invalid`);
+    sampleRecipeIds(source.sampleRecipeIds, `${label} ${sourceKey}`);
+  }
+
+  for (const counter of RUN_COUNTERS) {
+    const sourceTotal = PILOT_SOURCES.reduce(
+      (sum, sourceKey) => sum + sourceMetrics(run, sourceKey, label)[counter],
+      0,
+    );
+    if (metrics[counter] !== sourceTotal) {
+      throw new Error(`${label} metrics.${counter} does not match the per-source total`);
     }
   }
 
@@ -159,11 +175,14 @@ function validateSecondRun(second) {
 
 function validateAudit(audit) {
   const fields = [
+    'expectedSampleDocuments',
     'sampledDocuments',
+    'missingSampleDocuments',
     'readyRecipeTin',
     'readySeriousEats',
     'reviewDocuments',
     'disabledSeriousEats',
+    'invalidSeriousEatsReasonCodes',
     'invalidReady',
     'searchMismatches',
     'missingTime',
@@ -171,7 +190,15 @@ function validateAudit(audit) {
     'estimatedDocumentBytes',
   ];
   for (const field of fields) nonNegative(audit[field], `audit.${field}`);
-  if (audit.sampledDocuments < 1 || audit.readyRecipeTin < 1) {
+  if (!Number.isInteger(audit.expectedSampleDocuments)
+    || !Number.isInteger(audit.sampledDocuments)
+    || !Number.isInteger(audit.missingSampleDocuments)
+    || audit.expectedSampleDocuments < 1
+    || audit.missingSampleDocuments !== 0
+    || audit.sampledDocuments !== audit.expectedSampleDocuments) {
+    throw new Error('Pilot sample document audit is incomplete');
+  }
+  if (audit.readyRecipeTin < 1) {
     throw new Error('Pilot recipe quality gate has no ready RecipeTin Eats sample');
   }
   if (audit.invalidReady > 0 || audit.searchMismatches > 0
@@ -179,11 +206,15 @@ function validateAudit(audit) {
     throw new Error('Pilot recipe quality gate failed');
   }
 
+  if (!Array.isArray(audit.seriousEatsReasonCodes)
+    || audit.invalidSeriousEatsReasonCodes > 0
+    || audit.seriousEatsReasonCodes.some((code) => !PROTECTED_ACCESS_REASON.test(code))) {
+    throw new Error('Serious Eats evidence contains an unsafe protected-access reason');
+  }
+
   if (audit.readySeriousEats < 1) {
     if (audit.disabledSeriousEats < 1
-      || !Array.isArray(audit.seriousEatsReasonCodes)
-      || audit.seriousEatsReasonCodes.length < 1
-      || audit.seriousEatsReasonCodes.some((code) => !/^unsupported-(401|402|403)$/.test(code))) {
+      || audit.seriousEatsReasonCodes.length < 1) {
       throw new Error('Serious Eats outcome is not a bounded protected-access result');
     }
   }

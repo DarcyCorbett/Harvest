@@ -5,6 +5,10 @@ import {
   validateCataloguePilotEvidence,
 } from '../scripts/cataloguePilotValidation.mjs';
 
+const recipeTinId1 = 'a'.repeat(64);
+const recipeTinId2 = 'b'.repeat(64);
+const seriousEatsId = 'c'.repeat(64);
+
 function sourceMetrics(overrides: Record<string, unknown> = {}) {
   return {
     discovered: 0,
@@ -20,7 +24,7 @@ function sourceMetrics(overrides: Record<string, unknown> = {}) {
     recipeReads: 0,
     documentWrites: 0,
     estimatedDocumentBytes: 0,
-    sampleRecipeIds: [],
+    sampleRecipeIds: [] as string[],
     ...overrides,
   };
 }
@@ -52,7 +56,7 @@ function run(overrides: Record<string, unknown> = {}) {
         recipeReads: 2,
         documentWrites: 2,
         estimatedDocumentBytes: 20_000,
-        sampleRecipeIds: ['recipe-tin-1', 'recipe-tin-2'],
+        sampleRecipeIds: [recipeTinId1, recipeTinId2],
       }),
       seriouseats: sourceMetrics({
         discovered: 1,
@@ -61,7 +65,7 @@ function run(overrides: Record<string, unknown> = {}) {
         recipeReads: 1,
         documentWrites: 1,
         estimatedDocumentBytes: 500,
-        sampleRecipeIds: ['serious-eats-1'],
+        sampleRecipeIds: [seriousEatsId],
       }),
     },
     telemetry: {
@@ -123,11 +127,14 @@ function validEvidence() {
       telemetry: { gemini: { calls: 0, promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 } },
     }),
     audit: {
+      expectedSampleDocuments: 3,
       sampledDocuments: 3,
+      missingSampleDocuments: 0,
       readyRecipeTin: 2,
       readySeriousEats: 0,
       reviewDocuments: 0,
       disabledSeriousEats: 1,
+      invalidSeriousEatsReasonCodes: 0,
       seriousEatsReasonCodes: ['unsupported-402'],
       invalidReady: 0,
       searchMismatches: 0,
@@ -172,6 +179,17 @@ describe('catalogue Phase 2 pilot validation', () => {
     expect(JSON.stringify(sanitized)).not.toContain('private-evidence');
   });
 
+  it('rejects sample identifiers that are not SHA-256 document hashes', () => {
+    const unsafe = run();
+    unsafe.bySource.recipetineats.sampleRecipeIds = ['https://example.com/private-recipe'];
+
+    expect(() => sanitizeCataloguePilotRun(unsafe)).toThrow('sample identifiers');
+
+    const duplicate = run();
+    duplicate.bySource.recipetineats.sampleRecipeIds = [recipeTinId1, recipeTinId1];
+    expect(() => sanitizeCataloguePilotRun(duplicate)).toThrow('sample identifiers');
+  });
+
   it('accepts a ready RecipeTin sample and explicit Serious Eats HTTP 402 outcome', () => {
     expect(() => validateCataloguePilotEvidence(validEvidence())).not.toThrow();
   });
@@ -191,10 +209,20 @@ describe('catalogue Phase 2 pilot validation', () => {
     ['rerun write', (value: ReturnType<typeof validEvidence>) => {
       value.second.bySource.recipetineats.documentWrites = 1;
     }],
+    ['aggregate/source mismatch', (value: ReturnType<typeof validEvidence>) => {
+      value.second.bySource.recipetineats.fetched = 1;
+    }],
     ['invalid ready recipe', (value: ReturnType<typeof validEvidence>) => { value.audit.invalidReady = 1; }],
     ['search mismatch', (value: ReturnType<typeof validEvidence>) => { value.audit.searchMismatches = 1; }],
     ['missing time', (value: ReturnType<typeof validEvidence>) => { value.audit.missingTime = 1; }],
     ['missing taxonomy', (value: ReturnType<typeof validEvidence>) => { value.audit.missingTaxonomy = 1; }],
+    ['missing sampled document', (value: ReturnType<typeof validEvidence>) => {
+      value.audit.sampledDocuments = 2;
+      value.audit.missingSampleDocuments = 1;
+    }],
+    ['sample audit mismatch', (value: ReturnType<typeof validEvidence>) => {
+      value.audit.expectedSampleDocuments = 4;
+    }],
     ['selector p95', (value: ReturnType<typeof validEvidence>) => { value.selection.p95Ms = 2_001; }],
     ['selector iterations', (value: ReturnType<typeof validEvidence>) => { value.selection.iterations = 9; }],
     ['negative byte measurement', (value: ReturnType<typeof validEvidence>) => {
@@ -222,6 +250,15 @@ describe('catalogue Phase 2 pilot validation', () => {
   it('rejects a Serious Eats disabled outcome without a bounded protected-access reason', () => {
     const evidence = validEvidence();
     evidence.audit.seriousEatsReasonCodes = ['provider-secret-value'];
+    expect(() => validateCataloguePilotEvidence(evidence)).toThrow('Serious Eats');
+  });
+
+  it('rejects an unsafe Serious Eats reason even when a ready sample exists', () => {
+    const evidence = validEvidence();
+    evidence.audit.readySeriousEats = 1;
+    evidence.audit.invalidSeriousEatsReasonCodes = 1;
+    evidence.audit.seriousEatsReasonCodes = [];
+
     expect(() => validateCataloguePilotEvidence(evidence)).toThrow('Serious Eats');
   });
 });

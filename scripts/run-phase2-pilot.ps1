@@ -3,7 +3,9 @@ param(
   [Parameter(Mandatory = $true)][string]$ProjectId,
   [string]$Region = 'europe-west1',
   [string]$JobName = 'mealwizard-catalogue-ingestion',
-  [string]$SchedulerName = 'mealwizard-catalogue-daily'
+  [string]$SchedulerName = 'mealwizard-catalogue-daily',
+  [string]$GcloudCommand = 'gcloud',
+  [string]$NodeCommand = 'node'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,7 +19,7 @@ function Get-SchedulerState {
   $previousErrorActionPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = 'Continue'
-    $output = & gcloud @arguments
+    $output = & $GcloudCommand @arguments
     $exitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousErrorActionPreference
@@ -25,6 +27,14 @@ function Get-SchedulerState {
   if ($exitCode -ne 0) {
     throw "Unable to read Scheduler state (gcloud exit $exitCode)."
   }
+  return ($output | Out-String).Trim()
+}
+
+function Assert-CatalogueLegacyMode {
+  $output = Invoke-CheckedNativeCommand -Command $NodeCommand -Arguments @(
+    (Join-Path $PSScriptRoot 'assertCatalogueLegacyMode.mjs'),
+    '--project', $ProjectId
+  )
   return ($output | Out-String).Trim()
 }
 
@@ -52,31 +62,42 @@ $targets = "recipetineats=$recipeTinRoast,recipetineats=$recipeTinNoodles,seriou
 $discoveryArgs = "^~^--source~$sources~--dry-run~--write-cap~40~--run-id~$discoveryRun"
 $targetArgs = "^~^--source~$sources~--target~$targets~--write-cap~40~--max-per-source~2"
 
-$schedulerState = Assert-SchedulerPaused
-Invoke-CheckedNativeCommand -Command 'gcloud' -Arguments @(
-  'run', 'jobs', 'execute', $JobName,
-  "--region=$Region", "--project=$ProjectId", '--wait', "--args=$discoveryArgs"
-)
-Invoke-CheckedNativeCommand -Command 'gcloud' -Arguments @(
-  'run', 'jobs', 'execute', $JobName,
-  "--region=$Region", "--project=$ProjectId", '--wait',
-  "--args=$targetArgs~--force-refresh~--run-id~$firstRun"
-)
-Invoke-CheckedNativeCommand -Command 'gcloud' -Arguments @(
-  'run', 'jobs', 'execute', $JobName,
-  "--region=$Region", "--project=$ProjectId", '--wait',
-  "--args=$targetArgs~--run-id~$secondRun"
-)
-$schedulerState = Assert-SchedulerPaused
+try {
+  $schedulerState = Assert-SchedulerPaused
+  $catalogueMode = Assert-CatalogueLegacyMode
+  Invoke-CheckedNativeCommand -Command $GcloudCommand -Arguments @(
+    'run', 'jobs', 'execute', $JobName,
+    "--region=$Region", "--project=$ProjectId", '--wait', "--args=$discoveryArgs"
+  )
+  Invoke-CheckedNativeCommand -Command $GcloudCommand -Arguments @(
+    'run', 'jobs', 'execute', $JobName,
+    "--region=$Region", "--project=$ProjectId", '--wait',
+    "--args=$targetArgs~--force-refresh~--run-id~$firstRun"
+  )
+  Invoke-CheckedNativeCommand -Command $GcloudCommand -Arguments @(
+    'run', 'jobs', 'execute', $JobName,
+    "--region=$Region", "--project=$ProjectId", '--wait',
+    "--args=$targetArgs~--run-id~$secondRun"
+  )
+  $schedulerState = Assert-SchedulerPaused
+  $catalogueMode = Assert-CatalogueLegacyMode
 
-Invoke-CheckedNativeCommand -Command 'node' -Arguments @(
-  (Join-Path $PSScriptRoot 'verifyPhase2Pilot.mjs'),
-  '--project', $ProjectId,
-  '--discovery-run', $discoveryRun,
-  '--first-run', $firstRun,
-  '--second-run', $secondRun,
-  '--scheduler-state', $schedulerState,
-  '--write-cap', '40'
-)
+  Invoke-CheckedNativeCommand -Command $NodeCommand -Arguments @(
+    (Join-Path $PSScriptRoot 'verifyPhase2Pilot.mjs'),
+    '--project', $ProjectId,
+    '--discovery-run', $discoveryRun,
+    '--first-run', $firstRun,
+    '--second-run', $secondRun,
+    '--scheduler-state', $schedulerState,
+    '--write-cap', '40'
+  )
+} finally {
+  $postconditionErrors = @()
+  try { Assert-SchedulerPaused | Out-Null } catch { $postconditionErrors += $_.Exception.Message }
+  try { Assert-CatalogueLegacyMode | Out-Null } catch { $postconditionErrors += $_.Exception.Message }
+  if ($postconditionErrors.Count -gt 0) {
+    throw "Phase 2 pilot postcondition check failed: $($postconditionErrors -join '; ')"
+  }
+}
 
 Write-Output "Phase 2 pilot evidence captured for $discoveryRun, $firstRun, and $secondRun."

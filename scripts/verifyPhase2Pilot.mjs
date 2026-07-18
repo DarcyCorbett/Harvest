@@ -64,11 +64,14 @@ const recipeSnapshots = sampleRecipeIds.length === 0
   : await db.getAll(...sampleRecipeIds.map((id) => db.collection('recipes').doc(id)));
 
 const audit = {
+  expectedSampleDocuments: sampleRecipeIds.length,
   sampledDocuments: 0,
+  missingSampleDocuments: 0,
   readyRecipeTin: 0,
   readySeriousEats: 0,
   reviewDocuments: 0,
   disabledSeriousEats: 0,
+  invalidSeriousEatsReasonCodes: 0,
   seriousEatsReasonCodes: [],
   invalidReady: 0,
   searchMismatches: 0,
@@ -78,7 +81,10 @@ const audit = {
 };
 
 for (const snapshot of recipeSnapshots) {
-  if (!snapshot.exists) continue;
+  if (!snapshot.exists) {
+    audit.missingSampleDocuments += 1;
+    continue;
+  }
   const recipe = snapshot.data();
   audit.sampledDocuments += 1;
   audit.estimatedDocumentBytes += Buffer.byteLength(JSON.stringify(recipe), 'utf8');
@@ -112,7 +118,12 @@ for (const snapshot of recipeSnapshots) {
     audit.reviewDocuments += 1;
   } else if (sourceKey === 'seriouseats' && recipe.status === 'disabled') {
     audit.disabledSeriousEats += 1;
-    if (typeof recipe.reasonCode === 'string') audit.seriousEatsReasonCodes.push(recipe.reasonCode);
+    if (typeof recipe.reasonCode === 'string'
+      && /^unsupported-(401|402|403)$/.test(recipe.reasonCode)) {
+      audit.seriousEatsReasonCodes.push(recipe.reasonCode);
+    } else {
+      audit.invalidSeriousEatsReasonCodes += 1;
+    }
   }
 }
 audit.seriousEatsReasonCodes = [...new Set(audit.seriousEatsReasonCodes)].sort();
