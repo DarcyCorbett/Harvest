@@ -5,6 +5,13 @@ const GEMINI_API_BASE =
   'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_TIMEOUT_MS = 45_000;
 
+export interface GeminiUsage {
+  model: string;
+  promptTokenCount: number;
+  candidatesTokenCount: number;
+  totalTokenCount: number;
+}
+
 interface GeminiRequest {
   apiKey: string;
   model: string;
@@ -12,6 +19,7 @@ interface GeminiRequest {
   maxOutputTokens: number;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  onUsage?: (usage: GeminiUsage) => void;
 }
 
 const tokenCount = z.number().finite().nonnegative().optional();
@@ -65,6 +73,7 @@ export async function requestGeminiJson<T>({
   maxOutputTokens,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl = fetch,
+  onUsage,
 }: GeminiRequest): Promise<T> {
   if (apiKey.trim().length === 0) {
     throw new GeminiProviderError('provider-secret-missing');
@@ -124,12 +133,14 @@ export async function requestGeminiJson<T>({
   }
   const envelope = parsedEnvelope.data;
 
-  logger.info('gemini_usage', {
+  const usage: GeminiUsage = {
     model,
-    promptTokenCount: envelope.usageMetadata?.promptTokenCount,
-    candidatesTokenCount: envelope.usageMetadata?.candidatesTokenCount,
-    totalTokenCount: envelope.usageMetadata?.totalTokenCount,
-  });
+    promptTokenCount: envelope.usageMetadata?.promptTokenCount ?? 0,
+    candidatesTokenCount: envelope.usageMetadata?.candidatesTokenCount ?? 0,
+    totalTokenCount: envelope.usageMetadata?.totalTokenCount ?? 0,
+  };
+  logger.info('gemini_usage', usage);
+  onUsage?.(usage);
 
   const candidate = envelope.candidates?.[0];
   if (candidate?.finishReason === 'MAX_TOKENS') {

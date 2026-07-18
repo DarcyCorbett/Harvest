@@ -69,6 +69,52 @@ describe('requestGeminiJson', () => {
     });
   });
 
+  it('reports only validated numeric usage to an optional observer', async () => {
+    const onUsage = vi.fn();
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(providerResponse('{"answer":"ok"}'));
+
+    await expect(requestGeminiJson<{ answer: string }>({
+      apiKey: API_KEY,
+      model: 'gemini-test',
+      prompt: 'Return JSON.',
+      maxOutputTokens: 256,
+      fetchImpl,
+      onUsage,
+    })).resolves.toEqual({ answer: 'ok' });
+
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onUsage).toHaveBeenCalledWith({
+      model: 'gemini-test',
+      promptTokenCount: 4,
+      candidatesTokenCount: 2,
+      totalTokenCount: 6,
+    });
+    expect(JSON.stringify(onUsage.mock.calls)).not.toContain(API_KEY);
+    expect(JSON.stringify(onUsage.mock.calls)).not.toContain('Return JSON.');
+  });
+
+  it('does not observe malformed usage metadata', async () => {
+    const onUsage = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"answer":"ok"}' }] } }],
+        usageMetadata: { promptTokenCount: 'credential-bearing-value' },
+      }), { status: 200 }),
+    );
+
+    await expect(requestGeminiJson<{ answer: string }>({
+      apiKey: API_KEY,
+      model: 'gemini-test',
+      prompt: 'Return JSON.',
+      maxOutputTokens: 256,
+      fetchImpl,
+      onUsage,
+    })).rejects.toMatchObject({ code: 'provider-invalid-response' });
+    expect(onUsage).not.toHaveBeenCalled();
+  });
+
   it('maps HTTP errors to bounded credential-free errors without reading the body', async () => {
     const providerBody = `rate limited: ${API_KEY}`;
     const response = new Response(providerBody, { status: 429 });
