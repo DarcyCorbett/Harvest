@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateCataloguePilotEvidence } from '../scripts/cataloguePilotValidation.mjs';
+import {
+  sanitizeCataloguePilotRun,
+  validateCataloguePilotEvidence,
+} from '../scripts/cataloguePilotValidation.mjs';
 
 function sourceMetrics(overrides: Record<string, unknown> = {}) {
   return {
@@ -144,6 +147,31 @@ function validEvidence() {
 }
 
 describe('catalogue Phase 2 pilot validation', () => {
+  it('allowlists run-summary evidence and drops checkpoint cursors or unknown fields', () => {
+    const sanitized = sanitizeCataloguePilotRun({
+      ...run(),
+      checkpoints: {
+        recipetineats: {
+          cursor: Buffer.from('https://www.recipetineats.com/post-sitemap.xml').toString('base64'),
+        },
+      },
+      rawUrl: 'https://www.recipetineats.com/private-evidence',
+    });
+
+    expect(sanitized).toMatchObject({
+      status: 'complete',
+      reservedWrites: 40,
+      consumedWrites: 8,
+      metrics: expect.any(Object),
+      bySource: expect.any(Object),
+      telemetry: expect.any(Object),
+    });
+    expect(sanitized).not.toHaveProperty('checkpoints');
+    expect(sanitized).not.toHaveProperty('rawUrl');
+    expect(JSON.stringify(sanitized)).not.toContain('post-sitemap');
+    expect(JSON.stringify(sanitized)).not.toContain('private-evidence');
+  });
+
   it('accepts a ready RecipeTin sample and explicit Serious Eats HTTP 402 outcome', () => {
     expect(() => validateCataloguePilotEvidence(validEvidence())).not.toThrow();
   });

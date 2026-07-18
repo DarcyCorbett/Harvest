@@ -47,6 +47,37 @@ function nonNegative(value, label) {
   return value;
 }
 
+export function sanitizeCataloguePilotRun(rawRun) {
+  const run = object(rawRun, 'catalogue run');
+  const metrics = object(run.metrics, 'catalogue run metrics');
+  const bySource = object(run.bySource, 'catalogue run bySource');
+  const telemetry = object(run.telemetry, 'catalogue run telemetry');
+  const gemini = object(telemetry.gemini, 'catalogue run Gemini');
+
+  return {
+    status: run.status,
+    ...(typeof run.quotaDate === 'string' ? { quotaDate: run.quotaDate } : {}),
+    reservedWrites: run.reservedWrites,
+    consumedWrites: run.consumedWrites,
+    metrics: Object.fromEntries(RUN_COUNTERS.map((counter) => [counter, metrics[counter]])),
+    ...(typeof run.startedAt === 'string' ? { startedAt: run.startedAt } : {}),
+    ...(typeof run.completedAt === 'string' ? { completedAt: run.completedAt } : {}),
+    ...(typeof run.durationMs === 'number' ? { durationMs: run.durationMs } : {}),
+    bySource: Object.fromEntries(PILOT_SOURCES.map((sourceKey) => {
+      const source = object(bySource[sourceKey], `catalogue run ${sourceKey}`);
+      return [sourceKey, {
+        ...Object.fromEntries(SOURCE_COUNTERS.map((counter) => [counter, source[counter]])),
+        sampleRecipeIds: Array.isArray(source.sampleRecipeIds)
+          ? source.sampleRecipeIds.filter((id) => typeof id === 'string').slice(0, 20)
+          : [],
+      }];
+    })),
+    telemetry: {
+      gemini: Object.fromEntries(GEMINI_COUNTERS.map((counter) => [counter, gemini[counter]])),
+    },
+  };
+}
+
 function sourceMetrics(run, sourceKey, label) {
   const bySource = object(run.bySource, `${label} bySource`);
   return object(bySource[sourceKey], `${label} ${sourceKey}`);
