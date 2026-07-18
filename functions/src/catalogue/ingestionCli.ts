@@ -25,6 +25,12 @@ async function main(): Promise<void> {
   const runId = command.runId ?? randomUUID();
   const secret = process.env.GEMINI_API_KEY?.trim() ?? '';
   const operational = firestoreCatalogueOpsDocuments();
+  const gemini = {
+    calls: 0,
+    promptTokenCount: 0,
+    candidatesTokenCount: 0,
+    totalTokenCount: 0,
+  };
   const classifier = createCatalogueClassifier({
     requestJson(prompt) {
       return requestGeminiJson({
@@ -32,6 +38,12 @@ async function main(): Promise<void> {
         model: 'gemini-3.1-flash-lite',
         prompt,
         maxOutputTokens: 512,
+        onUsage(usage) {
+          gemini.calls += 1;
+          gemini.promptTokenCount += usage.promptTokenCount;
+          gemini.candidatesTokenCount += usage.candidatesTokenCount;
+          gemini.totalTokenCount += usage.totalTokenCount;
+        },
       });
     },
   });
@@ -48,6 +60,7 @@ async function main(): Promise<void> {
     classify: classifier,
     now: () => new Date(),
     random: Math.random,
+    getTelemetry: () => ({ gemini: { ...gemini } }),
   });
 
   const summary = await engine.run({

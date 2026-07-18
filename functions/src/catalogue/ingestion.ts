@@ -76,6 +76,7 @@ export interface CatalogueIngestionDependencies {
     content: CompleteCanonicalRecipeV2['content'],
     sourceMetadata: RecipeMetadata,
   ) => Promise<CatalogueClassification>;
+  getTelemetry?: () => CatalogueRunTelemetry;
 }
 
 export interface CatalogueRunMetrics {
@@ -91,12 +92,33 @@ export interface CatalogueRunMetrics {
   failed: number;
 }
 
+export interface CatalogueSourceRunMetrics extends CatalogueRunMetrics {
+  recipeReads: number;
+  documentWrites: number;
+  estimatedDocumentBytes: number;
+  sampleRecipeIds: string[];
+}
+
+export interface CatalogueRunTelemetry {
+  gemini: {
+    calls: number;
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
+}
+
 export interface CatalogueRunSummary {
   status: 'complete' | 'budget-exhausted' | 'lease-unavailable';
   quotaDate?: string;
   reservedWrites: number;
   consumedWrites: number;
   metrics: CatalogueRunMetrics;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  bySource: Record<string, CatalogueSourceRunMetrics>;
+  telemetry?: CatalogueRunTelemetry;
 }
 
 export interface CatalogueIngestionOptions {
@@ -123,6 +145,16 @@ function emptyMetrics(): CatalogueRunMetrics {
     retryable: 0,
     permanentSkipped: 0,
     failed: 0,
+  };
+}
+
+function emptySourceMetrics(): CatalogueSourceRunMetrics {
+  return {
+    ...emptyMetrics(),
+    recipeReads: 0,
+    documentWrites: 0,
+    estimatedDocumentBytes: 0,
+    sampleRecipeIds: [],
   };
 }
 
@@ -188,12 +220,43 @@ function manifestEntry(
 export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionDependencies) {
   return {
     async run(options: CatalogueIngestionOptions): Promise<CatalogueRunSummary> {
+      const startedAtDate = dependencies.now();
       const metrics = emptyMetrics();
       const parserVersion = options.parserVersion ?? 1;
       const taxonomyVersion = options.taxonomyVersion ?? 1;
       const adapters = dependencies.adapters.filter((adapter) =>
         !options.sourceKeys || options.sourceKeys.includes(adapter.sourceKey));
       if (adapters.length === 0) throw new Error('No catalogue sources selected');
+      const bySource = Object.fromEntries(adapters.map((adapter) => [
+        adapter.sourceKey,
+        emptySourceMetrics(),
+      ])) as Record<string, CatalogueSourceRunMetrics>;
+      const increment = (sourceKey: string, field: keyof CatalogueRunMetrics): void => {
+        metrics[field] += 1;
+        bySource[sourceKey][field] += 1;
+      };
+      const recordDocument = (sourceKey: string, recipeId: string, value: unknown): void => {
+        const source = bySource[sourceKey];
+        source.documentWrites += 1;
+        source.estimatedDocumentBytes += Buffer.byteLength(JSON.stringify(value), 'utf8');
+        if (source.sampleRecipeIds.length < 20 && !source.sampleRecipeIds.includes(recipeId)) {
+          source.sampleRecipeIds.push(recipeId);
+        }
+      };
+      const finishSummary = (
+        summary: Pick<CatalogueRunSummary,
+          'status' | 'quotaDate' | 'reservedWrites' | 'consumedWrites' | 'metrics'>,
+      ): CatalogueRunSummary => {
+        const completedAtDate = dependencies.now();
+        return {
+          ...summary,
+          startedAt: startedAtDate.toISOString(),
+          completedAt: completedAtDate.toISOString(),
+          durationMs: Math.max(0, completedAtDate.getTime() - startedAtDate.getTime()),
+          bySource,
+          ...(dependencies.getTelemetry ? { telemetry: dependencies.getTelemetry() } : {}),
+        };
+      };
 
       const requestedWrites = options.writeCap ?? dependencies.budget.limit;
       if (!Number.isInteger(requestedWrites)
@@ -207,12 +270,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       }
 
       if (requestedWrites === 0) {
-        return {
+        return finishSummary({
           status: 'budget-exhausted',
           reservedWrites: 0,
           consumedWrites: 0,
           metrics,
-        };
+        });
       }
       const reservation = await dependencies.budget.reserve(
         Math.min(250, requestedWrites),
@@ -222,13 +285,13 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       let quotaDate = reservation.quotaDate;
       let remaining = Math.max(0, reservation.granted - 1); // budget transaction
       if (remaining === 0 || !(await dependencies.lease.acquire(dependencies.now().getTime()))) {
-        return {
+        return finishSummary({
           status: remaining === 0 ? 'budget-exhausted' : 'lease-unavailable',
           quotaDate: reservation.quotaDate,
           reservedWrites: totalReserved,
           consumedWrites: totalReserved - remaining,
           metrics,
-        };
+        });
       }
       remaining -= 1; // lease acquisition
 
@@ -285,7 +348,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             try {
               next = await iterator.next();
             } catch {
-              metrics.failed += 1;
+              increment(adapter.sourceKey, 'failed');
               active.delete(adapter.sourceKey);
               continue;
             }
@@ -297,7 +360,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             const discovered = next.value;
             const manifest = manifests.get(adapter.sourceKey) as CatalogueManifest;
             manifest.cursor = discovered.cursor;
-            metrics.discovered += 1;
+            increment(adapter.sourceKey, 'discovered');
             discoveriesSinceLeaseCheck += 1;
             if (discoveriesSinceLeaseCheck >= 100) {
               if (!(await dependencies.lease.renew(dependencies.now().getTime()))) {
@@ -309,6 +372,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             const recipeId = canonicalRecipeId(discovered.url);
             let prior: CatalogueManifestEntry | undefined = manifest.entries[recipeId];
             if (!prior && dependencies.recipes.recoverManifestEntry) {
+              bySource[adapter.sourceKey].recipeReads += 1;
               prior = await dependencies.recipes.recoverManifestEntry(recipeId) ?? undefined;
               if (prior) manifest.entries[recipeId] = prior;
             }
@@ -318,7 +382,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
               force: options.forceRefresh,
               now: dependencies.now(),
             })) {
-              metrics.unchanged += 1;
+              increment(adapter.sourceKey, 'unchanged');
               manifest.updatedAt = dependencies.now().toISOString();
               await dependencies.manifests.save(manifest);
               continue;
@@ -327,17 +391,17 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             if (processingWrites <= 0) break;
 
             const fetched = await adapter.fetch(discovered.url);
-            metrics.fetched += 1;
+            increment(adapter.sourceKey, 'fetched');
             const now = dependencies.now().toISOString();
             let wrote = false;
             if (fetched.kind === 'ok') {
               try {
                 const parsed = parseCatalogueRecipe(fetched.html, discovered.url);
-                metrics.parsed += 1;
+                increment(adapter.sourceKey, 'parsed');
                 const classification = dependencies.classify
                   ? await dependencies.classify(parsed.content, parsed.sourceMetadata)
                   : deterministicClassification(parsed.sourceMetadata);
-                metrics.classified += 1;
+                increment(adapter.sourceKey, 'classified');
                 const effective = buildEffectiveMetadata(classification.metadata);
                 const recipe: CompleteCanonicalRecipeV2 = {
                   schemaVersion: 2,
@@ -373,10 +437,11 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 };
                 if (validateReadyRecipe(recipe).length) {
                   recipe.status = 'review';
-                  metrics.review += 1;
+                  increment(adapter.sourceKey, 'review');
                 }
                 await dependencies.recipes.writeComplete(recipe);
-                metrics.written += 1;
+                increment(adapter.sourceKey, 'written');
+                recordDocument(adapter.sourceKey, recipeId, recipe);
                 wrote = true;
                 manifest.entries[recipeId] = {
                   ...manifestEntry(prior, {
@@ -402,7 +467,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   ingestion: { lastAttemptAt: now, lastErrorCode: 'invalid' },
                 };
                 await dependencies.recipes.writeOperational(record);
-                metrics.failed += 1;
+                increment(adapter.sourceKey, 'failed');
+                recordDocument(adapter.sourceKey, recipeId, record);
                 wrote = true;
                 manifest.entries[recipeId] = {
                   ...manifestEntry(prior, { parserVersion, now, state: 'invalid' }),
@@ -436,9 +502,10 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 },
               };
               await dependencies.recipes.writeOperational(record);
+              recordDocument(adapter.sourceKey, recipeId, record);
               wrote = true;
-              if (permanent) metrics.permanentSkipped += 1;
-              else metrics.retryable += 1;
+              if (permanent) increment(adapter.sourceKey, 'permanentSkipped');
+              else increment(adapter.sourceKey, 'retryable');
               manifest.entries[recipeId] = {
                 ...manifestEntry(prior, {
                   sourceLastModified: discovered.lastModified,
@@ -482,13 +549,13 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         }
         const status = active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
         const consumedWrites = totalReserved - Math.max(0, processingWrites);
-        const summary: CatalogueRunSummary = {
+        const summary = finishSummary({
           status,
           quotaDate,
           reservedWrites: totalReserved,
           consumedWrites,
           metrics,
-        };
+        });
         await dependencies.runs.summarize(options.runId, summary);
         remaining -= 1;
         return summary;

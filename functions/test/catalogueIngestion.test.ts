@@ -181,6 +181,74 @@ describe('catalogue ingestion engine', () => {
     expect(result.metrics).toMatchObject({ permanentSkipped: 1 });
   });
 
+  it('summarizes source outcomes, bounded identifiers, bytes, reads, timing, and telemetry', async () => {
+    const recipeTinUrl = 'https://www.recipetineats.com/chicken-salad';
+    const seriousEatsUrl = 'https://www.seriouseats.com/blocked';
+    const ready = adapter('recipetineats', [recipeTinUrl]);
+    const blocked = adapter('seriouseats', [seriousEatsUrl], vi.fn(async () => ({
+      kind: 'unsupported' as const,
+      status: 402,
+    })));
+    const { injected, recipeStore } = dependencies([ready, blocked]);
+    recipeStore.recoverManifestEntry = vi.fn(async () => null);
+    injected.getTelemetry = () => ({
+      gemini: {
+        calls: 1,
+        promptTokenCount: 100,
+        candidatesTokenCount: 20,
+        totalTokenCount: 120,
+      },
+    });
+
+    const result = await createCatalogueIngestionEngine(injected).run({ runId: 'phase2-test' });
+
+    expect(result.bySource.recipetineats).toMatchObject({
+      discovered: 1,
+      fetched: 1,
+      parsed: 1,
+      classified: 1,
+      written: 1,
+      recipeReads: 1,
+      documentWrites: 1,
+      sampleRecipeIds: [canonicalRecipeId(recipeTinUrl)],
+    });
+    expect(result.bySource.recipetineats.estimatedDocumentBytes).toBeGreaterThan(0);
+    expect(result.bySource.seriouseats).toMatchObject({
+      discovered: 1,
+      fetched: 1,
+      permanentSkipped: 1,
+      recipeReads: 1,
+      documentWrites: 1,
+      sampleRecipeIds: [canonicalRecipeId(seriousEatsUrl)],
+    });
+    expect(result.bySource.seriouseats.estimatedDocumentBytes).toBeGreaterThan(0);
+    expect(result.telemetry?.gemini).toEqual({
+      calls: 1,
+      promptTokenCount: 100,
+      candidatesTokenCount: 20,
+      totalTokenCount: 120,
+    });
+    expect(result.startedAt).toBe('2026-07-18T12:00:00.000Z');
+    expect(result.completedAt).toBe('2026-07-18T12:00:00.000Z');
+    expect(result.durationMs).toBe(0);
+    expect(JSON.stringify(result)).not.toContain(recipeTinUrl);
+    expect(JSON.stringify(result)).not.toContain(seriousEatsUrl);
+  });
+
+  it('caps source sample identifiers at twenty entries', async () => {
+    const urls = Array.from({ length: 25 }, (_, index) => `https://bulk.test/${index}`);
+    const source = adapter('bulk', urls);
+    const { injected } = dependencies([source]);
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'bounded-samples',
+      writeCap: 40,
+    });
+
+    expect(result.bySource.bulk.sampleRecipeIds).toHaveLength(20);
+    expect(result.bySource.bulk.documentWrites).toBeGreaterThanOrEqual(20);
+  });
+
   it('isolates discovery failure so another source can continue', async () => {
     const broken: RecipeSourceAdapter = {
       sourceKey: 'broken',
@@ -196,6 +264,8 @@ describe('catalogue ingestion engine', () => {
     expect(recipes).toHaveLength(1);
     expect(recipes[0].source.key).toBe('healthy');
     expect(result.metrics.failed).toBe(1);
+    expect(result.bySource.broken).toMatchObject({ failed: 1, documentWrites: 0 });
+    expect(result.bySource.healthy).toMatchObject({ written: 1, documentWrites: 1 });
   });
 });
 
