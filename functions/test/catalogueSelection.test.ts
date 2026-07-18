@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createCatalogueSelectionHandlers,
+  firestoreCatalogueSelectionStore,
   selectCatalogueRecipes,
   type CatalogueCandidate,
   type CatalogueSelectionStore,
@@ -62,6 +63,33 @@ function store(data: Record<string, CatalogueCandidate[]>, pageSize = 50): Catal
 }
 
 describe('selectCatalogueRecipes', () => {
+  it('uses an injected Firestore instance for external pilot tooling', async () => {
+    const snapshot = { docs: [], size: 0 };
+    const query = {
+      where: vi.fn(),
+      orderBy: vi.fn(),
+      limit: vi.fn(),
+      startAfter: vi.fn(),
+      get: vi.fn(async () => snapshot),
+    };
+    query.where.mockReturnValue(query);
+    query.orderBy.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
+    query.startAfter.mockReturnValue(query);
+    const db = { collection: vi.fn(() => query) };
+    const documentId = { kind: 'root-admin-document-id' };
+
+    const injected = firestoreCatalogueSelectionStore(db as never, documentId as never);
+    await expect(injected.queryCandidates(
+      'recipetineats',
+      selectionRequest().slots[0],
+    )).resolves.toEqual({ candidates: [] });
+
+    expect(db.collection).toHaveBeenCalledWith('recipes');
+    expect(query.orderBy).toHaveBeenCalledWith(documentId);
+    expect(query.get).toHaveBeenCalledOnce();
+  });
+
   it('exhausts paginated candidates for every enabled source before weighting', async () => {
     const first = candidate('wrong-ingredient', 'first', { ingredientTokens: ['beef'] });
     const exact = candidate('exact', 'first');

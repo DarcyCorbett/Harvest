@@ -1,4 +1,4 @@
-import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { FieldPath, getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 
@@ -286,8 +286,10 @@ function decodeSourceWeights(value: unknown): Record<string, number> {
   return weights;
 }
 
-export function firestoreCatalogueSelectionStore(): CatalogueSelectionStore {
-  const db = getFirestore();
+export function firestoreCatalogueSelectionStore(
+  db: Firestore = getFirestore(),
+  documentId: FieldPath = FieldPath.documentId(),
+): CatalogueSelectionStore {
   return {
     async getSourceWeights(householdId) {
       const snapshot = await db.collection('households').doc(householdId)
@@ -315,7 +317,7 @@ export function firestoreCatalogueSelectionStore(): CatalogueSelectionStore {
       }
       if (slot.maxTotalMinutes === 30) query = query.where('search.quick30', '==', true);
       if (slot.maxTotalMinutes === 45) query = query.where('search.moderate45', '==', true);
-      query = query.orderBy('search.randomKey').orderBy(FieldPath.documentId()).limit(100);
+      query = query.orderBy('search.randomKey').orderBy(documentId).limit(100);
 
       if (pageToken) {
         const token = JSON.parse(Buffer.from(pageToken, 'base64url').toString('utf8')) as {

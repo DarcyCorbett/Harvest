@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 
 import { applicationDefault, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldPath, getFirestore } from 'firebase-admin/firestore';
 
 import {
   buildSearchFields,
@@ -117,7 +117,7 @@ for (const snapshot of recipeSnapshots) {
 }
 audit.seriousEatsReasonCodes = [...new Set(audit.seriousEatsReasonCodes)].sort();
 
-const firestoreStore = firestoreCatalogueSelectionStore();
+const firestoreStore = firestoreCatalogueSelectionStore(db, FieldPath.documentId());
 let selectionQueryCalls = 0;
 let candidateReads = 0;
 const measuredStore = {
