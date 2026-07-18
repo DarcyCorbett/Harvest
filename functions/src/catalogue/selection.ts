@@ -1,0 +1,350 @@
+import { FieldPath, getFirestore } from 'firebase-admin/firestore';
+import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
+import { z } from 'zod';
+
+import {
+  CUISINES,
+  MEAL_TYPES,
+  MODIFIERS,
+  normalizeIngredientTokens,
+  type Cuisine,
+  type MealType,
+  type Modifier,
+} from './domain.js';
+import { SOURCE_CONFIGS } from './sourceAdapters.js';
+
+const ingredientControl = z.string().trim().min(1).max(120);
+const slotSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  mealType: z.enum(MEAL_TYPES),
+  cuisines: z.array(z.enum(CUISINES)).max(CUISINES.length),
+  modifiers: z.array(z.enum(MODIFIERS)).max(MODIFIERS.length),
+  maxTotalMinutes: z.union([z.literal(30), z.literal(45)]).optional(),
+  ingredients: z.object({
+    must: z.array(ingredientControl).max(20),
+    prefer: z.array(ingredientControl).max(20),
+    exclude: z.array(ingredientControl).max(20),
+  }).strict(),
+}).strict();
+
+export const selectCatalogueRecipesRequestSchema = z.object({
+  householdId: z.string().trim().min(1).max(128),
+  slots: z.array(slotSchema).min(1).max(31),
+  currentPlanRecipeIds: z.array(z.string().trim().min(1).max(160)).max(500).optional().default([]),
+  recentRecipeIds: z.array(z.string().trim().min(1).max(160)).max(500).optional().default([]),
+}).strict();
+
+export type CatalogueMealSlot = z.infer<typeof slotSchema>;
+export type SelectCatalogueRecipesRequest = z.input<typeof selectCatalogueRecipesRequestSchema>;
+type ParsedSelectionRequest = z.output<typeof selectCatalogueRecipesRequestSchema>;
+
+export interface CatalogueCandidate {
+  id: string;
+  sourceKey: string;
+  totalMinutes?: number;
+  mealTypes: readonly MealType[];
+  cuisines: readonly Cuisine[];
+  modifiers: readonly Modifier[];
+  ingredientTokens: readonly string[];
+  randomKey: number;
+}
+
+export interface CatalogueSelectionStore {
+  getSourceWeights(householdId: string): Promise<Record<string, number>>;
+  queryCandidates(
+    sourceKey: string,
+    query: CatalogueMealSlot,
+    pageToken?: string,
+  ): Promise<{ candidates: CatalogueCandidate[]; nextPageToken?: string }>;
+}
+
+export type Relaxation =
+  | { filter: 'maxTotalMinutes'; from: 30; to: 45; matchCount: number }
+  | { filter: 'modifier'; value: Modifier; matchCount: number }
+  | { filter: 'cuisine'; value: Cuisine; matchCount: number }
+  | { filter: 'mustIngredient'; value: string; matchCount: number }
+  | { filter: 'excludedIngredient'; value: string; matchCount: number };
+
+type RelaxationWithoutCount = Relaxation extends infer Candidate
+  ? Candidate extends { matchCount: number }
+    ? Omit<Candidate, 'matchCount'>
+    : never
+  : never;
+
+export interface SelectCatalogueRecipesResponse {
+  slots: Array<{
+    date: string;
+    mealType: MealType;
+    status: 'selected';
+    recipeId: string;
+    sourceKey: string;
+  } | {
+    date: string;
+    mealType: MealType;
+    status: 'no-match';
+    relaxations: Relaxation[];
+  }>;
+}
+
+function normalizedControls(slot: CatalogueMealSlot) {
+  return {
+    must: normalizeIngredientTokens(slot.ingredients.must),
+    prefer: normalizeIngredientTokens(slot.ingredients.prefer),
+    exclude: normalizeIngredientTokens(slot.ingredients.exclude),
+  };
+}
+
+function containsAll(haystack: readonly string[], needles: readonly string[]): boolean {
+  const values = new Set(haystack);
+  return needles.every((needle) => values.has(needle));
+}
+
+function isEligible(
+  candidate: CatalogueCandidate,
+  slot: CatalogueMealSlot,
+  excludedIds: ReadonlySet<string>,
+): boolean {
+  if (excludedIds.has(candidate.id)) return false;
+  if (!candidate.mealTypes.includes(slot.mealType)) return false;
+  if (!containsAll(candidate.cuisines, slot.cuisines)) return false;
+  if (!containsAll(candidate.modifiers, slot.modifiers)) return false;
+  if (slot.maxTotalMinutes !== undefined
+    && (candidate.totalMinutes === undefined || candidate.totalMinutes > slot.maxTotalMinutes)) {
+    return false;
+  }
+  const controls = normalizedControls(slot);
+  if (!containsAll(candidate.ingredientTokens, controls.must)) return false;
+  if (controls.exclude.some((token) => candidate.ingredientTokens.includes(token))) return false;
+  return true;
+}
+
+async function eligibleBySource(
+  sourceWeights: Record<string, number>,
+  slot: CatalogueMealSlot,
+  store: CatalogueSelectionStore,
+  excludedIds: ReadonlySet<string>,
+): Promise<Map<string, CatalogueCandidate[]>> {
+  const result = new Map<string, CatalogueCandidate[]>();
+  const enabledSources = Object.entries(sourceWeights)
+    .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
+    .map(([sourceKey]) => sourceKey);
+
+  const sourceResults = await Promise.all(enabledSources.map(async (sourceKey) => {
+    const matches: CatalogueCandidate[] = [];
+    let pageToken: string | undefined;
+    do {
+      const page = await store.queryCandidates(sourceKey, slot, pageToken);
+      matches.push(...page.candidates.filter((candidate) =>
+        candidate.sourceKey === sourceKey && isEligible(candidate, slot, excludedIds)));
+      pageToken = page.nextPageToken;
+    } while (pageToken !== undefined);
+    return { sourceKey, matches };
+  }));
+  for (const { sourceKey, matches } of sourceResults) {
+    if (matches.length) result.set(sourceKey, matches);
+  }
+
+  return result;
+}
+
+function weightedPick<T>(
+  values: readonly T[],
+  weight: (value: T) => number,
+  random: () => number,
+): T {
+  const total = values.reduce((sum, value) => sum + Math.max(0, weight(value)), 0);
+  let target = random() * total;
+  for (const value of values) {
+    target -= Math.max(0, weight(value));
+    if (target < 0) return value;
+  }
+  return values[values.length - 1];
+}
+
+async function relaxationDiagnostics(
+  sourceWeights: Record<string, number>,
+  slot: CatalogueMealSlot,
+  store: CatalogueSelectionStore,
+  excludedIds: ReadonlySet<string>,
+): Promise<Relaxation[]> {
+  const variants: Array<{ slot: CatalogueMealSlot; relaxation: RelaxationWithoutCount }> = [];
+  if (slot.maxTotalMinutes === 30) {
+    variants.push({
+      slot: { ...slot, maxTotalMinutes: 45 },
+      relaxation: { filter: 'maxTotalMinutes', from: 30, to: 45 },
+    });
+  }
+  slot.modifiers.forEach((value) => variants.push({
+    slot: { ...slot, modifiers: slot.modifiers.filter((item) => item !== value) },
+    relaxation: { filter: 'modifier', value },
+  }));
+  slot.cuisines.forEach((value) => variants.push({
+    slot: { ...slot, cuisines: slot.cuisines.filter((item) => item !== value) },
+    relaxation: { filter: 'cuisine', value },
+  }));
+  slot.ingredients.must.forEach((value) => variants.push({
+    slot: {
+      ...slot,
+      ingredients: { ...slot.ingredients, must: slot.ingredients.must.filter((item) => item !== value) },
+    },
+    relaxation: { filter: 'mustIngredient', value },
+  }));
+  slot.ingredients.exclude.forEach((value) => variants.push({
+    slot: {
+      ...slot,
+      ingredients: { ...slot.ingredients, exclude: slot.ingredients.exclude.filter((item) => item !== value) },
+    },
+    relaxation: { filter: 'excludedIngredient', value },
+  }));
+
+  const diagnostics: Relaxation[] = [];
+  for (const variant of variants) {
+    const matches = await eligibleBySource(sourceWeights, variant.slot, store, excludedIds);
+    const matchCount = [...matches.values()].reduce((sum, candidates) => sum + candidates.length, 0);
+    if (matchCount > 0) diagnostics.push({ ...variant.relaxation, matchCount } as Relaxation);
+  }
+  return diagnostics;
+}
+
+export async function selectCatalogueRecipes(
+  input: SelectCatalogueRecipesRequest,
+  store: CatalogueSelectionStore,
+  random: () => number = Math.random,
+): Promise<SelectCatalogueRecipesResponse> {
+  const parsed = selectCatalogueRecipesRequestSchema.parse(input);
+  const sourceWeights = await store.getSourceWeights(parsed.householdId);
+  const excludedIds = new Set([...parsed.currentPlanRecipeIds, ...parsed.recentRecipeIds]);
+  const selected: SelectCatalogueRecipesResponse['slots'] = [];
+
+  for (const slot of parsed.slots) {
+    const eligible = await eligibleBySource(sourceWeights, slot, store, excludedIds);
+    if (eligible.size === 0) {
+      selected.push({
+        date: slot.date,
+        mealType: slot.mealType,
+        status: 'no-match',
+        relaxations: await relaxationDiagnostics(sourceWeights, slot, store, excludedIds),
+      });
+      continue;
+    }
+
+    const sourceKey = weightedPick(
+      [...eligible.keys()],
+      (key) => sourceWeights[key] ?? 0,
+      random,
+    );
+    const controls = normalizedControls(slot);
+    const recipe = weightedPick(
+      eligible.get(sourceKey) as CatalogueCandidate[],
+      (candidate) => 1 + controls.prefer.filter((token) =>
+        candidate.ingredientTokens.includes(token)).length * 2,
+      random,
+    );
+    excludedIds.add(recipe.id);
+    selected.push({
+      date: slot.date,
+      mealType: slot.mealType,
+      status: 'selected',
+      recipeId: recipe.id,
+      sourceKey,
+    });
+  }
+
+  return { slots: selected };
+}
+
+type Authorize = (
+  auth: CallableRequest<unknown>['auth'],
+  householdId: string,
+) => Promise<{ uid: string; email: string }>;
+
+export function createCatalogueSelectionHandlers(dependencies: {
+  authorize: Authorize;
+  store: CatalogueSelectionStore;
+  random?: () => number;
+}) {
+  return {
+    async select(request: CallableRequest<unknown>) {
+      const parsed = selectCatalogueRecipesRequestSchema.safeParse(request.data);
+      if (!parsed.success) throw new HttpsError('invalid-argument', 'Invalid catalogue request.');
+      await dependencies.authorize(request.auth, parsed.data.householdId);
+      return selectCatalogueRecipes(parsed.data, dependencies.store, dependencies.random);
+    },
+  };
+}
+
+function decodeSourceWeights(value: unknown): Record<string, number> {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const weights: Record<string, number> = {};
+  for (const config of SOURCE_CONFIGS) {
+    const encodedHost = config.host.replace(/\./g, '_');
+    const candidate = raw[encodedHost];
+    weights[config.sourceKey] = typeof candidate === 'number' && Number.isFinite(candidate)
+      ? Math.max(0, candidate)
+      : 1;
+  }
+  return weights;
+}
+
+export function firestoreCatalogueSelectionStore(): CatalogueSelectionStore {
+  const db = getFirestore();
+  return {
+    async getSourceWeights(householdId) {
+      const snapshot = await db.collection('households').doc(householdId)
+        .collection('settings').doc('preferences').get();
+      return decodeSourceWeights(snapshot.exists ? snapshot.get('sourceWeights') : undefined);
+    },
+    async queryCandidates(sourceKey, slot, pageToken) {
+      let query = db.collection('recipes')
+        .where('schemaVersion', '==', 2)
+        .where('status', '==', 'ready')
+        .where('source.key', '==', sourceKey)
+        .where('search.selectionKeys', 'array-contains', `${slot.mealType}|${slot.cuisines[0] ?? 'any'}`);
+      // Use one bounded indexed discriminator and enforce the complete
+      // intersection again in isEligible(). This avoids a combinatorial index
+      // explosion while still exhausting every categorical candidate page.
+      if (slot.maxTotalMinutes === undefined && slot.modifiers.length === 1) {
+        const modifier = slot.modifiers[0];
+        const field = {
+          vegetarian: 'search.vegetarian',
+          'kid-friendly': 'search.kidFriendly',
+          healthy: 'search.healthy',
+          salad: 'search.salad',
+        }[modifier];
+        query = query.where(field, '==', true);
+      }
+      if (slot.maxTotalMinutes === 30) query = query.where('search.quick30', '==', true);
+      if (slot.maxTotalMinutes === 45) query = query.where('search.moderate45', '==', true);
+      query = query.orderBy('search.randomKey').orderBy(FieldPath.documentId()).limit(100);
+
+      if (pageToken) {
+        const token = JSON.parse(Buffer.from(pageToken, 'base64url').toString('utf8')) as {
+          randomKey: number;
+          id: string;
+        };
+        query = query.startAfter(token.randomKey, token.id);
+      }
+      const snapshot = await query.get();
+      const candidates = snapshot.docs.map((document) => {
+        const data = document.data();
+        return {
+          id: document.id,
+          sourceKey: data.source?.key,
+          totalMinutes: data.effective?.totalMinutes,
+          mealTypes: Array.isArray(data.effective?.mealTypes) ? data.effective.mealTypes : [],
+          cuisines: Array.isArray(data.effective?.cuisines) ? data.effective.cuisines : [],
+          modifiers: Array.isArray(data.effective?.modifiers) ? data.effective.modifiers : [],
+          ingredientTokens: Array.isArray(data.search?.ingredientTokens) ? data.search.ingredientTokens : [],
+          randomKey: typeof data.search?.randomKey === 'number' ? data.search.randomKey : 0,
+        } as CatalogueCandidate;
+      });
+      const last = candidates.at(-1);
+      return {
+        candidates,
+        ...(snapshot.size === 100 && last
+          ? { nextPageToken: Buffer.from(JSON.stringify({ randomKey: last.randomKey, id: last.id })).toString('base64url') }
+          : {}),
+      };
+    },
+  };
+}

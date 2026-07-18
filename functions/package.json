@@ -5,6 +5,7 @@
   "engines": { "node": "22" },
   "scripts": {
     "build": "tsc",
+    "catalogue:ingest": "npm run build && node lib/catalogue/ingestionCli.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

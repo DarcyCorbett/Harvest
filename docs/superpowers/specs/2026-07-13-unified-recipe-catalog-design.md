@@ -1,7 +1,7 @@
 # Unified Recipe Catalogue — Design Specification
 
 **Date:** 2026-07-13
-**Status:** Phase 0 verified; Phase 1 catalogue foundation approved to begin
+**Status:** Phase 1 verified and deployed dormant; Phase 2 two-source pilot approved to begin
 **Scope:** Security hardening, unified complete-recipe ingestion, catalogue-only generation, metadata editing, migration, and managed maintenance
 
 ## Context

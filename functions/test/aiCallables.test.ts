@@ -25,6 +25,10 @@ const indexMocks = vi.hoisted(() => {
       uid: 'user-1',
       email: 'member@example.com',
     })),
+    authorizeCatalogueEditor: vi.fn(async () => ({
+      uid: 'editor-1',
+      email: 'editor@example.com',
+    })),
     firestoreQuotaStore: vi.fn(() => quotaStore),
     initializeApp: vi.fn(),
     onCall: vi.fn((options: unknown, handler: unknown) => ({ options, handler })),
@@ -44,6 +48,8 @@ const indexMocks = vi.hoisted(() => {
       save: vi.fn(),
       update: vi.fn(),
     },
+    catalogueSelectionHandlers: { select: vi.fn() },
+    catalogueMetadataHandlers: { update: vi.fn() },
   };
 });
 
@@ -64,7 +70,18 @@ vi.mock('../src/config.js', () => ({
 
 vi.mock('../src/authz.js', () => ({
   authorizeAllowlistedUser: indexMocks.authorizeAllowlistedUser,
+  authorizeCatalogueEditor: indexMocks.authorizeCatalogueEditor,
   authorizeHouseholdMember: indexMocks.authorizeHouseholdMember,
+}));
+
+vi.mock('../src/catalogue/selection.js', () => ({
+  firestoreCatalogueSelectionStore: vi.fn(() => ({ kind: 'catalogue-selection-store' })),
+  createCatalogueSelectionHandlers: vi.fn(() => indexMocks.catalogueSelectionHandlers),
+}));
+
+vi.mock('../src/catalogue/metadata.js', () => ({
+  firestoreCanonicalMetadataStore: vi.fn(() => ({ kind: 'catalogue-metadata-store' })),
+  createCatalogueMetadataHandlers: vi.fn(() => indexMocks.catalogueMetadataHandlers),
 }));
 
 vi.mock('../src/callables/households.js', () => ({
@@ -427,7 +444,7 @@ describe('createAiHandlers', () => {
 });
 
 describe('Functions entrypoint', () => {
-  it('registers four secret-bound AI callables and five fixed non-secret mutation callables', async () => {
+  it('registers four secret-bound AI callables and seven fixed non-secret mutation callables', async () => {
     vi.resetModules();
 
     const entrypoint = await import('../src/index.js');
@@ -437,15 +454,17 @@ describe('Functions entrypoint', () => {
       'joinHousehold',
       'reminderFlags',
       'saveLegacyRecipe',
+      'selectCatalogueRecipes',
       'shoppingGroups',
       'substitutions',
       'switchHousehold',
       'tagRecipes',
+      'updateCanonicalRecipeMetadata',
       'updateLegacyRecipeMetadata',
     ]);
     expect(indexMocks.initializeApp).toHaveBeenCalledOnce();
     expect(indexMocks.firestoreQuotaStore).toHaveBeenCalledOnce();
-    expect(indexMocks.onCall).toHaveBeenCalledTimes(9);
+    expect(indexMocks.onCall).toHaveBeenCalledTimes(11);
     for (const [options] of indexMocks.onCall.mock.calls.slice(0, 4)) {
       expect(options).toEqual({
         secrets: [indexMocks.secret],

@@ -1,0 +1,93 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.quick30", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.moderate45", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.vegetarian", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.kidFriendly", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.healthy", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.salad", "order": "ASCENDING" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    { "collectionGroup": "recipes", "fieldPath": "content.instructions", "indexes": [] },
+    { "collectionGroup": "recipes", "fieldPath": "content.description", "indexes": [] },
+    { "collectionGroup": "recipes", "fieldPath": "content.notes", "indexes": [] },
+    { "collectionGroup": "recipes", "fieldPath": "content.ingredientGroups", "indexes": [] }
+  ]
+}

@@ -67,6 +67,14 @@ describe('Firestore household security boundary', () => {
       await setDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1'), {
         url: 'https://example.com/recipe-1',
       });
+      await setDoc(doc(database, 'appConfig/catalogue'), {
+        generationMode: 'legacy',
+      });
+      await setDoc(doc(database, 'catalogueOps/config'), { enabled: false });
+      await setDoc(doc(database, 'catalogueOps/lease'), { ownerId: 'run-1' });
+      await setDoc(doc(database, 'catalogueBudgets/2026-07-18'), { used: 1 });
+      await setDoc(doc(database, 'catalogueRuns/run-1'), { status: 'complete' });
+      await setDoc(doc(database, 'catalogueEditors/member-1'), { enabled: true });
     });
   });
 
@@ -251,5 +259,29 @@ describe('Firestore household security boundary', () => {
     await assertFails(getDocs(collection(database, 'recipes')));
     await assertFails(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
     await assertFails(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
+  });
+
+  it('allows authenticated catalogue config reads but keeps it server-write only', async () => {
+    const database = environment.authenticatedContext('member-1').firestore();
+    const anonymous = environment.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(database, 'appConfig/catalogue')));
+    await assertFails(getDoc(doc(anonymous, 'appConfig/catalogue')));
+    await assertFails(setDoc(doc(database, 'appConfig/catalogue'), {
+      generationMode: 'catalogue',
+    }));
+  });
+
+  it.each([
+    'catalogueOps/config',
+    'catalogueOps/lease',
+    'catalogueBudgets/2026-07-18',
+    'catalogueRuns/run-1',
+    'catalogueEditors/member-1',
+  ])('keeps %s entirely server-only', async (documentPath) => {
+    const database = environment.authenticatedContext('member-1').firestore();
+
+    await assertFails(getDoc(doc(database, documentPath)));
+    await assertFails(setDoc(doc(database, documentPath), { enabled: true }));
   });
 });

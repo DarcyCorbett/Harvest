@@ -15,6 +15,7 @@ vi.mock('firebase-admin/firestore', () => ({
 
 import {
   authorizeAllowlistedUser,
+  authorizeCatalogueEditor,
   authorizeHouseholdMember,
   firestoreAuthzLookups,
   type AuthzLookups,
@@ -223,5 +224,26 @@ describe('authorizeAllowlistedUser', () => {
     ).resolves.toEqual({ uid: 'user-1', email: 'member@example.com' });
     expect(injected.isAllowlisted).toHaveBeenCalledWith('member@example.com');
     expect(injected.getMembers).not.toHaveBeenCalled();
+  });
+});
+
+describe('authorizeCatalogueEditor', () => {
+  it('requires both the login allowlist and an enabled server-only editor record', async () => {
+    const authorization = lookups();
+    const editorLookup = { isEnabledEditor: vi.fn().mockResolvedValue(false) };
+
+    await expect(authorizeCatalogueEditor(
+      auth('user-1', 'member@example.com'),
+      authorization,
+      editorLookup,
+    )).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(editorLookup.isEnabledEditor).toHaveBeenCalledWith('user-1');
+
+    editorLookup.isEnabledEditor.mockResolvedValue(true);
+    await expect(authorizeCatalogueEditor(
+      auth('user-1', 'member@example.com'),
+      authorization,
+      editorLookup,
+    )).resolves.toEqual({ uid: 'user-1', email: 'member@example.com' });
   });
 });

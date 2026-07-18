@@ -4,7 +4,8 @@
     "predeploy": ["npm --prefix functions run test", "npm --prefix functions run build"]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "emulators": {
     "auth": { "port": 9099 },

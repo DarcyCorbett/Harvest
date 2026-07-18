@@ -3,7 +3,19 @@ import { onCall } from 'firebase-functions/v2/https';
 
 import { requestGeminiJson } from './ai/geminiProvider.js';
 import { createAiService } from './ai/service.js';
-import { authorizeAllowlistedUser, authorizeHouseholdMember } from './authz.js';
+import {
+  authorizeAllowlistedUser,
+  authorizeCatalogueEditor,
+  authorizeHouseholdMember,
+} from './authz.js';
+import {
+  createCatalogueMetadataHandlers,
+  firestoreCanonicalMetadataStore,
+} from './catalogue/metadata.js';
+import {
+  createCatalogueSelectionHandlers,
+  firestoreCatalogueSelectionStore,
+} from './catalogue/selection.js';
 import { createAiHandlers } from './callables/ai.js';
 import {
   createHouseholdHandlers,
@@ -51,6 +63,14 @@ const legacyRecipeHandlers = createLegacyRecipeHandlers({
   create: legacyRecipeStore.create,
   update: legacyRecipeStore.update,
 });
+const catalogueSelectionHandlers = createCatalogueSelectionHandlers({
+  authorize: authorizeHouseholdMember,
+  store: firestoreCatalogueSelectionStore(),
+});
+const catalogueMetadataHandlers = createCatalogueMetadataHandlers({
+  authorize: authorizeCatalogueEditor,
+  store: firestoreCanonicalMetadataStore(),
+});
 
 const aiOptions = {
   secrets: [GEMINI_API_KEY] as [typeof GEMINI_API_KEY],
@@ -67,3 +87,5 @@ export const joinHousehold = onCall(householdHandlers.join);
 export const switchHousehold = onCall(householdHandlers.switch);
 export const saveLegacyRecipe = onCall(legacyRecipeHandlers.save);
 export const updateLegacyRecipeMetadata = onCall(legacyRecipeHandlers.update);
+export const selectCatalogueRecipes = onCall(catalogueSelectionHandlers.select);
+export const updateCanonicalRecipeMetadata = onCall(catalogueMetadataHandlers.update);

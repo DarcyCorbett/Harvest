@@ -13,6 +13,20 @@ export interface AuthorizedIdentity {
   email: string;
 }
 
+export interface CatalogueEditorLookups {
+  isEnabledEditor(uid: string): Promise<boolean>;
+}
+
+export function firestoreCatalogueEditorLookups(): CatalogueEditorLookups {
+  const db = getFirestore();
+  return {
+    async isEnabledEditor(uid) {
+      const snapshot = await db.collection('catalogueEditors').doc(uid).get();
+      return snapshot.exists && snapshot.get('enabled') === true;
+    },
+  };
+}
+
 export function firestoreAuthzLookups(): AuthzLookups {
   const db = getFirestore();
 
@@ -66,4 +80,16 @@ export async function authorizeAllowlistedUser(
   }
 
   return { uid: auth.uid, email };
+}
+
+export async function authorizeCatalogueEditor(
+  auth: AuthData,
+  authz: AuthzLookups = firestoreAuthzLookups(),
+  editors: CatalogueEditorLookups = firestoreCatalogueEditorLookups(),
+): Promise<AuthorizedIdentity> {
+  const identity = await authorizeAllowlistedUser(auth, authz);
+  if (!(await editors.isEnabledEditor(identity.uid))) {
+    throw new HttpsError('permission-denied', 'Permission denied.');
+  }
+  return identity;
 }
