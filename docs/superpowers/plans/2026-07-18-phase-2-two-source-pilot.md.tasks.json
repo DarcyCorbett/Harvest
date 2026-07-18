@@ -38,10 +38,10 @@
     {
       "id": 6,
       "subject": "Task 6: Complete cloud pilot gate",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [5],
       "description": "**Goal:** Capture gcloud and Firestore evidence proving the deployed image passes the bounded pilot with Scheduler PAUSED, mode legacy, a zero-fetch/zero-document-write rerun, valid RecipeTin sample, explicit Serious Eats outcome, and selector p95 no greater than 2,000 ms.\n\n> **USER-ORDERED GATE — NON-SKIPPABLE.** This task was requested by the user in the current conversation. It MUST NOT be closed by walking around it, by declaring it \"verified inline\", or by substituting a cheaper check. Close only after every item in `acceptanceCriteria` has been re-validated independently, with output captured.\n\n**Files:**\n- Modify: `docs/superpowers/verification/phase-2-catalogue-evidence.md`\n\n**Acceptance Criteria:**\n- [ ] Dormant deployment succeeds with build/image evidence.\n- [ ] Job remains one task/parallelism one and Scheduler remains PAUSED before/after.\n- [ ] generationMode remains legacy.\n- [ ] All three run documents pass the validator.\n- [ ] Runs remain under cap and rerun has zero fetches/document writes.\n- [ ] Quality, operation, byte, latency, and Gemini measurements are captured without sensitive data.\n- [ ] Serious Eats 402 is recorded without bypass if it persists.\n\n**Verify:** `.\\scripts\\run-phase2-pilot.ps1 -ProjectId meal-wizard-ad202` → exits 0 with valid sanitized JSON.\n\n**Steps:** Deploy committed implementation dormant; re-read resource invariants; execute bounded pilot; re-read rollback invariants; append evidence; commit and confirm clean branch.\n\n```json:metadata\n{\"files\":[\"docs/superpowers/verification/phase-2-catalogue-evidence.md\"],\"verifyCommand\":\".\\\\scripts\\\\run-phase2-pilot.ps1 -ProjectId meal-wizard-ad202\",\"acceptanceCriteria\":[\"Dormant deployment succeeds with recorded build and image evidence.\",\"Job and Scheduler invariants remain safe.\",\"generationMode remains legacy.\",\"Pilot source, idempotency, quality, cost, and latency thresholds pass.\",\"Protected access is recorded without bypass.\"],\"estimatedScope\":\"large\",\"modelTier\":\"standard\",\"userGate\":true,\"tags\":[\"user-gate\"],\"gateScope\":\"cloud-phase2\",\"failurePolicy\":\"stop\",\"requireEvidenceTokens\":[[\"PAUSED\"],[\"legacy\"],[\"zero-fetch\",\"fetched=0\"],[\"p95\"]]}\n```"
     }
   ],
-  "lastUpdated": "2026-07-18T16:27:00+03:00"
+  "lastUpdated": "2026-07-18T16:45:00+03:00"
 }
