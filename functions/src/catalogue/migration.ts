@@ -35,6 +35,7 @@ export const LEGACY_MIGRATION_REASON_CODES = [
   'classification-incomplete',
   'invalid-search-fields',
   'document-limits',
+  'canonical-id-collision',
 ] as const;
 
 export type LegacyMigrationReasonCode = typeof LEGACY_MIGRATION_REASON_CODES[number];

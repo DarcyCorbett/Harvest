@@ -6,6 +6,7 @@ import {
   type LegacyMigrationMappingState,
 } from './migration.js';
 import type { CatalogueTimestamp } from './domain.js';
+import { pacificQuotaDate } from './operations.js';
 
 export type MigrationStage = 'recipes' | 'meal-plans' | 'cookbooks' | 'complete';
 export type MigrationCommand = 'dry-run' | 'migrate-recipes' | 'reconcile';
@@ -54,7 +55,7 @@ export interface MigrationAccounting {
 }
 
 type RejectedTransactionOutcome = Omit<MigrationAccounting, 'dataWrites'> & {
-  status: 'budget-exhausted' | 'concurrent-change';
+  status: 'budget-exhausted' | 'concurrent-change' | 'lease-lost';
   dataWrites: 0;
 };
 
@@ -106,9 +107,16 @@ export interface MigrationRunStart {
   commandCap: number;
   dailyLimit: number;
   startedAt: string;
+  quotaDate: string;
+  transactionTimeMs: number;
 }
 
-export interface CommitRecipeInput {
+interface StableAtomicInput {
+  quotaDate: string;
+  transactionTimeMs: number;
+}
+
+export interface CommitRecipeInput extends StableAtomicInput {
   runId: string;
   epoch: number;
   document: ScannedDocument;
@@ -118,7 +126,7 @@ export interface CommitRecipeInput {
   dailyLimit: number;
 }
 
-export interface CursorAdvanceInput {
+export interface CursorAdvanceInput extends StableAtomicInput {
   runId: string;
   epoch: number;
   document: ScannedDocument;
@@ -130,10 +138,10 @@ export interface CursorAdvanceInput {
 
 export interface MigrationTransactionStore {
   loadCheckpoint(): Promise<MigrationCheckpoint>;
-  startRun(start: MigrationRunStart): Promise<void>;
+  startRun(start: MigrationRunStart): Promise<'started' | 'noop' | 'lease-lost' | 'concurrent-change'>;
   commitRecipe(input: CommitRecipeInput): Promise<RecipeTransactionOutcome>;
   advanceRecipeCursor(input: CursorAdvanceInput): Promise<CursorTransactionOutcome>;
-  completeRecipes(input: {
+  completeRecipes(input: StableAtomicInput & {
     runId: string;
     epoch: number;
     cursorId: string | null;
@@ -141,7 +149,7 @@ export interface MigrationTransactionStore {
     commandCap: number;
     dailyLimit: number;
   }): Promise<CursorTransactionOutcome>;
-  resetForReconciliation(input: {
+  resetForReconciliation(input: StableAtomicInput & {
     runId: string;
     command: 'reconcile';
     previousEpoch: number;
@@ -221,6 +229,7 @@ function outcomeStatus(outcome: CursorTransactionOutcome | RecipeTransactionOutc
   MigrationRunStatus | undefined {
   if (outcome.status === 'budget-exhausted') return 'budget-exhausted';
   if (outcome.status === 'concurrent-change') return 'concurrent-change';
+  if (outcome.status === 'lease-lost') return 'lease-lost';
   return undefined;
 }
 
@@ -246,6 +255,13 @@ export async function runRecipeMigration(
     throw new Error('Invalid dailyLimit');
   }
   const startedAt = dependencies.now().toISOString();
+  const atomicInput = () => {
+    const transactionTime = dependencies.now();
+    return {
+      quotaDate: pacificQuotaDate(transactionTime),
+      transactionTimeMs: transactionTime.getTime(),
+    };
+  };
   if (command === 'dry-run') {
     const counts = emptyCounts();
     const ids: string[] = [];
@@ -342,7 +358,7 @@ export async function runRecipeMigration(
       return summary;
     }
     if (command === 'migrate-recipes') {
-      await dependencies.store.startRun({
+      const startStatus = await dependencies.store.startRun({
         runId: options.runId,
         command,
         epoch: summary.epoch,
@@ -350,7 +366,12 @@ export async function runRecipeMigration(
         commandCap,
         dailyLimit,
         startedAt,
+        ...atomicInput(),
       });
+      if (startStatus === 'lease-lost' || startStatus === 'concurrent-change') {
+        summary.status = startStatus;
+        return summary;
+      }
       started = true;
     } else {
       if (!(await dependencies.lease.renew(dependencies.now().getTime()))) {
@@ -366,6 +387,7 @@ export async function runRecipeMigration(
         updatedAt: startedAt,
         commandCap,
         dailyLimit,
+        ...atomicInput(),
       });
       addAccounting(summary, reset);
       if (!('checkpoint' in reset)) {
@@ -394,6 +416,7 @@ export async function runRecipeMigration(
           updatedAt: startedAt,
           commandCap,
           dailyLimit,
+          ...atomicInput(),
         });
         addAccounting(summary, complete);
         if (complete.status === 'concurrent-change') summary.counts.concurrentChanges += 1;
@@ -417,6 +440,7 @@ export async function runRecipeMigration(
             reason: 'schema-v2',
             commandCap,
             dailyLimit,
+            ...atomicInput(),
           });
         } else {
           const conversion = convertLegacyRecipe({
@@ -433,6 +457,7 @@ export async function runRecipeMigration(
             conversion,
             commandCap,
             dailyLimit,
+            ...atomicInput(),
           });
         }
         addAccounting(summary, outcome);

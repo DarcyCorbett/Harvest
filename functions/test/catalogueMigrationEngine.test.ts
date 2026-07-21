@@ -66,7 +66,7 @@ function memoryStore(
 ): MigrationTransactionStore {
   return {
     async loadCheckpoint() { return initial; },
-    async startRun() { return undefined; },
+    async startRun() { return 'started' as const; },
     async commitRecipe() { return transaction(); },
     async advanceRecipeCursor() {
       return { status: 'committed', dataWrites: 1, commandUsed: 1, dailyUsed: 1 };
@@ -181,7 +181,7 @@ describe('recipe migration engine', () => {
     const committed: string[] = [];
     const store: MigrationTransactionStore = {
       async loadCheckpoint() { return checkpoint({ recipeCursorId: 'legacy-a' }); },
-      async startRun() { return undefined; },
+      async startRun() { return 'started' as const; },
       async commitRecipe(input) {
         committed.push(input.document.id);
         return {
@@ -234,7 +234,7 @@ describe('recipe migration engine', () => {
     let completed = false;
     const store: MigrationTransactionStore = {
       async loadCheckpoint() { return checkpoint(); },
-      async startRun() { return undefined; },
+      async startRun() { return 'started' as const; },
       async commitRecipe() { throw new Error('not used'); },
       async advanceRecipeCursor() { throw new Error('not used'); },
       async completeRecipes() {
@@ -378,7 +378,7 @@ describe('recipe migration engine', () => {
     let starts = 0;
     let summaries = 0;
     const store = memoryStore({
-      async startRun() { starts += 1; },
+      async startRun() { starts += 1; return 'started' as const; },
       async summarizeRun() { summaries += 1; },
     });
 
@@ -395,6 +395,26 @@ describe('recipe migration engine', () => {
 
     expect(summary.status).toBe('lease-unavailable');
     expect(starts).toBe(0);
+    expect(summaries).toBe(0);
+  });
+
+  it('stops on a concurrent start transaction without scanning or summarizing', async () => {
+    let scans = 0;
+    let summaries = 0;
+    const store = memoryStore({
+      async startRun() { return 'concurrent-change'; },
+      async summarizeRun() { summaries += 1; },
+    });
+
+    const summary = await runRecipeMigration('migrate-recipes', {
+      scanner: { async scanRecipes() { scans += 1; return []; } },
+      store,
+      lease: availableLease().lease,
+      now: () => runTimestamp,
+    }, { runId: 'run-start-race' });
+
+    expect(summary.status).toBe('concurrent-change');
+    expect(scans).toBe(0);
     expect(summaries).toBe(0);
   });
 
@@ -483,6 +503,27 @@ describe('recipe migration engine', () => {
     expect(summary).toMatchObject({
       status: 'concurrent-change', endCursor: null, dataWrites: 0,
       counts: { concurrentChanges: 1 },
+    });
+  });
+
+  it('stops as lease-lost when an atomic recipe transaction rejects the lease', async () => {
+    const store = memoryStore({
+      async commitRecipe() {
+        return { status: 'lease-lost', dataWrites: 0, commandUsed: 2, dailyUsed: 12 };
+      },
+    });
+
+    const summary = await runRecipeMigration('migrate-recipes', {
+      scanner: {
+        async scanRecipes(afterId) { return afterId === null ? [document('legacy-a')] : []; },
+      },
+      store,
+      lease: availableLease().lease,
+      now: () => runTimestamp,
+    }, { runId: 'run-transaction-lease-lost' });
+
+    expect(summary).toMatchObject({
+      status: 'lease-lost', endCursor: null, dataWrites: 0, commandUsed: 2, dailyUsed: 12,
     });
   });
 
@@ -602,7 +643,7 @@ describe('recipe migration engine', () => {
     const mutations: string[] = [];
     const lease = availableLease();
     const store = memoryStore({
-      async startRun() { mutations.push('start'); },
+      async startRun() { mutations.push('start'); return 'started' as const; },
       async resetForReconciliation() {
         mutations.push('reset');
         return {
@@ -649,7 +690,7 @@ describe('recipe migration engine', () => {
     });
     const store = memoryStore({
       async loadCheckpoint() { order.push('checkpoint'); return old; },
-      async startRun() { order.push('startRun'); },
+      async startRun() { order.push('startRun'); return 'started' as const; },
       async resetForReconciliation(input) {
         order.push('reset');
         resetInputs.push(input);
@@ -692,6 +733,8 @@ describe('recipe migration engine', () => {
       startCursor: null,
       commandCap: 77,
       dailyLimit: 123,
+      quotaDate: '2026-07-19',
+      transactionTimeMs: runTimestamp.getTime(),
       startedAt: '2026-07-19T08:00:00.000Z',
       updatedAt: '2026-07-19T08:00:00.000Z',
     }]);
@@ -709,7 +752,7 @@ describe('recipe migration engine', () => {
       const mutations: string[] = [];
       const lease = availableLease();
       const store = memoryStore({
-        async startRun() { mutations.push('start'); },
+        async startRun() { mutations.push('start'); return 'started' as const; },
         async resetForReconciliation() {
           return { status, dataWrites: 0, commandUsed: 4, dailyUsed: 40 };
         },
@@ -737,7 +780,7 @@ describe('recipe migration engine', () => {
     const mutations: string[] = [];
     const store = memoryStore({
       async loadCheckpoint() { mutations.push('checkpoint'); return checkpoint(); },
-      async startRun() { mutations.push('start'); },
+      async startRun() { mutations.push('start'); return 'started' as const; },
       async commitRecipe() { mutations.push('commit'); return transaction(); },
       async advanceRecipeCursor() { mutations.push('advance'); return { status: 'committed', dataWrites: 1, commandUsed: 1, dailyUsed: 1 }; },
       async completeRecipes() { mutations.push('complete'); return { status: 'committed', dataWrites: 1, commandUsed: 1, dailyUsed: 1 }; },
