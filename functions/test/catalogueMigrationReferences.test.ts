@@ -138,6 +138,15 @@ describe('catalogue reference migration', () => {
     expect(store.applied).toHaveLength(2);
     expect(store.completed).toBe(false);
   });
+
+  it('does not complete the checkpoint after a bounded canary', async () => {
+    const store = memoryStore(['meal-plan-updated', 'cookbook-moved']);
+
+    const summary = await runReferenceMigration(store, { dryRun: false, maxReferences: 1 });
+
+    expect(summary).toMatchObject({ status: 'partial', scanned: 1 });
+    expect(store.completed).toBe(false);
+  });
 });
 
 type TestOutcome = Awaited<ReturnType<ReferenceMigrationStore['process']>>;

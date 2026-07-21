@@ -277,6 +277,9 @@ describe('Firestore household security boundary', () => {
     'catalogueOps/lease',
     'catalogueBudgets/2026-07-18',
     'catalogueRuns/run-1',
+    'catalogueMigrationCheckpoints/phase3',
+    'catalogueMigrationRuns/run-1',
+    'catalogueRecipeMigrations/legacy-1',
     'catalogueEditors/member-1',
   ])('keeps %s entirely server-only', async (documentPath) => {
     const database = environment.authenticatedContext('member-1').firestore();

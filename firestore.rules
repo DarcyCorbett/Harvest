@@ -67,6 +67,15 @@ service cloud.firestore {
     match /catalogueRuns/{runId} {
       allow read, write: if false;
     }
+    match /catalogueMigrationCheckpoints/{checkpointId} {
+      allow read, write: if false;
+    }
+    match /catalogueMigrationRuns/{runId} {
+      allow read, write: if false;
+    }
+    match /catalogueRecipeMigrations/{legacyRecipeId} {
+      allow read, write: if false;
+    }
     match /catalogueEditors/{uid} {
       allow read, write: if false;
     }

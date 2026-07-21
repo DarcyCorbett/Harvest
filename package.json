@@ -17,7 +17,8 @@
     "test:rules": "firebase emulators:exec --only firestore --project demo-meal-wizard-rules \"npm run test:rules:vitest\"",
     "scan:client-secrets": "node scripts/scanClientSecrets.mjs",
     "verify:phase0": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",
-    "verify:phase2:local": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets"
+    "verify:phase2:local": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",
+    "verify:phase3:local": "npm run test:functions && npm run build:functions && npm run test:rules && npm run scan:client-secrets && node scripts/verifyPhase3Static.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",

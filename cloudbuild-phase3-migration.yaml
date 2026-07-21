@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - functions/Dockerfile.migration
+      - --tag
+      - ${_IMAGE}
+      - functions
+images:
+  - ${_IMAGE}

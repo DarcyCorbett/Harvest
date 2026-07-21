@@ -27,7 +27,7 @@ export interface ReferenceMigrationStore {
 }
 
 export interface ReferenceMigrationSummary {
-  status: 'complete' | 'stopped';
+  status: 'complete' | 'partial' | 'stopped';
   scanned: number;
   mealPlansUpdated: number;
   cookbooksMoved: number;
@@ -153,7 +153,8 @@ export async function runReferenceMigration(
       return summary;
     }
   }
-  if (!options.dryRun) await store.complete();
+  if (limit < references.length) summary.status = 'partial';
+  else if (!options.dryRun) await store.complete();
   return summary;
 }
 
