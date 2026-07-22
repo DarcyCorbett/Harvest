@@ -1,6 +1,6 @@
 # Phase 3 catalogue migration evidence
 
-Status: production rollout in progress; day-one recipe batch complete at the 8,000-write safety cap.
+Status: production rollout in progress; first accelerated recipe batch complete at the operator-approved 20,000-write cap.
 
 ## Local verification
 
@@ -12,6 +12,7 @@ Status: production rollout in progress; day-one recipe batch complete at the 8,0
 - Verified 2026-07-21: Functions TypeScript build passed.
 - Verified 2026-07-21: 38 Firestore Rules emulator tests passed.
 - Verified 2026-07-21: client-secret scan and Phase 3 static safety assertions passed.
+- Re-verified 2026-07-22 after raising the operator-approved cap: 479 Functions tests across 22 files, Functions build, 38 Firestore Rules emulator tests, client-secret scan, Phase 3 static safety assertions, and PowerShell syntax all passed.
 
 ## Production evidence template
 
@@ -29,7 +30,10 @@ Status: production rollout in progress; day-one recipe batch complete at the 8,0
 - Follow-up hardening sets the migration engine's daily limit to 8,000, not merely its per-command cap, preventing multiple commands or timezone mistakes from exceeding the conservative Pacific-day target.
 - Daily-cap hardening deployed through Cloud Build `4ba47349-b105-4f43-be0e-b1c574bfd440`, image digest `sha256:c78e3d587b1b191815853cbdaeb1acc3d2d60bda95093411c94d40f4d05e3a8f`; the job remained single-task/manual, Scheduler remained `PAUSED`, and generation mode remained `legacy`.
 - On 2026-07-22 the operator explicitly raised the Phase 3 command and Pacific-day ceilings to 20,000 writes to complete the remaining migration in two quota days. This prioritizes rollout speed and may exceed the Firestore free allowance when combined with normal application and operational writes.
+- The 20,000-write version was deployed through Cloud Build `168c34f2-b433-4564-86ca-0ed75ce4622e`, image digest `sha256:dd8071c9b665623173cf6d3118b98e7f7688baad348996f8ec4531af87763ced`; the job remained single-task/manual, Scheduler remained `PAUSED`, and generation mode remained `legacy`.
 - Post-execution dry-run `phase3-dry-run-20260722050224`: 27,656 legacy recipes, 8,004 v2 documents, zero conversion failures. Seven new Serious Eats legacy recipes arrived through the still-active legacy generator, producing the expected reconciliable hash `d039e8b97b966b0ce22b4c18824ad26e5518ac7fe8afbf127dc665c8e12da518`.
+- First accelerated batch `phase3-migrate-recipes-20260722201734` (execution `mealwizard-catalogue-migration-44fmr`): exactly 20,000 catalogue writes, 10,000 mappings/targets, 3,990 ready, 6,010 review, zero failures or concurrent changes; completed successfully in 13m29s.
+- Post-batch inventory `phase3-dry-run-20260722203245`: 27,656 legacy recipes and 18,004 v2 documents, with 18,000 migrated mappings represented by the v2 increase. The legacy count and stable ID hash remained unchanged and conversion failures remained zero. Remaining recipe work is 9,656 mappings/targets (19,312 catalogue writes). Current auto-mappable references are 29 meal-plan updates and 33 cookbook moves; 158 existing orphans remain untouched.
 - Reference canary and full-run counts (updated, merged, orphan, failed):
 - Reconciliation and idempotency results:
 - Final recipe/mapping counts and checkpoint stage:
