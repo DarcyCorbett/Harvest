@@ -7,7 +7,7 @@ param(
   [string]$Region = 'europe-west1',
   [string]$JobName = 'mealwizard-catalogue-migration',
   [string]$SchedulerName = 'mealwizard-catalogue-daily',
-  [ValidateRange(1, 8000)][int]$MaxWrites = 8000,
+  [ValidateRange(1, 20000)][int]$MaxWrites = 20000,
   [ValidateRange(0, 10000)][int]$MaxReferences = 0,
   [string]$BackupUri
 )

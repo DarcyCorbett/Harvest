@@ -33,7 +33,7 @@ export function parseMigrationArguments(arguments_: readonly string[]): Migratio
     const value = rest[index + 1];
     if (!value) throw new Error(`Missing value for ${flag}`);
     if (flag === '--run-id' && value.trim()) result.runId = value.trim();
-    else if (flag === '--max-writes') result.maxWrites = positiveInteger(value, 8_000, 'max-writes');
+    else if (flag === '--max-writes') result.maxWrites = positiveInteger(value, 20_000, 'max-writes');
     else if (flag === '--max-references') result.maxReferences = positiveInteger(value, 10_000, 'max-references');
     else throw new Error(`Unsupported argument: ${flag}`);
   }

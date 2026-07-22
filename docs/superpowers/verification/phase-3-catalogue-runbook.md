@@ -21,9 +21,9 @@ Run a canary capped at 25 catalogue-data writes:
 
 `./scripts/run-phase3-migration.ps1 -ProjectId <project> -Stage migrate-recipes -MaxWrites 25 -BackupUri <gs-uri>`
 
-Inspect mappings and ready/review targets, then continue with manual runs capped at 8,000 writes:
+Inspect mappings and ready/review targets, then continue with manual runs capped at 20,000 writes:
 
-`./scripts/run-phase3-migration.ps1 -ProjectId <project> -Stage migrate-recipes -MaxWrites 8000 -BackupUri <gs-uri>`
+`./scripts/run-phase3-migration.ps1 -ProjectId <project> -Stage migrate-recipes -MaxWrites 20000 -BackupUri <gs-uri>`
 
 Repeat until the summary reports `complete`. Budget-exhausted runs are expected and resume from the durable cursor.
 
@@ -37,6 +37,6 @@ After recipes complete, migrate a 10-reference canary, inspect it, then process 
 
 Late legacy writes are handled by `reconcile`, followed by another reference run:
 
-`./scripts/run-phase3-migration.ps1 -ProjectId <project> -Stage reconcile -MaxWrites 8000 -BackupUri <gs-uri>`
+`./scripts/run-phase3-migration.ps1 -ProjectId <project> -Stage reconcile -MaxWrites 20000 -BackupUri <gs-uri>`
 
 Finish with `-Stage verify`. Keep Scheduler paused and generation mode legacy; Phase 5 owns cutover.

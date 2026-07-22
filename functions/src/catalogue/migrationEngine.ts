@@ -243,15 +243,15 @@ export async function runRecipeMigration(
   options: RecipeMigrationOptions,
 ): Promise<MigrationRunSummary> {
   const pageSize = options.pageSize ?? 100;
-  const commandCap = options.commandCap ?? 8_000;
-  const dailyLimit = options.dailyLimit ?? 18_000;
+  const commandCap = options.commandCap ?? 20_000;
+  const dailyLimit = options.dailyLimit ?? 20_000;
   if (!options.runId || !Number.isInteger(pageSize) || pageSize <= 0) {
     throw new Error('Invalid recipe migration options');
   }
-  if (!Number.isInteger(commandCap) || commandCap <= 0 || commandCap > 8_000) {
+  if (!Number.isInteger(commandCap) || commandCap <= 0 || commandCap > 20_000) {
     throw new Error('Invalid commandCap');
   }
-  if (!Number.isInteger(dailyLimit) || dailyLimit <= 0 || dailyLimit > 18_000) {
+  if (!Number.isInteger(dailyLimit) || dailyLimit <= 0 || dailyLimit > 20_000) {
     throw new Error('Invalid dailyLimit');
   }
   const startedAt = dependencies.now().toISOString();

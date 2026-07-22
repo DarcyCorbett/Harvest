@@ -25,11 +25,16 @@ describe('parseMigrationArguments', () => {
   it.each([
     [],
     ['rollback-references'],
-    ['migrate-recipes', '--max-writes', '8001'],
+    ['migrate-recipes', '--max-writes', '20001'],
     ['migrate-references', '--max-references', '0'],
     ['verify', '--unknown', 'value'],
   ])('rejects unsupported or unsafe arguments: %j', (arguments_) => {
     expect(() => parseMigrationArguments(arguments_)).toThrow();
+  });
+
+  it('accepts the requested 20,000-write daily batch', () => {
+    expect(parseMigrationArguments(['migrate-recipes', '--max-writes', '20000']))
+      .toEqual({ command: 'migrate-recipes', maxWrites: 20_000 });
   });
 });
 

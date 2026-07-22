@@ -31,7 +31,7 @@ import type {
 
 const CHECKPOINT_PATH = ['catalogueMigrationCheckpoints', 'phase3'] as const;
 const TERMINAL_STATES = new Set(['migrated', 'linked-existing', 'failed']);
-const GLOBAL_DAILY_WRITE_LIMIT = 18_000;
+const GLOBAL_DAILY_WRITE_LIMIT = 20_000;
 
 function serializedUpdateTime(snapshot: DocumentSnapshot): string | null {
   return snapshot.updateTime ? String(snapshot.updateTime.valueOf()) : null;

@@ -104,10 +104,10 @@ function availableLease(renewResults: boolean[] = []) {
 
 describe('recipe migration engine', () => {
   it.each([
-    [{ commandCap: 8_001 }, 'commandCap'],
+    [{ commandCap: 20_001 }, 'commandCap'],
     [{ commandCap: 1.5 }, 'commandCap'],
     [{ commandCap: 0 }, 'commandCap'],
-    [{ dailyLimit: 18_001 }, 'dailyLimit'],
+    [{ dailyLimit: 20_001 }, 'dailyLimit'],
     [{ dailyLimit: 1.5 }, 'dailyLimit'],
     [{ dailyLimit: -1 }, 'dailyLimit'],
   ])('rejects an invalid hard-cap option %o before calling dependencies', async (invalid, field) => {
@@ -338,8 +338,8 @@ describe('recipe migration engine', () => {
   });
 
   it.each([
-    ['command', { commandUsed: 8_000, dailyUsed: 11_000 }],
-    ['daily', { commandUsed: 3_000, dailyUsed: 18_000 }],
+    ['command', { commandUsed: 20_000, dailyUsed: 11_000 }],
+    ['daily', { commandUsed: 3_000, dailyUsed: 20_000 }],
   ] as const)('stops on the %s cap without advancing the rejected recipe', async (_cap, usage) => {
     let completionCalls = 0;
     const inputs: Array<{ commandCap: number; dailyLimit: number }> = [];
@@ -367,7 +367,7 @@ describe('recipe migration engine', () => {
       scanner, store, lease: availableLease().lease, now: () => runTimestamp,
     }, { runId: `run-${_cap}-cap` });
 
-    expect(inputs).toEqual([{ commandCap: 8_000, dailyLimit: 18_000 }]);
+    expect(inputs).toEqual([{ commandCap: 20_000, dailyLimit: 20_000 }]);
     expect(summary).toMatchObject({
       status: 'budget-exhausted', endCursor: null, dataWrites: 0, ...usage,
     });

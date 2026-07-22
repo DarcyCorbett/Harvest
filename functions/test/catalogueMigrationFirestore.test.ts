@@ -122,7 +122,7 @@ function seed(db: FakeFirestore, runId = 'run-1', consumedWrites = 0, dailyUsed 
     commandCap: 10, dailyLimit: 100, consumedWrites, status: 'running', quotaDate,
     startedAt: timestamp,
   });
-  db.put(`catalogueBudgets/${quotaDate}`, { quotaDate, used: dailyUsed, limit: 18_000 });
+  db.put(`catalogueBudgets/${quotaDate}`, { quotaDate, used: dailyUsed, limit: 20_000 });
 }
 
 function scanned(db: FakeFirestore): ScannedDocument {
@@ -238,7 +238,7 @@ describe('Firestore recipe migration transaction store', () => {
     expect(db.documents.get('catalogueMigrationCheckpoints/phase3')?.data.recipeCursorId).toBe('legacy-1');
     expect(db.documents.get('catalogueMigrationRuns/run-1')?.data.consumedWrites).toBe(2);
     expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data.used).toBe(2);
-    expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data.limit).toBe(18_000);
+    expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data.limit).toBe(20_000);
   });
 
   it('enforces a lower invocation daily cap without lowering the shared global budget limit', async () => {
@@ -254,16 +254,16 @@ describe('Firestore recipe migration transaction store', () => {
     );
 
     expect(outcome).toMatchObject({ status: 'committed', dailyUsed: 7 });
-    expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data).toMatchObject({ used: 7, limit: 18_000 });
+    expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data).toMatchObject({ used: 7, limit: 20_000 });
   });
 
   it.each([
-    ['quota date', { quotaDate: '2026-07-18', used: 0, limit: 18_000 }],
-    ['fractional used', { quotaDate, used: 1.5, limit: 18_000 }],
-    ['negative used', { quotaDate, used: -1, limit: 18_000 }],
-    ['used over global cap', { quotaDate, used: 18_001, limit: 18_000 }],
+    ['quota date', { quotaDate: '2026-07-18', used: 0, limit: 20_000 }],
+    ['fractional used', { quotaDate, used: 1.5, limit: 20_000 }],
+    ['negative used', { quotaDate, used: -1, limit: 20_000 }],
+    ['used over global cap', { quotaDate, used: 20_001, limit: 20_000 }],
     ['missing limit', { quotaDate, used: 0 }],
-    ['invalid limit', { quotaDate, used: 0, limit: 18_001 }],
+    ['invalid limit', { quotaDate, used: 0, limit: 20_001 }],
   ])('rejects an existing budget with corrupt %s without writes', async (_label, budget) => {
     const db = new FakeFirestore(); seed(db); db.put('recipes/legacy-1', legacyRecipe(), 'scan-v1');
     db.put(`catalogueBudgets/${quotaDate}`, budget);
@@ -279,7 +279,7 @@ describe('Firestore recipe migration transaction store', () => {
     const outcome = await firestoreRecipeMigrationStore(db as never, 'run-1').commitRecipe(input(db));
     expect(outcome).toMatchObject({ status: 'committed', dailyUsed: 2 });
     expect(db.documents.get(`catalogueBudgets/${quotaDate}`)?.data).toMatchObject({
-      quotaDate, used: 2, limit: 18_000,
+      quotaDate, used: 2, limit: 20_000,
     });
   });
 
@@ -343,7 +343,7 @@ describe('Firestore recipe migration transaction store', () => {
         return { commandCap: 1 };
       }, 'budget-exhausted'],
       ['daily cap', (db) => {
-        db.put(`catalogueBudgets/${quotaDate}`, { quotaDate, used: 99, limit: 18_000 });
+        db.put(`catalogueBudgets/${quotaDate}`, { quotaDate, used: 99, limit: 20_000 });
         return { dailyLimit: 100 };
       }, 'budget-exhausted'],
     ];
