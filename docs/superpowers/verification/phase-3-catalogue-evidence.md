@@ -25,6 +25,9 @@ Status: production rollout in progress; day-one recipe batch complete at the 8,0
 - Recipe canary `phase3-migrate-recipes-20260721200732`: 24 writes, 12 mappings/targets, 6 ready, 6 review, zero failures. All sampled legacy documents remained present; maximum sampled target size was 6,451 bytes.
 - Day-one batch `phase3-migrate-recipes-20260721200922`: 7,976 writes, 3,988 mappings/targets, 1,569 ready, 2,419 review, zero failures or concurrent changes. Combined daily usage including canary: exactly 8,000 writes.
 - Post-batch dry-run `phase3-dry-run-20260721201523`: legacy count remained 27,649 and stable ID hash was unchanged. Total v2 count 4,004; total mappings 4,000; checkpoint remains at recipe stage and epoch 0.
+- Additional execution `phase3-migrate-recipes-20260722045701`: 8,000 writes, 4,000 mappings/targets, 1,605 ready, 2,395 review, zero failures or concurrent changes. This ran at 05:00 UTC, still July 21 Pacific, raising that quota day's catalogue usage from 8,000 to 16,000. It remained below the enforced 18,000 hard limit but exceeded the conservative 8,000 target; all further writes stopped immediately.
+- Follow-up hardening sets the migration engine's daily limit to 8,000, not merely its per-command cap, preventing multiple commands or timezone mistakes from exceeding the conservative Pacific-day target.
+- Post-execution dry-run `phase3-dry-run-20260722050224`: 27,656 legacy recipes, 8,004 v2 documents, zero conversion failures. Seven new Serious Eats legacy recipes arrived through the still-active legacy generator, producing the expected reconciliable hash `d039e8b97b966b0ce22b4c18824ad26e5518ac7fe8afbf127dc665c8e12da518`.
 - Reference canary and full-run counts (updated, merged, orphan, failed):
 - Reconciliation and idempotency results:
 - Final recipe/mapping counts and checkpoint stage:

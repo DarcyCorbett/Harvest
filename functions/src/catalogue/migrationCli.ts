@@ -24,7 +24,7 @@ async function recipeCommand(command: 'dry-run' | 'migrate-recipes' | 'reconcile
     store: firestoreRecipeMigrationStore(db, runId),
     lease: createLeaseManager(operational.lease, { ownerId: runId, ttlMs: 5 * 60 * 1_000 }),
     now: () => new Date(),
-  }, { runId, commandCap: maxWrites ?? 8_000 });
+  }, { runId, commandCap: maxWrites ?? 8_000, dailyLimit: 8_000 });
 }
 
 async function verificationSummary() {
