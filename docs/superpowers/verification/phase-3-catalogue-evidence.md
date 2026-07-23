@@ -1,6 +1,6 @@
 # Phase 3 catalogue migration evidence
 
-Status: production rollout in progress; first accelerated recipe batch complete at the operator-approved 20,000-write cap.
+Status: complete. Production recipe and reference migration, reconciliation, idempotency, and final verification passed.
 
 ## Local verification
 
@@ -34,8 +34,13 @@ Status: production rollout in progress; first accelerated recipe batch complete 
 - Post-execution dry-run `phase3-dry-run-20260722050224`: 27,656 legacy recipes, 8,004 v2 documents, zero conversion failures. Seven new Serious Eats legacy recipes arrived through the still-active legacy generator, producing the expected reconciliable hash `d039e8b97b966b0ce22b4c18824ad26e5518ac7fe8afbf127dc665c8e12da518`.
 - First accelerated batch `phase3-migrate-recipes-20260722201734` (execution `mealwizard-catalogue-migration-44fmr`): exactly 20,000 catalogue writes, 10,000 mappings/targets, 3,990 ready, 6,010 review, zero failures or concurrent changes; completed successfully in 13m29s.
 - Post-batch inventory `phase3-dry-run-20260722203245`: 27,656 legacy recipes and 18,004 v2 documents, with 18,000 migrated mappings represented by the v2 increase. The legacy count and stable ID hash remained unchanged and conversion failures remained zero. Remaining recipe work is 9,656 mappings/targets (19,312 catalogue writes). Current auto-mappable references are 29 meal-plan updates and 33 cookbook moves; 158 existing orphans remain untouched.
-- Reference canary and full-run counts (updated, merged, orphan, failed):
-- Reconciliation and idempotency results:
-- Final recipe/mapping counts and checkpoint stage:
+- Second accelerated recipe batch `phase3-migrate-recipes-20260723193221` (execution `mealwizard-catalogue-migration-5wchx`): 19,309 catalogue writes; 9,653 new targets and 3 mappings linked to existing canonical targets; 3,808 ready and 5,848 review outcomes; zero failures or concurrent changes. The recipe scan completed within the second 20,000-write quota day.
+- Reference canary `phase3-migrate-references-20260723194250`: 10 cookbook moves, zero collisions, failures, no-ops, or concurrent changes.
+- Full reference run `phase3-migrate-references-20260723194436`: 50 meal-plan updates and 44 additional cookbook moves; zero collisions, failed mappings, or concurrent changes. Together with the canary, all 50 auto-mappable meal-plan references and all 54 auto-mappable cookbook references were migrated. The 116 pre-existing orphans remained unchanged.
+- Reconciliation `phase3-reconcile-20260723194605`: all 27,656 legacy recipes were durable no-ops, with zero recipe, mapping, or target data writes, zero failures, and zero concurrent changes. The complete collection scan checked 55,313 recipe documents.
+- Post-reconciliation reference rerun `phase3-migrate-references-20260723202333`: 104 canonical-reference no-ops and 116 unchanged orphans; zero updates, moves, collisions, failures, or concurrent changes. This advanced the reference checkpoint after recipe reconciliation.
+- Terminal verifier `phase3-verify-20260723202531`: 27,656 mappings, 55,313 total recipe documents, generation mode `legacy`, checkpoint epoch 1 and stage `complete`, with completed stages `recipes`, `meal-plans`, and `cookbooks`.
+- Final zero-write inventory `phase3-dry-run-20260723202700`: 27,656 legacy recipes, 27,657 v2 documents, 10,978 ready and 16,678 review outcomes, zero conversion failures, zero remaining auto-mappable reference changes, and 116 unchanged orphans. The final legacy ID hash remained `d039e8b97b966b0ce22b4c18824ad26e5518ac7fe8afbf127dc665c8e12da518`.
+- Scheduler state before and after every accelerated operation remained `PAUSED`; generation mode remained `legacy`. The production generator was not changed or activated for catalogue selection.
 
 Do not include household IDs, document paths, recipe IDs, source URLs, or other personal data.
