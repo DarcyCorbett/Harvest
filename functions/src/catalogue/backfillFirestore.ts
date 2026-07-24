@@ -18,6 +18,29 @@ import type { RecipeSourceAdapter } from './sourceAdapters.js';
 const CHECKPOINT_COLLECTION = 'catalogueBackfillCheckpoints';
 const SOURCE_COLLECTION = 'catalogueSourceBackfills';
 const RUN_COLLECTION = 'catalogueBackfillRuns';
+const RECIPE_SCAN_PAGE_SIZE = 500;
+
+async function forEachV2Recipe(
+  visitor: (document: FirebaseFirestore.QueryDocumentSnapshot) => void,
+): Promise<number> {
+  const db = getFirestore();
+  let cursor: string | undefined;
+  let total = 0;
+  while (true) {
+    let query = db.collection('recipes')
+      .where('schemaVersion', '==', 2)
+      .orderBy(FieldPath.documentId())
+      .limit(RECIPE_SCAN_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    for (const document of snapshot.docs) {
+      visitor(document);
+      cursor = document.id;
+      total += 1;
+    }
+    if (snapshot.size < RECIPE_SCAN_PAGE_SIZE) return total;
+  }
+}
 
 function completeRecipe(value: unknown): value is CompleteCanonicalRecipeV2 {
   if (!value || typeof value !== 'object') return false;
@@ -126,18 +149,17 @@ export async function runSourceRefreshCanaries(options: {
     throw new Error('Invalid source canary sample limit');
   }
   const db = getFirestore();
-  const recipes = await db.collection('recipes').where('schemaVersion', '==', 2).get();
   const candidates = new Map<string, string[]>();
-  for (const document of recipes.docs) {
+  await forEachV2Recipe((document) => {
     if (document.get('status') !== 'review'
-      || (document.get('classification.parserVersion') ?? 0) !== 0) continue;
+      || (document.get('classification.parserVersion') ?? 0) !== 0) return;
     const sourceKey = document.get('source.key');
     const url = document.get('source.canonicalUrl');
-    if (typeof sourceKey !== 'string' || typeof url !== 'string') continue;
+    if (typeof sourceKey !== 'string' || typeof url !== 'string') return;
     const values = candidates.get(sourceKey) ?? [];
     if (values.length < sampleLimit) values.push(url);
     candidates.set(sourceKey, values);
-  }
+  });
 
   const bySource: Record<string, SourceCanarySummary> = {};
   for (const adapter of options.adapters) {
@@ -204,19 +226,18 @@ export async function loadEligibleRefreshWork(
     document.get('state') === 'eligible' ? [document.id] : []));
   if (eligible.size === 0) return { sourceKeys: [] };
 
-  const recipes = await db.collection('recipes').where('schemaVersion', '==', 2).get();
   const targets: Record<string, string[]> = {};
-  for (const document of recipes.docs) {
+  await forEachV2Recipe((document) => {
     const sourceKey = document.get('source.key');
     if (typeof sourceKey !== 'string' || !eligible.has(sourceKey)
       || document.get('status') !== 'review'
-      || (document.get('classification.parserVersion') ?? 0) !== 0) continue;
+      || (document.get('classification.parserVersion') ?? 0) !== 0) return;
     const url = document.get('source.canonicalUrl');
-    if (typeof url !== 'string') continue;
+    if (typeof url !== 'string') return;
     const values = targets[sourceKey] ?? [];
     if (values.length < maxPerSource) values.push(url);
     targets[sourceKey] = values;
-  }
+  });
   const targetedSourceKeys = Object.keys(targets).sort();
   return targetedSourceKeys.length
     ? { sourceKeys: targetedSourceKeys, targetUrls: targets }
@@ -245,13 +266,10 @@ export interface Phase4Inventory {
 
 export async function verifyPhase4Backfill(): Promise<Phase4Inventory> {
   const db = getFirestore();
-  const [recipes, sources] = await Promise.all([
-    db.collection('recipes').where('schemaVersion', '==', 2).get(),
-    db.collection(SOURCE_COLLECTION).get(),
-  ]);
+  const sources = await db.collection(SOURCE_COLLECTION).get();
   const result: Phase4Inventory = {
     mode: 'verify-backfill',
-    totalV2: recipes.size,
+    totalV2: 0,
     completeV2: 0,
     operationalV2: 0,
     classifierCurrent: 0,
@@ -268,11 +286,11 @@ export async function verifyPhase4Backfill(): Promise<Phase4Inventory> {
     parserVersion0BySource: {},
     sourceStates: { eligible: 0, unsupported: 0, failed: 0 },
   };
-  for (const document of recipes.docs) {
+  result.totalV2 = await forEachV2Recipe((document) => {
     const value = document.data();
     if (!completeRecipe(value)) {
       result.operationalV2 += 1;
-      continue;
+      return;
     }
     const recipe = { ...value, id: document.id };
     result.completeV2 += 1;
@@ -303,7 +321,7 @@ export async function verifyPhase4Backfill(): Promise<Phase4Inventory> {
       result.parserVersion0BySource[recipe.source.key] =
         (result.parserVersion0BySource[recipe.source.key] ?? 0) + 1;
     }
-  }
+  });
   for (const document of sources.docs) {
     const state = document.get('state');
     if (state === 'eligible' || state === 'unsupported' || state === 'failed') {
