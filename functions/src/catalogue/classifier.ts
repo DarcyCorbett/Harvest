@@ -70,7 +70,7 @@ export function createCatalogueClassifier(dependencies: {
       modifiers: sourceMetadata.modifiers?.length ? 'source' : 'rule',
     };
 
-    if (mealTypes.length === 0 || cuisines.length === 0 || modifiers.length === 0) {
+    if (mealTypes.length === 0 || cuisines.length === 0) {
       const prompt = [
         'Classify this recipe using only the allowed JSON values.',
         `mealTypes: ${MEAL_TYPES.join(', ')}`,
@@ -90,6 +90,8 @@ export function createCatalogueClassifier(dependencies: {
         cuisines = parsed.data.cuisines;
         sources.cuisines = 'ai';
       }
+      // Modifiers are optional. Only use AI modifier output when the same call
+      // was already required for a missing meal type or cuisine.
       if (modifiers.length === 0) {
         modifiers = parsed.data.modifiers;
         sources.modifiers = 'ai';

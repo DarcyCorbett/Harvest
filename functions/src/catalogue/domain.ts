@@ -130,6 +130,7 @@ export interface CompleteCanonicalRecipeV2 extends CanonicalRecipeBase {
   search: RecipeSearchFields;
   classification: {
     parserVersion: number;
+    classifierVersion?: number;
     taxonomyVersion: number;
     sources: Record<string, ClassificationSource>;
     complete: boolean;

@@ -109,7 +109,7 @@ export interface CatalogueRunTelemetry {
 }
 
 export interface CatalogueRunSummary {
-  status: 'complete' | 'budget-exhausted' | 'lease-unavailable';
+  status: 'complete' | 'budget-exhausted' | 'provider-cap-exhausted' | 'lease-unavailable';
   quotaDate?: string;
   reservedWrites: number;
   consumedWrites: number;
@@ -180,22 +180,77 @@ export function mergeIngestedRecipe(
   existing: CompleteCanonicalRecipeV2 | undefined,
   incoming: CompleteCanonicalRecipeV2,
 ): CompleteCanonicalRecipeV2 {
-  if (!existing?.manualOverrides) return incoming;
+  if (!existing) return incoming;
   const effective = buildEffectiveMetadata(incoming.sourceMetadata, existing.manualOverrides);
+  const randomKey = existing.search.randomKey;
+  const contentChanged = JSON.stringify(existing.content) !== JSON.stringify(incoming.content);
   const merged: CompleteCanonicalRecipeV2 = {
     ...incoming,
-    manualOverrides: existing.manualOverrides,
+    source: {
+      ...incoming.source,
+      key: existing.source.key,
+      canonicalUrl: existing.source.canonicalUrl,
+      originalUrl: existing.source.originalUrl,
+    },
+    ...(existing.manualOverrides ? { manualOverrides: existing.manualOverrides } : {}),
     effective,
     search: buildSearchFields(
       effective,
       incoming.content.ingredients.map((ingredient) => ingredient.name),
-      incoming.search.randomKey,
+      randomKey,
     ),
+    ingestion: {
+      ...incoming.ingestion,
+      ...(existing.ingestion.firstIngestedAt === undefined
+        ? {}
+        : { firstIngestedAt: existing.ingestion.firstIngestedAt }),
+      ...(!contentChanged && existing.ingestion.lastChangedAt !== undefined
+        ? { lastChangedAt: existing.ingestion.lastChangedAt }
+        : {}),
+    },
+    classification: {
+      ...incoming.classification,
+      sources: {
+        ...incoming.classification.sources,
+        ...(existing.manualOverrides?.mealTypes === null
+          || existing.manualOverrides?.mealTypes === undefined
+          ? {}
+          : { mealTypes: 'manual' }),
+        ...(existing.manualOverrides?.cuisines === null
+          || existing.manualOverrides?.cuisines === undefined
+          ? {}
+          : { cuisines: 'manual' }),
+        ...(existing.manualOverrides?.modifiers === null
+          || existing.manualOverrides?.modifiers === undefined
+          ? {}
+          : { modifiers: 'manual' }),
+      },
+      complete: effective.mealTypes.length > 0 && effective.cuisines.length > 0,
+    },
   };
   if (merged.status === 'ready' && validateReadyRecipe(merged).length) {
     merged.status = 'review';
   }
   return merged;
+}
+
+export function mergeOperationalFailure(
+  existing: CompleteCanonicalRecipeV2,
+  failure: CompleteCanonicalRecipeV2['ingestion'],
+): CompleteCanonicalRecipeV2 {
+  const {
+    contentHash: _contentHash,
+    firstIngestedAt: _firstIngestedAt,
+    lastChangedAt: _lastChangedAt,
+    ...safeFailure
+  } = failure;
+  return {
+    ...existing,
+    ingestion: {
+      ...existing.ingestion,
+      ...safeFailure,
+    },
+  };
 }
 
 function manifestEntry(
@@ -321,6 +376,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       const consecutiveFailures = new Map<string, number>();
       const processedBySource = new Map<string, number>();
       let discoveriesSinceLeaseCheck = 0;
+      let providerCapExhausted = false;
 
       try {
         while (active.size > 0) {
@@ -425,6 +481,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   ),
                   classification: {
                     parserVersion,
+                    classifierVersion: 1,
                     taxonomyVersion,
                     sources: classification.sources,
                     complete: classification.complete,
@@ -453,7 +510,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   urlHash: recipeId,
                 };
                 consecutiveFailures.set(adapter.sourceKey, 0);
-              } catch {
+              } catch (error) {
+                if (error instanceof Error && error.name === 'GeminiCallCapError') {
+                  providerCapExhausted = true;
+                  active.clear();
+                  break;
+                }
                 const record: OperationalCanonicalRecipeV2 = {
                   schemaVersion: 2,
                   id: recipeId,
@@ -547,7 +609,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
           );
           remaining -= 1;
         }
-        const status = active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
+        const status = providerCapExhausted
+          ? 'provider-cap-exhausted'
+          : active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
         const consumedWrites = totalReserved - Math.max(0, processingWrites);
         const summary = finishSummary({
           status,
@@ -603,8 +667,20 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
         transaction.set(reference, mergeIngestedRecipe(existing, incoming));
       });
     },
-    async writeOperational(record) {
-      await db.collection('recipes').doc(record.id).set(record);
+    writeOperational(record) {
+      const reference = db.collection('recipes').doc(record.id);
+      return db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(reference);
+        const existing = snapshot.exists
+          && snapshot.get('schemaVersion') === 2
+          && ['ready', 'review'].includes(snapshot.get('status'))
+          ? snapshot.data() as CompleteCanonicalRecipeV2
+          : undefined;
+        transaction.set(
+          reference,
+          existing ? mergeOperationalFailure(existing, record.ingestion) : record,
+        );
+      });
     },
     async recoverManifestEntry(recipeId) {
       const snapshot = await db.collection('recipes').doc(recipeId).get();

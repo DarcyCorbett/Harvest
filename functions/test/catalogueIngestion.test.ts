@@ -267,10 +267,29 @@ describe('catalogue ingestion engine', () => {
     expect(result.bySource.broken).toMatchObject({ failed: 1, documentWrites: 0 });
     expect(result.bySource.healthy).toMatchObject({ written: 1, documentWrites: 1 });
   });
+
+  it('stops refresh cleanly at the Gemini cap without replacing the current recipe', async () => {
+    const source = adapter('source', ['https://source.test/recipe']);
+    const { injected, recipes } = dependencies([source]);
+    injected.classify = async () => {
+      const error = new Error('cap');
+      error.name = 'GeminiCallCapError';
+      throw error;
+    };
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'run-provider-cap',
+      forceRefresh: true,
+    });
+
+    expect(result.status).toBe('provider-cap-exhausted');
+    expect(recipes).toHaveLength(0);
+    expect(result.metrics.failed).toBe(0);
+  });
 });
 
 describe('ingestion refresh merging', () => {
-  it('preserves manual overrides and rebuilds effective search fields from refreshed source metadata', () => {
+  it('preserves overrides, deterministic fields, and stable timestamps while rebuilding refreshed metadata', () => {
     const sourceMetadata = { totalMinutes: 50, mealTypes: ['dinner'] as const, cuisines: ['mediterranean'] as const, modifiers: [] };
     const effective = buildEffectiveMetadata(sourceMetadata, { totalMinutes: 25, modifiers: ['salad'] });
     const existing = {
@@ -283,10 +302,27 @@ describe('ingestion refresh merging', () => {
       manualOverrides: { totalMinutes: 25, modifiers: ['salad'] as const },
       effective,
       search: buildSearchFields(effective, ['Chicken'], 0.1),
-      classification: { parserVersion: 1, taxonomyVersion: 1, sources: {}, complete: true },
-      ingestion: { contentHash: 'old' },
+      classification: {
+        parserVersion: 0, classifierVersion: 1, taxonomyVersion: 1, sources: {}, complete: true,
+      },
+      ingestion: {
+        contentHash: 'old',
+        firstIngestedAt: '2026-07-01T00:00:00.000Z',
+        lastChangedAt: '2026-07-02T00:00:00.000Z',
+      },
     } satisfies CompleteCanonicalRecipeV2;
-    const incoming = { ...existing, content: { ...existing.content, title: 'New' }, manualOverrides: undefined };
+    const incoming = {
+      ...existing,
+      content: { ...existing.content, title: 'New' },
+      manualOverrides: undefined,
+      search: { ...existing.search, randomKey: 0.9 },
+      classification: { ...existing.classification, parserVersion: 1 },
+      ingestion: {
+        contentHash: 'new',
+        firstIngestedAt: '2026-07-20T00:00:00.000Z',
+        lastChangedAt: '2026-07-20T00:00:00.000Z',
+      },
+    };
 
     const merged = mergeIngestedRecipe(existing, incoming);
 
@@ -294,5 +330,52 @@ describe('ingestion refresh merging', () => {
     expect(merged.manualOverrides).toEqual(existing.manualOverrides);
     expect(merged.effective.totalMinutes).toBe(25);
     expect(merged.search.salad).toBe(true);
+    expect(merged.search.randomKey).toBe(0.1);
+    expect(merged.source).toEqual(existing.source);
+    expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
+    expect(merged.ingestion.lastChangedAt).toBe('2026-07-20T00:00:00.000Z');
+    expect(merged.classification.parserVersion).toBe(1);
+  });
+
+  it('does not change lastChangedAt when refreshed content is unchanged', () => {
+    const sourceMetadata = {
+      totalMinutes: 20,
+      mealTypes: ['dinner'] as const,
+      cuisines: ['global'] as const,
+      modifiers: [],
+    };
+    const effective = buildEffectiveMetadata(sourceMetadata);
+    const existing = {
+      schemaVersion: 2,
+      id: 'id',
+      status: 'ready',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: { title: 'Same', originalServings: 4, ingredients: [{ name: 'Rice' }], instructions: [{ text: 'Cook.' }] },
+      sourceMetadata,
+      effective,
+      search: buildSearchFields(effective, ['Rice'], 0.2),
+      classification: {
+        parserVersion: 0, classifierVersion: 1, taxonomyVersion: 1, sources: {}, complete: true,
+      },
+      ingestion: {
+        contentHash: 'same-hash',
+        firstIngestedAt: '2026-07-01T00:00:00.000Z',
+        lastChangedAt: '2026-07-02T00:00:00.000Z',
+      },
+    } satisfies CompleteCanonicalRecipeV2;
+    const incoming = {
+      ...existing,
+      classification: { ...existing.classification, parserVersion: 1 },
+      ingestion: {
+        contentHash: 'same-hash',
+        firstIngestedAt: '2026-07-20T00:00:00.000Z',
+        lastChangedAt: '2026-07-20T00:00:00.000Z',
+      },
+    };
+
+    const merged = mergeIngestedRecipe(existing, incoming);
+
+    expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
+    expect(merged.ingestion.lastChangedAt).toBe('2026-07-02T00:00:00.000Z');
   });
 });

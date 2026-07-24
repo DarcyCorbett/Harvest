@@ -73,6 +73,15 @@ service cloud.firestore {
     match /catalogueMigrationRuns/{runId} {
       allow read, write: if false;
     }
+    match /catalogueBackfillCheckpoints/{checkpointId} {
+      allow read, write: if false;
+    }
+    match /catalogueSourceBackfills/{sourceKey} {
+      allow read, write: if false;
+    }
+    match /catalogueBackfillRuns/{runId} {
+      allow read, write: if false;
+    }
     match /catalogueRecipeMigrations/{legacyRecipeId} {
       allow read, write: if false;
     }

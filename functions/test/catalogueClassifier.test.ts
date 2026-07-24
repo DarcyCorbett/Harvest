@@ -60,18 +60,17 @@ describe('catalogue classification', () => {
     });
   });
 
-  it('uses Gemini for ambiguous descriptor tags even when meal type and cuisine are known', async () => {
-    const requestJson = vi.fn(async () => ({
-      mealTypes: ['dinner'], cuisines: ['mediterranean'], modifiers: [],
-    }));
+  it('does not use Gemini when only optional modifiers are empty', async () => {
+    const requestJson = vi.fn();
     const classify = createCatalogueClassifier({ requestJson });
 
     const result = await classify({ ...content, title: 'Chicken bake' }, {
       mealTypes: ['dinner'], cuisines: ['mediterranean'], modifiers: [],
     });
 
-    expect(requestJson).toHaveBeenCalledOnce();
-    expect(result.sources.modifiers).toBe('ai');
+    expect(requestJson).not.toHaveBeenCalled();
+    expect(result.metadata.modifiers).toEqual([]);
+    expect(result.sources.modifiers).toBe('rule');
     expect(result.complete).toBe(true);
   });
 

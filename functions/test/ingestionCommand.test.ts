@@ -38,9 +38,25 @@ describe('ingestion command arguments', () => {
     });
   });
 
+  it('supports Phase 4 modes and bounded Gemini calls', () => {
+    expect(parseIngestionArguments([
+      'classify-backfill',
+      '--write-cap', '8000',
+      '--gemini-call-cap', '500',
+      '--run-id', 'phase4-run',
+    ])).toEqual({
+      mode: 'classify-backfill',
+      writeCap: 8000,
+      geminiCallCap: 500,
+      runId: 'phase4-run',
+    });
+  });
+
   it.each([
     ['--write-cap', '18001'],
     ['--write-cap', '-1'],
+    ['classify-backfill', '--gemini-call-cap', '501'],
+    ['unknown-mode'],
     ['--source', 'unknown'],
     ['--unexpected'],
   ])('rejects unsafe arguments: %s %s', (...args) => {
