@@ -34,7 +34,9 @@ try {
   if ($Mode -eq 'refresh-backfill') {
     $jobArgs += @('--max-per-source', [string]$MaxPerSource)
   }
-  $encodedArgs = $jobArgs -join ','
+  # Use gcloud's alternate list delimiter so equal values (for example both
+  # canary caps set to 25) are preserved as distinct positional arguments.
+  $encodedArgs = '^|^' + ($jobArgs -join '|')
   gcloud run jobs execute $JobName `
     --region=$Region `
     --project=$ProjectId `
