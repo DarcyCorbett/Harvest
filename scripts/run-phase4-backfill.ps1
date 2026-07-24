@@ -29,13 +29,19 @@ try {
   $jobArgs = @($Mode, '--run-id', $runId)
   if ($Mode -in @('classify-backfill', 'refresh-backfill', 'retry-failed')) {
     $jobArgs += @('--write-cap', [string]$WriteCap)
-    $jobArgs += @('--gemini-call-cap', [string]$GeminiCallCap)
+    # gcloud list flags reject duplicate string elements. Use an equivalent
+    # numeric spelling when both caps are equal; Number("+25") remains 25.
+    $geminiCapArgument = if ($GeminiCallCap -eq $WriteCap) {
+      "+$GeminiCallCap"
+    } else {
+      [string]$GeminiCallCap
+    }
+    $jobArgs += @('--gemini-call-cap', $geminiCapArgument)
   }
   if ($Mode -eq 'refresh-backfill') {
     $jobArgs += @('--max-per-source', [string]$MaxPerSource)
   }
-  # Use gcloud's alternate list delimiter so equal values (for example both
-  # canary caps set to 25) are preserved as distinct positional arguments.
+  # Use gcloud's alternate list delimiter to preserve argument boundaries.
   $encodedArgs = '^|^' + ($jobArgs -join '|')
   gcloud run jobs execute $JobName `
     --region=$Region `
