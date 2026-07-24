@@ -1,4 +1,5 @@
 import { FieldPath, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { z } from 'zod';
 
@@ -55,6 +56,7 @@ export interface CatalogueSelectionStore {
     sourceKey: string,
     query: CatalogueMealSlot,
     pageToken?: string,
+    randomStart?: number,
   ): Promise<{ candidates: CatalogueCandidate[]; nextPageToken?: string }>;
 }
 
@@ -123,6 +125,8 @@ async function eligibleBySource(
   slot: CatalogueMealSlot,
   store: CatalogueSelectionStore,
   excludedIds: ReadonlySet<string>,
+  random: () => number,
+  maxMatchesPerSource = 25,
 ): Promise<Map<string, CatalogueCandidate[]>> {
   const result = new Map<string, CatalogueCandidate[]>();
   const enabledSources = Object.entries(sourceWeights)
@@ -132,13 +136,15 @@ async function eligibleBySource(
   const sourceResults = await Promise.all(enabledSources.map(async (sourceKey) => {
     const matches: CatalogueCandidate[] = [];
     let pageToken: string | undefined;
+    const randomStart = random();
     do {
-      const page = await store.queryCandidates(sourceKey, slot, pageToken);
+      const page = await store.queryCandidates(sourceKey, slot, pageToken, randomStart);
       matches.push(...page.candidates.filter((candidate) =>
         candidate.sourceKey === sourceKey && isEligible(candidate, slot, excludedIds)));
+      if (matches.length >= maxMatchesPerSource) break;
       pageToken = page.nextPageToken;
     } while (pageToken !== undefined);
-    return { sourceKey, matches };
+    return { sourceKey, matches: matches.slice(0, maxMatchesPerSource) };
   }));
   for (const { sourceKey, matches } of sourceResults) {
     if (matches.length) result.set(sourceKey, matches);
@@ -199,7 +205,14 @@ async function relaxationDiagnostics(
 
   const diagnostics: Relaxation[] = [];
   for (const variant of variants) {
-    const matches = await eligibleBySource(sourceWeights, variant.slot, store, excludedIds);
+    const matches = await eligibleBySource(
+      sourceWeights,
+      variant.slot,
+      store,
+      excludedIds,
+      () => 0,
+      Number.POSITIVE_INFINITY,
+    );
     const matchCount = [...matches.values()].reduce((sum, candidates) => sum + candidates.length, 0);
     if (matchCount > 0) diagnostics.push({ ...variant.relaxation, matchCount } as Relaxation);
   }
@@ -217,7 +230,7 @@ export async function selectCatalogueRecipes(
   const selected: SelectCatalogueRecipesResponse['slots'] = [];
 
   for (const slot of parsed.slots) {
-    const eligible = await eligibleBySource(sourceWeights, slot, store, excludedIds);
+    const eligible = await eligibleBySource(sourceWeights, slot, store, excludedIds, random);
     if (eligible.size === 0) {
       selected.push({
         date: slot.date,
@@ -265,10 +278,18 @@ export function createCatalogueSelectionHandlers(dependencies: {
 }) {
   return {
     async select(request: CallableRequest<unknown>) {
+      const startedAt = Date.now();
       const parsed = selectCatalogueRecipesRequestSchema.safeParse(request.data);
       if (!parsed.success) throw new HttpsError('invalid-argument', 'Invalid catalogue request.');
       await dependencies.authorize(request.auth, parsed.data.householdId);
-      return selectCatalogueRecipes(parsed.data, dependencies.store, dependencies.random);
+      const response = await selectCatalogueRecipes(parsed.data, dependencies.store, dependencies.random);
+      logger.info('catalogue_selection', {
+        durationMs: Date.now() - startedAt,
+        slots: response.slots.length,
+        selected: response.slots.filter((slot) => slot.status === 'selected').length,
+        noMatch: response.slots.filter((slot) => slot.status === 'no-match').length,
+      });
+      return response;
     },
   };
 }
@@ -296,7 +317,7 @@ export function firestoreCatalogueSelectionStore(
         .collection('settings').doc('preferences').get();
       return decodeSourceWeights(snapshot.exists ? snapshot.get('sourceWeights') : undefined);
     },
-    async queryCandidates(sourceKey, slot, pageToken) {
+    async queryCandidates(sourceKey, slot, pageToken, randomStart) {
       let query = db.collection('recipes')
         .where('schemaVersion', '==', 2)
         .where('status', '==', 'ready')
@@ -319,12 +340,22 @@ export function firestoreCatalogueSelectionStore(
       if (slot.maxTotalMinutes === 45) query = query.where('search.moderate45', '==', true);
       query = query.orderBy('search.randomKey').orderBy(documentId).limit(100);
 
+      let cursor: {
+        randomKey?: number;
+        id?: string;
+        wrapped?: boolean;
+        upperBound?: number;
+      } | undefined;
       if (pageToken) {
-        const token = JSON.parse(Buffer.from(pageToken, 'base64url').toString('utf8')) as {
-          randomKey: number;
-          id: string;
-        };
-        query = query.startAfter(token.randomKey, token.id);
+        cursor = JSON.parse(Buffer.from(pageToken, 'base64url').toString('utf8')) as typeof cursor;
+        if (cursor?.randomKey !== undefined && cursor.id !== undefined) {
+          query = query.startAfter(cursor.randomKey, cursor.id);
+        }
+        if (cursor?.wrapped && cursor.upperBound !== undefined) {
+          query = query.endBefore(cursor.upperBound);
+        }
+      } else if (randomStart !== undefined && randomStart > 0) {
+        query = query.startAt(randomStart);
       }
       const snapshot = await query.get();
       const candidates = snapshot.docs.map((document) => {
@@ -341,11 +372,24 @@ export function firestoreCatalogueSelectionStore(
         } as CatalogueCandidate;
       });
       const last = candidates.at(-1);
+      const upperBound = cursor?.upperBound ?? randomStart;
+      let nextPageToken: string | undefined;
+      if (snapshot.size === 100 && last) {
+        nextPageToken = Buffer.from(JSON.stringify({
+          randomKey: last.randomKey,
+          id: last.id,
+          wrapped: cursor?.wrapped ?? false,
+          ...(upperBound === undefined ? {} : { upperBound }),
+        })).toString('base64url');
+      } else if (!cursor?.wrapped && upperBound !== undefined && upperBound > 0) {
+        nextPageToken = Buffer.from(JSON.stringify({
+          wrapped: true,
+          upperBound,
+        })).toString('base64url');
+      }
       return {
         candidates,
-        ...(snapshot.size === 100 && last
-          ? { nextPageToken: Buffer.from(JSON.stringify({ randomKey: last.randomKey, id: last.id })).toString('base64url') }
-          : {}),
+        ...(nextPageToken ? { nextPageToken } : {}),
       };
     },
   };

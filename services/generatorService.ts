@@ -17,11 +17,18 @@ import {
   addToCookbook,
   bumpMealReminderState,
   clearAllShoppingItems,
+  getCatalogueGenerationMode,
   getRecipe,
   getStarredRecipes,
   updateRecipeFlags,
   updateRecipeTags,
 } from './firestoreService';
+import {
+  generateCatalogueMealPlan,
+  regenerateCatalogueMeals,
+  type RegenerateConfig,
+} from './catalogueGenerator';
+import { createGenerationDispatcher } from './generationDispatcher';
 import { getGeminiReminderFlags, tagRecipesWithGemini } from './gemini';
 import {
   calculateRequiredServings,
@@ -232,7 +239,7 @@ async function applyGeminiTagsToFreshMeals(
  * Smart Favourites: if the household has more than 10 starred recipes,
  * 1–3 of them are randomly woven into the plan alongside new scrapes.
  */
-export async function generateMealPlan(
+async function generateLegacyMealPlan(
   config: GenerateConfig,
   householdId: string,
   onProgress: ProgressCallback
@@ -496,10 +503,10 @@ export async function generateMealPlan(
  * Re-scrape a subset of an existing generated meal plan.
  * Used when the user checks some recipes and taps "Regenerate Selected".
  */
-export async function regenerateMeals(
+async function regenerateLegacyMeals(
   meals: GeneratedMeal[],
   indicesToRegenerate: number[],
-  config: Pick<GenerateConfig, 'cuisineStyles' | 'customInstructions' | 'adults' | 'children' | 'settings'>,
+  config: RegenerateConfig,
   householdId: string,
   onProgress: ProgressCallback
 ): Promise<GeneratedMeal[]> {
@@ -587,6 +594,38 @@ export async function regenerateMeals(
   await applyGeminiTagsToFreshMeals(householdId, updated, freshRecipeIds);
 
   return updated;
+}
+
+const generationDispatcher = createGenerationDispatcher({
+  getMode: getCatalogueGenerationMode,
+  legacyGenerate: generateLegacyMealPlan,
+  catalogueGenerate: generateCatalogueMealPlan,
+  legacyRegenerate: regenerateLegacyMeals,
+  catalogueRegenerate: regenerateCatalogueMeals,
+});
+
+export async function generateMealPlan(
+  config: GenerateConfig,
+  householdId: string,
+  onProgress: ProgressCallback,
+): Promise<GeneratedMeal[]> {
+  return generationDispatcher.generate(config, householdId, onProgress);
+}
+
+export async function regenerateMeals(
+  meals: GeneratedMeal[],
+  indicesToRegenerate: number[],
+  config: RegenerateConfig,
+  householdId: string,
+  onProgress: ProgressCallback,
+): Promise<GeneratedMeal[]> {
+  return generationDispatcher.regenerate(
+    meals,
+    indicesToRegenerate,
+    config,
+    householdId,
+    onProgress,
+  );
 }
 
 /**

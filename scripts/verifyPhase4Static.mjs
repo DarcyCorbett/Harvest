@@ -18,8 +18,8 @@ if (/\bfetch\s*\(/.test(backfillCore)) {
 if (/scheduler jobs (resume|run)/i.test(combined)) {
   throw new Error('Phase 4 must not enable or invoke Scheduler');
 }
-if (/generationMode[^\n]+catalogue/i.test(combined)) {
-  throw new Error('Phase 4 must not enable catalogue generation');
+if (/setCatalogueGenerationMode|generationMode\s*:\s*['"]catalogue['"]/i.test(combined)) {
+  throw new Error('Phase 4 must not change catalogue generation mode');
 }
 if (/collection\(['"]recipes['"]\)[\s\S]{0,100}\.delete\s*\(/.test(combined)) {
   throw new Error('Phase 4 must not delete recipe documents');

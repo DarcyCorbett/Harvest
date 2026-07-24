@@ -14,6 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { DevLogTerminal } from '@/components/DevLogTerminal';
 import { addToCookbook, clearGenerationResult, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
+import { normalizeIngredientFilters, type CatalogueIngredientFilters } from '@/services/catalogueClient';
 import {
   addDays,
   findMismatchedMeals,
@@ -163,7 +164,8 @@ export default function GenerateScreen() {
     ...modifiers,
     ...selectedCuisines,
   ], [effort, modifiers, selectedCuisines]);
-  const [customInstructions, setCustomInstructions] = useState('');
+  const [mustIngredientsText, setMustIngredientsText] = useState('');
+  const [excludeIngredientsText, setExcludeIngredientsText] = useState('');
   const [selectedMaterials, setSelectedMaterials] = useState<Set<string>>(new Set());
 
   // ── Flow state ──
@@ -206,6 +208,7 @@ export default function GenerateScreen() {
   const [generateSnapshot, setGenerateSnapshot] = useState<{
     cuisines: CuisineStyle[];
     selectedMaterials: Set<string>;
+    ingredientFilters: CatalogueIngredientFilters;
   } | null>(null);
   const [resultsScreenDirty, setResultsScreenDirty] = useState(false);
 
@@ -255,14 +258,37 @@ export default function GenerateScreen() {
       return next;
     });
 
+  const ingredientValues = (value: string): string[] =>
+    value.split(',').map((item) => item.trim()).filter(Boolean);
+
+  const resolveIngredientFilters = (
+    preferred: ReadonlySet<string>,
+  ): CatalogueIngredientFilters | null => {
+    try {
+      return normalizeIngredientFilters({
+        must: ingredientValues(mustIngredientsText),
+        prefer: [...preferred],
+        exclude: ingredientValues(excludeIngredientsText),
+      });
+    } catch (error) {
+      Alert.alert(
+        'Check ingredient filters',
+        error instanceof Error ? error.message : 'Please check the ingredient filters.',
+      );
+      return null;
+    }
+  };
+
   const resolveConfig = (): GenerateConfig | null => {
     if (mealTypes.length === 0) {
       Alert.alert('No meal types selected', 'Please select at least one meal type.');
       return null;
     }
 
-    // Wire selected ingredient tiles to the forceSeed round-robin mechanism
-    const seeds = Array.from(selectedMaterials).map((m) => m.toLowerCase());
+    const ingredientFilters = resolveIngredientFilters(selectedMaterials);
+    if (!ingredientFilters) return null;
+    // Preserve selectedSeeds for operator-controlled legacy rollback.
+    const seeds = ingredientFilters.prefer;
     const configSettings = seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings;
     return {
       startDate,
@@ -271,7 +297,7 @@ export default function GenerateScreen() {
       children,
       mealTypes,
       cuisineStyles: cuisines,
-      customInstructions: customInstructions.trim() || undefined,
+      ingredientFilters,
       settings: configSettings,
     };
   };
@@ -291,10 +317,14 @@ export default function GenerateScreen() {
     if (developerMode) {
       clearLogs();
     }
-    setGenerateSnapshot({ cuisines, selectedMaterials: new Set(selectedMaterials) });
+    setGenerateSnapshot({
+      cuisines,
+      selectedMaterials: new Set(selectedMaterials),
+      ingredientFilters: config.ingredientFilters ?? { must: [], prefer: [], exclude: [] },
+    });
     setResultsScreenDirty(false);
     startGeneration(config, householdId);
-  }, [householdId, generation.status, startGeneration, days, startDate, adults, children, mealTypes, cuisines, customInstructions, selectedMaterials, developerMode, clearLogs]);
+  }, [householdId, generation.status, startGeneration, days, startDate, adults, children, mealTypes, cuisines, mustIngredientsText, excludeIngredientsText, selectedMaterials, developerMode, clearLogs]);
 
   // Seed checkedIndices when a generation transitions from running → done.
   const prevGenStatus = useRef(generation.status);
@@ -318,7 +348,11 @@ export default function GenerateScreen() {
     const activeMaterials = resultsScreenDirty
       ? selectedMaterials
       : (generateSnapshot?.selectedMaterials ?? selectedMaterials);
-    const seeds = Array.from(activeMaterials).map((m) => m.toLowerCase());
+    const activeIngredientFilters = resultsScreenDirty
+      ? resolveIngredientFilters(activeMaterials)
+      : (generateSnapshot?.ingredientFilters ?? resolveIngredientFilters(activeMaterials));
+    if (!activeIngredientFilters) return;
+    const seeds = activeIngredientFilters.prefer;
     const activeSettings = seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings;
 
     if (developerMode) {
@@ -334,7 +368,7 @@ export default function GenerateScreen() {
         indices,
         {
           cuisineStyles: activeCuisines,
-          customInstructions: customInstructions.trim() || undefined,
+          ingredientFilters: activeIngredientFilters,
           adults,
           children,
           settings: activeSettings,
@@ -347,14 +381,18 @@ export default function GenerateScreen() {
       );
       setGeneratedMeals(updated);
       setCheckedIndices(new Set(indices));
-      setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
+      setGenerateSnapshot({
+        cuisines: activeCuisines,
+        selectedMaterials: new Set(activeMaterials),
+        ingredientFilters: activeIngredientFilters,
+      });
       setResultsScreenDirty(false);
       setPhase('results');
     } catch (err) {
       setPhase('results');
       Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, checkedIndices, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
+  }, [householdId, checkedIndices, generatedMeals, cuisines, mustIngredientsText, excludeIngredientsText, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
 
   // ── Regenerate mismatched ──
   const handleRegenerateMismatched = useCallback(async () => {
@@ -364,6 +402,10 @@ export default function GenerateScreen() {
     const activeMaterials = resultsScreenDirty
       ? selectedMaterials
       : (generateSnapshot?.selectedMaterials ?? selectedMaterials);
+    const activeIngredientFilters = resultsScreenDirty
+      ? resolveIngredientFilters(activeMaterials)
+      : (generateSnapshot?.ingredientFilters ?? resolveIngredientFilters(activeMaterials));
+    if (!activeIngredientFilters) return;
 
     const mismatches = findMismatchedMeals(generatedMeals, activeCuisines);
     const mismatchedIndices = mismatches.map((m) => m.index);
@@ -385,16 +427,17 @@ export default function GenerateScreen() {
     setLoadingProgress({ current: 0, total: mismatchedIndices.length });
 
     try {
-      const seeds = Array.from(activeMaterials).map((m) => m.toLowerCase());
       const updated = await regenerateMeals(
         generatedMeals,
         mismatchedIndices,
         {
           cuisineStyles: activeCuisines,
-          customInstructions: customInstructions.trim() || undefined,
+          ingredientFilters: activeIngredientFilters,
           adults,
           children,
-          settings: seeds.length > 0 ? { ...settings, selectedSeeds: seeds } : settings,
+          settings: activeIngredientFilters.prefer.length > 0
+            ? { ...settings, selectedSeeds: activeIngredientFilters.prefer }
+            : settings,
         },
         householdId,
         (msg, current, total) => {
@@ -404,14 +447,18 @@ export default function GenerateScreen() {
       );
       setGeneratedMeals(updated);
       setCheckedIndices(new Set(mismatchedIndices));
-      setGenerateSnapshot({ cuisines: activeCuisines, selectedMaterials: new Set(activeMaterials) });
+      setGenerateSnapshot({
+        cuisines: activeCuisines,
+        selectedMaterials: new Set(activeMaterials),
+        ingredientFilters: activeIngredientFilters,
+      });
       setResultsScreenDirty(false);
       setPhase('results');
     } catch (err) {
       setPhase('results');
       Alert.alert('Regeneration failed', err instanceof Error ? err.message : 'Please try again.');
     }
-  }, [householdId, generatedMeals, cuisines, customInstructions, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
+  }, [householdId, generatedMeals, cuisines, mustIngredientsText, excludeIngredientsText, adults, children, selectedMaterials, settings, resultsScreenDirty, generateSnapshot, developerMode, clearLogs]);
 
   // ── Add to calendar ──
   // Fires the confirm in the background. Calendar entries land quickly; the
@@ -542,7 +589,10 @@ export default function GenerateScreen() {
   // A finished background generation is ready for review.
   if (generation.status === 'done' || phase === 'results') {
     const activeCuisinesForMismatch = resultsScreenDirty ? cuisines : (generateSnapshot?.cuisines ?? cuisines);
-    const hasMismatches = findMismatchedMeals(generatedMeals, activeCuisinesForMismatch).length > 0;
+    const isCataloguePlan = generatedMeals.length > 0
+      && generatedMeals.every((meal) => meal.recipe.schemaVersion === 2);
+    const hasMismatches = !isCataloguePlan
+      && findMismatchedMeals(generatedMeals, activeCuisinesForMismatch).length > 0;
     return (
       <>
         <ResultsScreen
@@ -817,7 +867,7 @@ export default function GenerateScreen() {
         </Section>
 
         {/* ── Section: Additional Requests ── */}
-        <Section title="Additional Requests" colors={colors}>
+        <Section title="Must Include" colors={colors}>
           <TextInput
             style={[
               styles.textArea,
@@ -827,12 +877,26 @@ export default function GenerateScreen() {
                 borderColor: '#D1D5DB',
               },
             ]}
-            value={customInstructions}
-            onChangeText={setCustomInstructions}
-            placeholder='e.g. "No nuts, low carb, dairy free"'
+            value={mustIngredientsText}
+            onChangeText={setMustIngredientsText}
+            placeholder="e.g. chicken, lemon"
             placeholderTextColor={colors.textTertiary}
-            multiline
-            numberOfLines={3}
+          />
+        </Section>
+        <Section title="Exclude" colors={colors}>
+          <TextInput
+            style={[
+              styles.textArea,
+              {
+                backgroundColor: colors.inputBackground,
+                color: colors.text,
+                borderColor: '#D1D5DB',
+              },
+            ]}
+            value={excludeIngredientsText}
+            onChangeText={setExcludeIngredientsText}
+            placeholder="e.g. nuts, anchovy"
+            placeholderTextColor={colors.textTertiary}
           />
         </Section>
 

@@ -16,16 +16,16 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'gcloudResourceProbe.ps1')
 $runId = "phase4-$Mode-$([DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss'))"
 
-function Assert-SafetyState {
+function Get-SafetyMode {
   $state = gcloud scheduler jobs describe $SchedulerName --location=$Region --project=$ProjectId --format='value(state)'
   if ($state -ne 'PAUSED') { throw "Scheduler must be PAUSED; observed $state" }
-  Invoke-CheckedNativeCommand -Command 'node' -Arguments @(
-    'scripts/assertCatalogueLegacyMode.mjs', '--project', $ProjectId
-  )
+  $mode = node scripts/readCatalogueGenerationMode.mjs --project $ProjectId
+  if ($LASTEXITCODE -ne 0) { throw 'Could not read catalogue generation mode' }
+  return ([string]$mode).Trim()
 }
 
+$initialMode = Get-SafetyMode
 try {
-  Assert-SafetyState
   $jobArgs = @($Mode, '--run-id', $runId)
   if ($Mode -in @('classify-backfill', 'refresh-backfill', 'retry-failed')) {
     $jobArgs += @('--write-cap', [string]$WriteCap)
@@ -49,5 +49,8 @@ try {
     --args=$encodedArgs `
     --wait
 } finally {
-  Assert-SafetyState
+  $finalMode = Get-SafetyMode
+  if ($finalMode -ne $initialMode) {
+    throw "Generation mode changed during Phase 4 command: $initialMode -> $finalMode"
+  }
 }

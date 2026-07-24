@@ -24,6 +24,8 @@ import {
 } from 'firebase/firestore';
 import { logEvent } from './devLog';
 import { legacyRecipeClient } from './legacyRecipeClient';
+import { decodeRecipeDocument } from './recipeDecoder';
+import type { CatalogueGenerationMode } from './generationDispatcher';
 import type {
   GenerateConfig,
   GeneratedMeal,
@@ -94,12 +96,21 @@ export async function saveRecipe(householdId: string, recipe: Recipe): Promise<s
 export async function getRecipe(recipeId: string): Promise<Recipe | null> {
   const snap = await withTimeout(getDoc(doc(db, 'recipes', recipeId)), 10000, 'getRecipe');
   if (!snap.exists()) return null;
-  const data = snap.data();
-  return {
-    ...data,
-    id: snap.id,
-    scrapedAt: data.scrapedAt?.toDate?.() || new Date(),
-  } as Recipe;
+  return decodeRecipeDocument(snap.id, snap.data());
+}
+
+/** Read the operator-controlled generator mode. Missing/invalid config fails closed. */
+export async function getCatalogueGenerationMode(): Promise<CatalogueGenerationMode> {
+  const snapshot = await withTimeout(
+    getDoc(doc(db, 'appConfig', 'catalogue')),
+    10000,
+    'getCatalogueGenerationMode',
+  );
+  const mode = snapshot.exists() ? snapshot.data().generationMode : undefined;
+  if (mode !== 'legacy' && mode !== 'catalogue') {
+    throw new Error('Generation mode is unavailable.');
+  }
+  return mode;
 }
 
 /** Check if a recipe with this source URL already exists (cache check) */
@@ -108,12 +119,7 @@ export async function getCachedRecipeByUrl(url: string): Promise<Recipe | null> 
   const snapshot = await withTimeout(getDocs(q), 10000, 'getCachedRecipeByUrl');
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
-  const data = docSnap.data();
-  return {
-    ...data,
-    id: docSnap.id,
-    scrapedAt: data.scrapedAt?.toDate?.() || new Date(),
-  } as Recipe;
+  return decodeRecipeDocument(docSnap.id, docSnap.data());
 }
 
 // ─── Household Settings ────────────────────────────────────
@@ -604,4 +610,36 @@ export async function getUpcomingMealPlan(
     }),
   );
   return { meals, recipes };
+}
+
+/** IDs used for current-plan and 28-day recent-use catalogue exclusions. */
+export async function getGenerationRecipeHistory(
+  householdId: string,
+  planStartDate: Date,
+): Promise<{ currentPlanRecipeIds: string[]; recentRecipeIds: string[] }> {
+  const format = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const recentStart = new Date(planStartDate);
+  recentStart.setDate(recentStart.getDate() - 28);
+  const planStart = format(planStartDate);
+  const snapshot = await withTimeout(
+    getDocs(query(
+      collection(db, 'households', householdId, 'mealPlan'),
+      where('date', '>=', format(recentStart)),
+    )),
+    10000,
+    'getGenerationRecipeHistory',
+  );
+  const current = new Set<string>();
+  const recent = new Set<string>();
+  for (const document of snapshot.docs) {
+    const recipeId = document.data().recipeId;
+    const date = document.data().date;
+    if (typeof recipeId !== 'string' || typeof date !== 'string') continue;
+    (date >= planStart ? current : recent).add(recipeId);
+  }
+  return {
+    currentPlanRecipeIds: [...current].slice(0, 500),
+    recentRecipeIds: [...recent].slice(0, 500),
+  };
 }

@@ -19,7 +19,8 @@
     "verify:phase0": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",
     "verify:phase2:local": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",
     "verify:phase3:local": "npm run test:functions && npm run build:functions && npm run test:rules && npm run scan:client-secrets && node scripts/verifyPhase3Static.mjs",
-    "verify:phase4:local": "npm run test:functions && npm run build:functions && npm run test:rules && npm run scan:client-secrets && node scripts/verifyPhase4Static.mjs"
+    "verify:phase4:local": "npm run test:functions && npm run build:functions && npm run test:rules && npm run scan:client-secrets && node scripts/verifyPhase4Static.mjs",
+    "verify:final:local": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets && node scripts/verifyFinalCatalogueStatic.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/outfit": "^0.4.3",

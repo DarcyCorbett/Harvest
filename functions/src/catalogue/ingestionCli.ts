@@ -35,10 +35,20 @@ import { createTrustedSourceAdapters } from './sourceAdapters.js';
 
 initializeApp();
 
-async function assertLegacyMode(): Promise<void> {
+type GenerationMode = 'legacy' | 'catalogue';
+
+async function readGenerationMode(): Promise<GenerationMode> {
   const config = await getFirestore().collection('appConfig').doc('catalogue').get();
-  if (config.get('generationMode') !== 'legacy') {
-    throw new Error('Catalogue generation mode is not legacy');
+  const mode = config.get('generationMode');
+  if (mode !== 'legacy' && mode !== 'catalogue') {
+    throw new Error('Catalogue generation mode is invalid');
+  }
+  return mode;
+}
+
+async function assertGenerationMode(expected: GenerationMode): Promise<void> {
+  if (await readGenerationMode() !== expected) {
+    throw new Error('Catalogue generation mode changed during ingestion');
   }
 }
 
@@ -57,7 +67,7 @@ function sanitizedIngestionSummary<T extends {
 async function main(): Promise<void> {
   const command = parseIngestionArguments(process.argv.slice(2));
   const runId = command.runId ?? randomUUID();
-  await assertLegacyMode();
+  const initialGenerationMode = await readGenerationMode();
   const secret = process.env.GEMINI_API_KEY?.trim() ?? '';
   const operational = firestoreCatalogueOpsDocuments();
   const geminiCallCap = command.geminiCallCap ?? DEFAULT_GEMINI_CALL_CAP;
@@ -108,7 +118,7 @@ async function main(): Promise<void> {
       geminiCallCap,
       resetCursor: command.mode === 'retry-failed',
     });
-    await assertLegacyMode();
+    await assertGenerationMode(initialGenerationMode);
     console.log(JSON.stringify(sanitizedClassificationSummary(summary)));
     return;
   }
@@ -122,7 +132,7 @@ async function main(): Promise<void> {
     try {
       const summary = await runSourceRefreshCanaries({ adapters, now: () => new Date() });
       await recordPhase4Run(runId, summary);
-      await assertLegacyMode();
+      await assertGenerationMode(initialGenerationMode);
       console.log(JSON.stringify(summary));
       return;
     } finally {
@@ -133,7 +143,7 @@ async function main(): Promise<void> {
   if (command.mode === 'verify-backfill') {
     const summary = await verifyPhase4Backfill();
     await recordPhase4Run(runId, summary);
-    await assertLegacyMode();
+    await assertGenerationMode(initialGenerationMode);
     console.log(JSON.stringify(summary));
     return;
   }
@@ -148,7 +158,7 @@ async function main(): Promise<void> {
         reasonCode: 'no-eligible-sources',
       };
       await recordPhase4Run(runId, summary);
-      await assertLegacyMode();
+      await assertGenerationMode(initialGenerationMode);
       console.log(JSON.stringify(summary));
       return;
     }
@@ -188,7 +198,7 @@ async function main(): Promise<void> {
     parserVersion: 1,
     taxonomyVersion: 1,
   });
-  await assertLegacyMode();
+  await assertGenerationMode(initialGenerationMode);
   console.log(JSON.stringify(command.mode === 'refresh-backfill'
     ? { runId, mode: command.mode, ...sanitizedIngestionSummary(summary) }
     : { runId, ...summary }));

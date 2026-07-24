@@ -353,12 +353,12 @@ export default function SettingsModal({
             <View style={styles.divider} />
 
             {/* ── Meal Generation Matching ── */}
-            <Text style={styles.sectionTitle}>Meal Generation Matching</Text>
+            <Text style={styles.sectionTitle}>Legacy Generator Matching</Text>
             <View style={styles.toggleRow}>
               <View style={styles.toggleTextCol}>
                 <Text style={styles.toggleLabel}>Strict Tag Matching</Text>
                 <Text style={styles.toggleDesc}>
-                  When enabled, the generator automatically regenerates meals in the background until all selected criteria (like Healthy, Dinner, Quick & Easy) are fully met.
+                  Used only while the operator has legacy generation enabled. Catalogue generation always applies exact matching.
                 </Text>
               </View>
               <Switch
@@ -427,9 +427,9 @@ export default function SettingsModal({
             <View style={styles.divider} />
 
             {/* ── Ingredient Weights ── */}
-            <Text style={styles.sectionTitle}>Ingredient Weights</Text>
+            <Text style={styles.sectionTitle}>Legacy Ingredient Weights</Text>
             <Text style={styles.sectionHint}>
-              Tap a chip to cycle its weight (1× → 2× → 3×). Higher weight means that ingredient appears more often in random selection.
+              Used only by legacy rollback. Catalogue generation uses the preference tiles on the Generate screen.
             </Text>
 
             <View style={styles.ingredientGrid}>

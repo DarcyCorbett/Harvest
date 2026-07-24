@@ -99,9 +99,9 @@ describe('selectCatalogueRecipes', () => {
     const result = await selectCatalogueRecipes(selectionRequest(), injected, () => 0);
 
     expect(result.slots[0]).toMatchObject({ status: 'selected', recipeId: 'exact', sourceKey: 'first' });
-    expect(injected.queryCandidates).toHaveBeenCalledWith('first', expect.any(Object), undefined);
-    expect(injected.queryCandidates).toHaveBeenCalledWith('first', expect.any(Object), '1');
-    expect(injected.queryCandidates).toHaveBeenCalledWith('second', expect.any(Object), undefined);
+    expect(injected.queryCandidates).toHaveBeenCalledWith('first', expect.any(Object), undefined, expect.any(Number));
+    expect(injected.queryCandidates).toHaveBeenCalledWith('first', expect.any(Object), '1', expect.any(Number));
+    expect(injected.queryCandidates).toHaveBeenCalledWith('second', expect.any(Object), undefined, expect.any(Number));
   });
 
   it('applies source weights only after eligible sources are known and not by catalogue size', async () => {

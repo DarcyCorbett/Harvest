@@ -313,6 +313,7 @@ export default function RecipeDetailModal({
   const [editingLabels, setEditingLabels] = useState(false);
   const [localCourse, setLocalCourse] = useState<string[]>([]);
   const [localTags, setLocalTags] = useState<string[]>([]);
+  const isCatalogueRecipe = recipe?.schemaVersion === 2;
 
   useEffect(() => {
     setLocalCourse(recipe?.course ?? []);
@@ -321,7 +322,7 @@ export default function RecipeDetailModal({
   }, [recipe]);
 
   const handleSaveLabels = useCallback(async () => {
-    if (!householdId || !recipe?.id) return;
+    if (!householdId || !recipe?.id || recipe.schemaVersion === 2) return;
     try {
       await legacyRecipeClient.update(householdId, recipe.id, {
         course: localCourse,
@@ -477,7 +478,7 @@ export default function RecipeDetailModal({
                 )}
               </View>
             )}
-            {recipe.id ? (
+            {recipe.id && !isCatalogueRecipe ? (
               editingLabels ? (
                 <View style={styles.courseEditActions}>
                   <TouchableOpacity onPress={handleSaveLabels} style={styles.courseEditBtn}>
@@ -497,7 +498,7 @@ export default function RecipeDetailModal({
               )
             ) : null}
           </View>
-          {editingLabels && (
+          {editingLabels && !isCatalogueRecipe && (
             <View style={styles.courseTagPicker}>
               {[...COURSE_TAGS, ...CUISINE_TAGS, ...MODIFIER_TAGS].map((tag) => {
                 // Check both course and tags arrays

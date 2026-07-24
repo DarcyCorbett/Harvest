@@ -38,6 +38,10 @@ export interface InstructionStep {
 /** A fully scraped and parsed recipe (root-level collection) */
 export interface Recipe {
   id?: string;
+  /** Present for canonical catalogue recipes decoded from schema-v2 documents. */
+  schemaVersion?: 2;
+  /** Catalogue recipes in review remain displayable but cannot be generated. */
+  catalogueStatus?: 'ready' | 'review';
   title: string;
   sourceUrl: string;
   imageUrl?: string;        // hero image URL extracted from JSON-LD / og:image
@@ -208,6 +212,12 @@ export interface GenerateConfig {
   children: number;
   mealTypes: MealType[];
   cuisineStyles: CuisineStyle[];
+  /** Structured catalogue controls. Optional for legacy persisted results. */
+  ingredientFilters?: {
+    must: string[];
+    prefer: string[];
+    exclude: string[];
+  };
   customInstructions?: string;
   settings?: HouseholdSettings;
 }
