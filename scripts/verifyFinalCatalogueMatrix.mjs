@@ -117,6 +117,7 @@ function assertHardConstraints(recipe, slot) {
 }
 
 const latencies = [];
+const latencyCases = [];
 let selectedCount = 0;
 let priorSelectedId;
 for (const testCase of selectedCases) {
@@ -127,7 +128,9 @@ for (const testCase of selectedCases) {
     currentPlanRecipeIds: [],
     recentRecipeIds: [],
   }, store);
-  latencies.push(performance.now() - startedAt);
+  const latencyMs = performance.now() - startedAt;
+  latencies.push(latencyMs);
+  latencyCases.push({ name: testCase.name, latencyMs });
   const outcome = response.slots[0];
   if (outcome?.status !== 'selected') {
     throw new Error(`Expected a selection for ${testCase.name}`);
@@ -149,7 +152,9 @@ const duplicateResponse = await selectCatalogueRecipes({
   currentPlanRecipeIds: [priorSelectedId],
   recentRecipeIds: [priorSelectedId],
 }, store);
-latencies.push(performance.now() - duplicateStartedAt);
+const duplicateLatencyMs = performance.now() - duplicateStartedAt;
+latencies.push(duplicateLatencyMs);
+latencyCases.push({ name: 'duplicate-recent', latencyMs: duplicateLatencyMs });
 const duplicateIds = duplicateResponse.slots.flatMap((slot) =>
   slot.status === 'selected' ? [slot.recipeId] : []);
 if (duplicateIds.length !== 2
@@ -173,7 +178,9 @@ const noMatchResponse = await selectCatalogueRecipes({
   currentPlanRecipeIds: [],
   recentRecipeIds: [],
 }, store);
-latencies.push(performance.now() - noMatchStartedAt);
+const noMatchLatencyMs = performance.now() - noMatchStartedAt;
+latencies.push(noMatchLatencyMs);
+latencyCases.push({ name: 'intentional-no-match', latencyMs: noMatchLatencyMs });
 const noMatch = noMatchResponse.slots[0];
 if (noMatch?.status !== 'no-match'
   || !noMatch.relaxations.some((relaxation) =>
@@ -185,7 +192,14 @@ if (noMatch?.status !== 'no-match'
 
 const sortedLatencies = [...latencies].sort((left, right) => left - right);
 const p95Ms = sortedLatencies[Math.ceil(sortedLatencies.length * 0.95) - 1] ?? 0;
-if (p95Ms > 2_000) throw new Error(`Selector p95 exceeded gate: ${p95Ms.toFixed(1)}ms`);
+if (p95Ms > 2_000) {
+  const slowest = latencyCases
+    .sort((left, right) => right.latencyMs - left.latencyMs)
+    .slice(0, 5)
+    .map(({ name, latencyMs }) => `${name}=${latencyMs.toFixed(1)}ms`)
+    .join(', ');
+  throw new Error(`Selector p95 exceeded gate: ${p95Ms.toFixed(1)}ms; slowest: ${slowest}`);
+}
 
 console.log(JSON.stringify({
   mode: expectedMode,

@@ -100,7 +100,7 @@ describe('selectCatalogueRecipes', () => {
     expect(query.get).toHaveBeenCalledOnce();
   });
 
-  it('exhausts paginated candidates for every enabled source before weighting', async () => {
+  it('exhausts paginated candidates in weighted source order until it finds an eligible source', async () => {
     const first = candidate('wrong-ingredient', 'first', { ingredientTokens: ['beef'] });
     const exact = candidate('exact', 'first');
     const second = candidate('second', 'second');

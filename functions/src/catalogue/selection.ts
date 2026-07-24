@@ -120,37 +120,24 @@ function isEligible(
   return true;
 }
 
-async function eligibleBySource(
-  sourceWeights: Record<string, number>,
+async function matchesForSource(
+  sourceKey: string,
   slot: CatalogueMealSlot,
   store: CatalogueSelectionStore,
   excludedIds: ReadonlySet<string>,
-  random: () => number,
+  randomStart: number,
   maxMatchesPerSource = 25,
-): Promise<Map<string, CatalogueCandidate[]>> {
-  const result = new Map<string, CatalogueCandidate[]>();
-  const enabledSources = Object.entries(sourceWeights)
-    .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
-    .map(([sourceKey]) => sourceKey);
-
-  const sourceResults = await Promise.all(enabledSources.map(async (sourceKey) => {
-    const matches: CatalogueCandidate[] = [];
-    let pageToken: string | undefined;
-    const randomStart = random();
-    do {
-      const page = await store.queryCandidates(sourceKey, slot, pageToken, randomStart);
-      matches.push(...page.candidates.filter((candidate) =>
-        candidate.sourceKey === sourceKey && isEligible(candidate, slot, excludedIds)));
-      if (matches.length >= maxMatchesPerSource) break;
-      pageToken = page.nextPageToken;
-    } while (pageToken !== undefined);
-    return { sourceKey, matches: matches.slice(0, maxMatchesPerSource) };
-  }));
-  for (const { sourceKey, matches } of sourceResults) {
-    if (matches.length) result.set(sourceKey, matches);
-  }
-
-  return result;
+): Promise<CatalogueCandidate[]> {
+  const matches: CatalogueCandidate[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await store.queryCandidates(sourceKey, slot, pageToken, randomStart);
+    matches.push(...page.candidates.filter((candidate) =>
+      candidate.sourceKey === sourceKey && isEligible(candidate, slot, excludedIds)));
+    if (matches.length >= maxMatchesPerSource) break;
+    pageToken = page.nextPageToken;
+  } while (pageToken !== undefined);
+  return matches.slice(0, maxMatchesPerSource);
 }
 
 function weightedPick<T>(
@@ -165,6 +152,43 @@ function weightedPick<T>(
     if (target < 0) return value;
   }
   return values[values.length - 1];
+}
+
+function weightedSourceOrder(
+  sourceWeights: Record<string, number>,
+  random: () => number,
+): string[] {
+  const remaining = Object.entries(sourceWeights)
+    .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
+    .map(([sourceKey]) => sourceKey);
+  const ordered: string[] = [];
+  while (remaining.length > 0) {
+    const selected = weightedPick(remaining, (key) => sourceWeights[key] ?? 0, random);
+    ordered.push(selected);
+    remaining.splice(remaining.indexOf(selected), 1);
+  }
+  return ordered;
+}
+
+async function firstEligibleSource(
+  sourceWeights: Record<string, number>,
+  slot: CatalogueMealSlot,
+  store: CatalogueSelectionStore,
+  excludedIds: ReadonlySet<string>,
+  random: () => number,
+): Promise<{ sourceKey: string; matches: CatalogueCandidate[] } | undefined> {
+  const orderedSources = weightedSourceOrder(sourceWeights, random);
+  const batchSize = 4;
+  for (let offset = 0; offset < orderedSources.length; offset += batchSize) {
+    const batch = orderedSources.slice(offset, offset + batchSize);
+    const results = await Promise.all(batch.map(async (sourceKey) => ({
+      sourceKey,
+      matches: await matchesForSource(sourceKey, slot, store, excludedIds, random()),
+    })));
+    const firstMatch = results.find(({ matches }) => matches.length > 0);
+    if (firstMatch) return firstMatch;
+  }
+  return undefined;
 }
 
 async function relaxationDiagnostics(
@@ -205,15 +229,14 @@ async function relaxationDiagnostics(
 
   const diagnostics: Relaxation[] = [];
   for (const variant of variants) {
-    const matches = await eligibleBySource(
+    const match = await firstEligibleSource(
       sourceWeights,
       variant.slot,
       store,
       excludedIds,
       () => 0,
-      25,
     );
-    const matchCount = [...matches.values()].reduce((sum, candidates) => sum + candidates.length, 0);
+    const matchCount = match?.matches.length ?? 0;
     if (matchCount > 0) diagnostics.push({ ...variant.relaxation, matchCount } as Relaxation);
   }
   return diagnostics;
@@ -230,8 +253,8 @@ export async function selectCatalogueRecipes(
   const selected: SelectCatalogueRecipesResponse['slots'] = [];
 
   for (const slot of parsed.slots) {
-    const eligible = await eligibleBySource(sourceWeights, slot, store, excludedIds, random);
-    if (eligible.size === 0) {
+    const eligible = await firstEligibleSource(sourceWeights, slot, store, excludedIds, random);
+    if (!eligible) {
       selected.push({
         date: slot.date,
         mealType: slot.mealType,
@@ -241,14 +264,9 @@ export async function selectCatalogueRecipes(
       continue;
     }
 
-    const sourceKey = weightedPick(
-      [...eligible.keys()],
-      (key) => sourceWeights[key] ?? 0,
-      random,
-    );
     const controls = normalizedControls(slot);
     const recipe = weightedPick(
-      eligible.get(sourceKey) as CatalogueCandidate[],
+      eligible.matches,
       (candidate) => 1 + controls.prefer.filter((token) =>
         candidate.ingredientTokens.includes(token)).length * 2,
       random,
@@ -259,7 +277,7 @@ export async function selectCatalogueRecipes(
       mealType: slot.mealType,
       status: 'selected',
       recipeId: recipe.id,
-      sourceKey,
+      sourceKey: eligible.sourceKey,
     });
   }
 
