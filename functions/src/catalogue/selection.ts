@@ -370,7 +370,19 @@ export function firestoreCatalogueSelectionStore(
       if (!requiredIngredient && slot.maxTotalMinutes === 45) {
         query = query.where('search.moderate45', '==', true);
       }
-      query = query.orderBy('search.randomKey').orderBy(documentId).limit(100);
+      query = query
+        .select(
+          'source.key',
+          'effective.totalMinutes',
+          'effective.mealTypes',
+          'effective.cuisines',
+          'effective.modifiers',
+          'search.ingredientTokens',
+          'search.randomKey',
+        )
+        .orderBy('search.randomKey')
+        .orderBy(documentId)
+        .limit(100);
 
       let cursor: {
         randomKey?: number;

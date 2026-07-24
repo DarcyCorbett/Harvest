@@ -67,12 +67,14 @@ describe('selectCatalogueRecipes', () => {
     const snapshot = { docs: [], size: 0 };
     const query = {
       where: vi.fn(),
+      select: vi.fn(),
       orderBy: vi.fn(),
       limit: vi.fn(),
       startAfter: vi.fn(),
       get: vi.fn(async () => snapshot),
     };
     query.where.mockReturnValue(query);
+    query.select.mockReturnValue(query);
     query.orderBy.mockReturnValue(query);
     query.limit.mockReturnValue(query);
     query.startAfter.mockReturnValue(query);
@@ -97,6 +99,15 @@ describe('selectCatalogueRecipes', () => {
       expect.any(String),
     );
     expect(query.orderBy).toHaveBeenCalledWith(documentId);
+    expect(query.select).toHaveBeenCalledWith(
+      'source.key',
+      'effective.totalMinutes',
+      'effective.mealTypes',
+      'effective.cuisines',
+      'effective.modifiers',
+      'search.ingredientTokens',
+      'search.randomKey',
+    );
     expect(query.get).toHaveBeenCalledOnce();
   });
 
