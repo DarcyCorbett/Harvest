@@ -86,6 +86,16 @@ describe('selectCatalogueRecipes', () => {
     )).resolves.toEqual({ candidates: [] });
 
     expect(db.collection).toHaveBeenCalledWith('recipes');
+    expect(query.where).toHaveBeenCalledWith(
+      'search.ingredientTokens',
+      'array-contains',
+      'chicken',
+    );
+    expect(query.where).not.toHaveBeenCalledWith(
+      'search.selectionKeys',
+      'array-contains',
+      expect.any(String),
+    );
     expect(query.orderBy).toHaveBeenCalledWith(documentId);
     expect(query.get).toHaveBeenCalledOnce();
   });

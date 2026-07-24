@@ -1,7 +1,11 @@
 import { performance } from 'node:perf_hooks';
+import { createRequire } from 'node:module';
 
-import { applicationDefault, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+const requireFunctionsDependency = createRequire(
+  new URL('../functions/package.json', import.meta.url),
+);
+const { applicationDefault, initializeApp } = requireFunctionsDependency('firebase-admin/app');
+const { getFirestore } = requireFunctionsDependency('firebase-admin/firestore');
 
 function argument(name) {
   const index = process.argv.indexOf(name);

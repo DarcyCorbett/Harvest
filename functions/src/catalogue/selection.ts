@@ -211,7 +211,7 @@ async function relaxationDiagnostics(
       store,
       excludedIds,
       () => 0,
-      Number.POSITIVE_INFINITY,
+      25,
     );
     const matchCount = [...matches.values()].reduce((sum, candidates) => sum + candidates.length, 0);
     if (matchCount > 0) diagnostics.push({ ...variant.relaxation, matchCount } as Relaxation);
@@ -318,15 +318,25 @@ export function firestoreCatalogueSelectionStore(
       return decodeSourceWeights(snapshot.exists ? snapshot.get('sourceWeights') : undefined);
     },
     async queryCandidates(sourceKey, slot, pageToken, randomStart) {
+      const controls = normalizedControls(slot);
+      const requiredIngredient = controls.must[0];
       let query = db.collection('recipes')
         .where('schemaVersion', '==', 2)
         .where('status', '==', 'ready')
-        .where('source.key', '==', sourceKey)
-        .where('search.selectionKeys', 'array-contains', `${slot.mealType}|${slot.cuisines[0] ?? 'any'}`);
+        .where('source.key', '==', sourceKey);
+      if (requiredIngredient) {
+        query = query.where('search.ingredientTokens', 'array-contains', requiredIngredient);
+      } else {
+        query = query.where(
+          'search.selectionKeys',
+          'array-contains',
+          `${slot.mealType}|${slot.cuisines[0] ?? 'any'}`,
+        );
+      }
       // Use one bounded indexed discriminator and enforce the complete
       // intersection again in isEligible(). This avoids a combinatorial index
       // explosion while still exhausting every categorical candidate page.
-      if (slot.maxTotalMinutes === undefined && slot.modifiers.length === 1) {
+      if (!requiredIngredient && slot.maxTotalMinutes === undefined && slot.modifiers.length === 1) {
         const modifier = slot.modifiers[0];
         const field = {
           vegetarian: 'search.vegetarian',
@@ -336,8 +346,12 @@ export function firestoreCatalogueSelectionStore(
         }[modifier];
         query = query.where(field, '==', true);
       }
-      if (slot.maxTotalMinutes === 30) query = query.where('search.quick30', '==', true);
-      if (slot.maxTotalMinutes === 45) query = query.where('search.moderate45', '==', true);
+      if (!requiredIngredient && slot.maxTotalMinutes === 30) {
+        query = query.where('search.quick30', '==', true);
+      }
+      if (!requiredIngredient && slot.maxTotalMinutes === 45) {
+        query = query.where('search.moderate45', '==', true);
+      }
       query = query.orderBy('search.randomKey').orderBy(documentId).limit(100);
 
       let cursor: {

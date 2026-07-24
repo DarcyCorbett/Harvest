@@ -11,6 +11,8 @@ describe('final catalogue release tooling', () => {
     const source = readFileSync(resolve(root, 'scripts/verifyFinalCatalogueMatrix.mjs'), 'utf8');
     expect(source).toContain('selectCatalogueRecipes');
     expect(source).toContain('validateReadyRecipe');
+    expect(source).toContain("createRequire(");
+    expect(source).toContain("../functions/package.json");
     expect(source).toContain('p95Ms > 2_000');
     expect(source).toContain('firestoreWrites: 0');
     expect(source).toContain('externalRecipeRequests: 0');

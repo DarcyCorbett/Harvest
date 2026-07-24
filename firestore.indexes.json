@@ -7,6 +7,17 @@
         { "fieldPath": "schemaVersion", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "source.key", "order": "ASCENDING" },
+        { "fieldPath": "search.ingredientTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "search.randomKey", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recipes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "source.key", "order": "ASCENDING" },
         { "fieldPath": "search.selectionKeys", "arrayConfig": "CONTAINS" },
         { "fieldPath": "search.randomKey", "order": "ASCENDING" }
       ]
