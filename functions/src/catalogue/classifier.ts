@@ -53,6 +53,33 @@ function deterministicRules(content: CompleteCanonicalRecipeV2['content']): {
   return { mealTypes, cuisines, modifiers };
 }
 
+export function classifyCatalogueDeterministically(
+  content: CompleteCanonicalRecipeV2['content'],
+  sourceMetadata: RecipeMetadata,
+): CatalogueClassification {
+  const rules = deterministicRules(content);
+  const mealTypes = unique([...(sourceMetadata.mealTypes ?? []), ...rules.mealTypes]);
+  const cuisines = unique([...(sourceMetadata.cuisines ?? []), ...rules.cuisines]);
+  const modifiers = unique([...(sourceMetadata.modifiers ?? []), ...rules.modifiers]);
+
+  const complete = mealTypes.length > 0 && cuisines.length > 0;
+  return {
+    metadata: {
+      ...sourceMetadata,
+      mealTypes,
+      cuisines,
+      modifiers,
+    },
+    sources: {
+      mealTypes: sourceMetadata.mealTypes?.length ? 'source' : 'rule',
+      cuisines: sourceMetadata.cuisines?.length ? 'source' : 'rule',
+      modifiers: sourceMetadata.modifiers?.length ? 'source' : 'rule',
+    },
+    complete,
+    classifierVersion: complete ? 1 : 0,
+  };
+}
+
 export function createCatalogueClassifier(dependencies: {
   requestJson(prompt: string): Promise<unknown>;
 }) {
@@ -60,15 +87,11 @@ export function createCatalogueClassifier(dependencies: {
     content: CompleteCanonicalRecipeV2['content'],
     sourceMetadata: RecipeMetadata,
   ): Promise<CatalogueClassification> => {
-    const rules = deterministicRules(content);
-    let mealTypes = unique([...(sourceMetadata.mealTypes ?? []), ...rules.mealTypes]);
-    let cuisines = unique([...(sourceMetadata.cuisines ?? []), ...rules.cuisines]);
-    let modifiers = unique([...(sourceMetadata.modifiers ?? []), ...rules.modifiers]);
-    const sources: CatalogueClassification['sources'] = {
-      mealTypes: sourceMetadata.mealTypes?.length ? 'source' : 'rule',
-      cuisines: sourceMetadata.cuisines?.length ? 'source' : 'rule',
-      modifiers: sourceMetadata.modifiers?.length ? 'source' : 'rule',
-    };
+    const deterministic = classifyCatalogueDeterministically(content, sourceMetadata);
+    let mealTypes = deterministic.metadata.mealTypes ?? [];
+    let cuisines = deterministic.metadata.cuisines ?? [];
+    let modifiers = deterministic.metadata.modifiers ?? [];
+    const sources = deterministic.sources;
 
     if (mealTypes.length === 0 || cuisines.length === 0) {
       const prompt = [
@@ -107,6 +130,7 @@ export function createCatalogueClassifier(dependencies: {
       },
       sources,
       complete: mealTypes.length > 0 && cuisines.length > 0,
+      classifierVersion: 1,
     };
   };
 }

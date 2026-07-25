@@ -12,13 +12,17 @@ import {
 } from './backfill.js';
 import {
   firestoreClassificationBackfillStore,
+  loadEligibleSourceKeys,
   loadEligibleRefreshWork,
   recordPhase4Run,
   runSourceRefreshCanaries,
   sanitizedClassificationSummary,
   verifyPhase4Backfill,
 } from './backfillFirestore.js';
-import { createCatalogueClassifier } from './classifier.js';
+import {
+  classifyCatalogueDeterministically,
+  createCatalogueClassifier,
+} from './classifier.js';
 import {
   cloudStorageManifestStore,
   createCatalogueIngestionEngine,
@@ -31,7 +35,11 @@ import {
   createLeaseManager,
   firestoreCatalogueOpsDocuments,
 } from './operations.js';
-import { createTrustedSourceAdapters } from './sourceAdapters.js';
+import {
+  WORDPRESS_SOURCE_KEYS,
+  createTrustedSourceAdapters,
+  inventorySourceDiscovery,
+} from './sourceAdapters.js';
 
 initializeApp();
 
@@ -96,6 +104,37 @@ async function main(): Promise<void> {
   });
   const adapters = createTrustedSourceAdapters();
   const phase4WriteCap = command.writeCap ?? DEFAULT_PHASE4_WRITE_CAP;
+  const wordpressSourceKeys = command.sourceKeys ?? [...WORDPRESS_SOURCE_KEYS];
+  const wordpressAdapters = adapters.filter((adapter) =>
+    wordpressSourceKeys.includes(adapter.sourceKey));
+
+  if (command.mode === 'crawl-inventory') {
+    const summary = await inventorySourceDiscovery(wordpressAdapters);
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({ runId, ...summary }));
+    return;
+  }
+
+  if (command.mode === 'crawl-canary') {
+    const lease = createLeaseManager(operational.lease, {
+      ownerId: runId,
+      ttlMs: 5 * 60 * 1_000,
+    });
+    if (!(await lease.acquire())) throw new Error('Catalogue ingestion lease unavailable');
+    try {
+      const summary = await runSourceRefreshCanaries({
+        adapters: wordpressAdapters,
+        now: () => new Date(),
+        candidateMode: 'any',
+      });
+      await recordPhase4Run(runId, { ...summary, mode: 'crawl-canary' });
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify({ ...summary, mode: 'crawl-canary' }));
+      return;
+    } finally {
+      await lease.release();
+    }
+  }
 
   if (command.mode === 'classify-backfill' || command.mode === 'retry-failed') {
     const engine = createClassificationBackfillEngine({
@@ -145,6 +184,57 @@ async function main(): Promise<void> {
     await recordPhase4Run(runId, summary);
     await assertGenerationMode(initialGenerationMode);
     console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'crawl-backfill') {
+    const eligibleSourceKeys = await loadEligibleSourceKeys(wordpressSourceKeys);
+    const ineligible = wordpressSourceKeys.filter((sourceKey) =>
+      !eligibleSourceKeys.includes(sourceKey));
+    if (ineligible.length > 0) {
+      throw new Error('WordPress crawl source has not passed its canary');
+    }
+    const crawlWriteCap = command.writeCap ?? 18_000;
+    const crawlEngine = createCatalogueIngestionEngine({
+      adapters: wordpressAdapters,
+      manifests: cloudStorageManifestStore(process.env.CATALOGUE_MANIFEST_BUCKET),
+      recipes: firestoreCatalogueRecipeStore(),
+      runs: firestoreCatalogueRunStore(),
+      lease: createLeaseManager(operational.lease, {
+        ownerId: runId,
+        ttlMs: 5 * 60 * 1_000,
+      }),
+      budget: createBudgetManager(operational.budget, {
+        limit: 18_000,
+        commandCap: crawlWriteCap,
+      }),
+      classify: async (content, sourceMetadata) =>
+        classifyCatalogueDeterministically(content, sourceMetadata),
+      now: () => new Date(),
+      random: Math.random,
+      getTelemetry: () => ({
+        gemini: {
+          calls: 0,
+          promptTokenCount: 0,
+          candidatesTokenCount: 0,
+          totalTokenCount: 0,
+        },
+      }),
+    });
+    const summary = await crawlEngine.run({
+      runId,
+      sourceKeys: eligibleSourceKeys,
+      writeCap: crawlWriteCap,
+      maxPerSource: command.maxPerSource,
+      parserVersion: 1,
+      taxonomyVersion: 1,
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'crawl-backfill',
+      ...sanitizedIngestionSummary(summary),
+    }));
     return;
   }
 

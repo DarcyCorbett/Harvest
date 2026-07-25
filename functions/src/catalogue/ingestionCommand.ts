@@ -1,4 +1,4 @@
-import { SOURCE_CONFIGS } from './sourceAdapters.js';
+import { SOURCE_CONFIGS, WORDPRESS_SOURCE_KEYS } from './sourceAdapters.js';
 
 export interface IngestionArguments {
   mode?: IngestionMode;
@@ -18,6 +18,9 @@ export const INGESTION_MODES = [
   'refresh-backfill',
   'verify-backfill',
   'retry-failed',
+  'crawl-canary',
+  'crawl-inventory',
+  'crawl-backfill',
 ] as const;
 
 export type IngestionMode = typeof INGESTION_MODES[number];
@@ -104,6 +107,21 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
       continue;
     }
     invalid();
+  }
+
+  if (result.mode?.startsWith('crawl-')) {
+    const wordpressSources = new Set<string>(WORDPRESS_SOURCE_KEYS);
+    if (result.sourceKeys?.some((sourceKey) => !wordpressSources.has(sourceKey))) invalid();
+    if (result.geminiCallCap !== undefined
+      || result.forceRefresh
+      || result.targetUrls
+      || result.dryRun) {
+      invalid();
+    }
+    if (result.mode !== 'crawl-backfill'
+      && (result.writeCap !== undefined || result.maxPerSource !== undefined)) {
+      invalid();
+    }
   }
 
   return result;

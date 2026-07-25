@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   SOURCE_CONFIGS,
+  WORDPRESS_SOURCE_KEYS,
   createSourceAdapter,
+  inventorySourceDiscovery,
   type SourceHttpResponse,
 } from '../src/catalogue/sourceAdapters.js';
 
@@ -29,6 +31,63 @@ describe('catalogue source adapters', () => {
     ]);
   });
 
+  it('uses every WordPress post sitemap shard and excludes non-post sitemaps', async () => {
+    expect(WORDPRESS_SOURCE_KEYS).toHaveLength(9);
+    const config = SOURCE_CONFIGS.find((source) => source.sourceKey === 'recipetineats');
+    if (!config) throw new Error('missing source');
+    const request = vi.fn(async (url: string) => {
+      if (url === config.discoveryUrl) {
+        return response(200, `<sitemapindex>
+          <sitemap><loc>https://${config.host}/post-sitemap.xml</loc></sitemap>
+          <sitemap><loc>https://${config.host}/post-sitemap2.xml</loc></sitemap>
+          <sitemap><loc>https://${config.host}/page-sitemap.xml</loc></sitemap>
+        </sitemapindex>`);
+      }
+      return response(200, `<urlset><url><loc>https://${config.host}/${url.includes('2') ? 'two' : 'one'}</loc></url></urlset>`);
+    });
+    const source = createSourceAdapter(config, { request, sleep: vi.fn() });
+
+    const discovered = [];
+    for await (const item of source.discover()) discovered.push(item.url);
+
+    expect(discovered).toEqual([
+      `https://${config.host}/one`,
+      `https://${config.host}/two`,
+    ]);
+    expect(request).not.toHaveBeenCalledWith(`https://${config.host}/page-sitemap.xml`);
+  });
+
+  it('inventories discovery without fetching recipe pages', async () => {
+    const first = {
+      sourceKey: 'first',
+      canonicalize: (url: string) => url,
+      async *discover() {
+        yield { url: 'https://first.test/one', cursor: '1' };
+        yield { url: 'https://first.test/two', cursor: '2' };
+      },
+      fetch: vi.fn(),
+    };
+    const second = {
+      sourceKey: 'second',
+      canonicalize: (url: string) => url,
+      async *discover() {
+        yield { url: 'https://second.test/one', cursor: '1' };
+      },
+      fetch: vi.fn(),
+    };
+
+    await expect(inventorySourceDiscovery([first, second])).resolves.toEqual({
+      mode: 'crawl-inventory',
+      totalDiscovered: 3,
+      bySource: {
+        first: { discovered: 2, status: 'complete' },
+        second: { discovered: 1, status: 'complete' },
+      },
+    });
+    expect(first.fetch).not.toHaveBeenCalled();
+    expect(second.fetch).not.toHaveBeenCalled();
+  });
+
   it.each(SOURCE_CONFIGS)('discovers and canonicalizes a fixture for $sourceKey', async (config) => {
     const sourceUrl = `https://${config.host}/recipes/test-recipe/?utm_source=fixture#card`;
     const request = vi.fn().mockResolvedValue(response(200, `<?xml version="1.0"?>
@@ -47,7 +106,7 @@ describe('catalogue source adapters', () => {
   });
 
   it('recurses through sitemap indexes and resumes after the durable child cursor', async () => {
-    const config = SOURCE_CONFIGS[0];
+    const config = SOURCE_CONFIGS[9];
     const request = vi.fn(async (url: string) => {
       if (url === config.discoveryUrl) {
         return response(200, '<sitemapindex><sitemap><loc>https://maps.test/one.xml</loc></sitemap><sitemap><loc>https://maps.test/two.xml</loc></sitemap></sitemapindex>');

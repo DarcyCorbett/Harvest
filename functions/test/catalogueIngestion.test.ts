@@ -143,6 +143,26 @@ describe('catalogue ingestion engine', () => {
     expect(result.metrics).toMatchObject({ fetched: 1, parsed: 1, classified: 1, written: 1 });
   });
 
+  it('stores unresolved deterministic crawl content as review at classifier version zero', async () => {
+    const url = 'https://www.recipetineats.com/ambiguous';
+    const source = adapter('recipetineats', [url]);
+    const { injected, recipes } = dependencies([source]);
+    injected.classify = vi.fn(async () => ({
+      metadata: { totalMinutes: 30, mealTypes: ['dinner'], cuisines: [], modifiers: [] },
+      sources: { mealTypes: 'source', cuisines: 'rule', modifiers: 'rule' },
+      complete: false,
+      classifierVersion: 0,
+    }));
+
+    await createCatalogueIngestionEngine(injected).run({ runId: 'crawl-unresolved' });
+
+    expect(recipes[0]).toMatchObject({
+      status: 'review',
+      classification: { classifierVersion: 0, complete: false },
+      effective: { mealTypes: ['dinner'], cuisines: [] },
+    });
+  });
+
   it('rotates fairly across sources and stops at a reducing command cap', async () => {
     const first = adapter('first', ['https://first.test/1', 'https://first.test/2', 'https://first.test/3']);
     const second = adapter('second', ['https://second.test/1']);
@@ -151,6 +171,22 @@ describe('catalogue ingestion engine', () => {
     await createCatalogueIngestionEngine(injected).run({ runId: 'run-3', writeCap: 9 });
 
     expect(recipes.map((recipe) => recipe.source.key)).toEqual(['first', 'second', 'first']);
+  });
+
+  it('reports a partial run when the per-source crawl cap is reached', async () => {
+    const source = adapter('source', [
+      'https://source.test/1',
+      'https://source.test/2',
+    ]);
+    const { injected } = dependencies([source]);
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'source-cap',
+      maxPerSource: 1,
+    });
+
+    expect(result.status).toBe('source-cap-exhausted');
+    expect(result.metrics.written).toBe(1);
   });
 
   it('reserves the daily budget in bounded batches instead of claiming the full cap upfront', async () => {

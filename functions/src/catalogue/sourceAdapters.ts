@@ -23,6 +23,7 @@ export interface SourceConfig {
   host: string;
   discoveryUrl: string;
   minDelayMs: number;
+  sitemapChildPattern?: RegExp;
 }
 
 export interface RecipeSourceAdapter {
@@ -37,16 +38,30 @@ export interface SourceAdapterDependencies {
   sleep(milliseconds: number): Promise<void>;
 }
 
+export const WORDPRESS_SOURCE_KEYS = [
+  'recipetineats',
+  'budgetbytes',
+  'thewoksoflife',
+  'themediterraneandish',
+  'spendwithpennies',
+  'cafedelites',
+  'skinnytaste',
+  'pinchofyum',
+  'natashaskitchen',
+] as const;
+
+const WORDPRESS_POST_SITEMAP = /\/post-sitemap\d*\.xml(?:$|\?)/i;
+
 export const SOURCE_CONFIGS: readonly SourceConfig[] = [
-  { sourceKey: 'recipetineats', host: 'www.recipetineats.com', discoveryUrl: 'https://www.recipetineats.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'budgetbytes', host: 'www.budgetbytes.com', discoveryUrl: 'https://www.budgetbytes.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'thewoksoflife', host: 'thewoksoflife.com', discoveryUrl: 'https://thewoksoflife.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'themediterraneandish', host: 'www.themediterraneandish.com', discoveryUrl: 'https://www.themediterraneandish.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'cafedelites', host: 'cafedelites.com', discoveryUrl: 'https://cafedelites.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/post-sitemap.xml', minDelayMs: 1_000 },
-  { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/post-sitemap.xml', minDelayMs: 1_000 },
+  { sourceKey: 'recipetineats', host: 'www.recipetineats.com', discoveryUrl: 'https://www.recipetineats.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'budgetbytes', host: 'www.budgetbytes.com', discoveryUrl: 'https://www.budgetbytes.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'thewoksoflife', host: 'thewoksoflife.com', discoveryUrl: 'https://thewoksoflife.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'themediterraneandish', host: 'www.themediterraneandish.com', discoveryUrl: 'https://www.themediterraneandish.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'cafedelites', host: 'cafedelites.com', discoveryUrl: 'https://cafedelites.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'seriouseats', host: 'www.seriouseats.com', discoveryUrl: 'https://www.seriouseats.com/sitemap.xml', minDelayMs: 1_500 },
   { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500 },
   { sourceKey: 'nytcooking', host: 'cooking.nytimes.com', discoveryUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz', minDelayMs: 2_000 },
@@ -182,7 +197,13 @@ export function createSourceAdapter(
   async function* discover(cursor?: string): AsyncIterable<DiscoveredUrl> {
     const root = await requestWithRetries(config.discoveryUrl);
     if (root.status !== 200) throw new Error(`Discovery failed with HTTP ${root.status}`);
-    const children = sitemapChildren(root.body);
+    const allChildren = sitemapChildren(root.body);
+    const children = config.sitemapChildPattern
+      ? allChildren.filter((child) => config.sitemapChildPattern?.test(child))
+      : allChildren;
+    if (allChildren.length > 0 && config.sitemapChildPattern && children.length === 0) {
+      throw new Error(`Discovery found no recipe sitemap for ${config.sourceKey}`);
+    }
     const sitemapQueue = children.length ? children : [config.discoveryUrl];
     const resume = decodeCursor(cursor);
     let cursorReached = resume === undefined;
@@ -244,4 +265,40 @@ export function createTrustedSourceAdapters(
   dependencies?: SourceAdapterDependencies,
 ): RecipeSourceAdapter[] {
   return SOURCE_CONFIGS.map((config) => createSourceAdapter(config, dependencies));
+}
+
+export async function inventorySourceDiscovery(
+  adapters: RecipeSourceAdapter[],
+): Promise<{
+  mode: 'crawl-inventory';
+  totalDiscovered: number;
+  bySource: Record<string, {
+    discovered: number;
+    status: 'complete' | 'failed';
+    reasonCode?: string;
+  }>;
+}> {
+  const bySource: Record<string, {
+    discovered: number;
+    status: 'complete' | 'failed';
+    reasonCode?: string;
+  }> = {};
+  let totalDiscovered = 0;
+
+  for (const adapter of adapters) {
+    let discovered = 0;
+    try {
+      for await (const _item of adapter.discover()) discovered += 1;
+      bySource[adapter.sourceKey] = { discovered, status: 'complete' };
+      totalDiscovered += discovered;
+    } catch (error) {
+      bySource[adapter.sourceKey] = {
+        discovered,
+        status: 'failed',
+        reasonCode: error instanceof Error ? error.name : 'unknown-error',
+      };
+    }
+  }
+
+  return { mode: 'crawl-inventory', totalDiscovered, bySource };
 }

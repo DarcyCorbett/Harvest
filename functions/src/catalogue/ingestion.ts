@@ -19,6 +19,7 @@ import {
   type CatalogueManifestEntry,
 } from './operations.js';
 import { parseCatalogueRecipe } from './parser.js';
+import { classifyCatalogueDeterministically } from './classifier.js';
 import type { DiscoveredUrl, RecipeSourceAdapter } from './sourceAdapters.js';
 
 export interface CatalogueManifestStore {
@@ -61,6 +62,7 @@ export interface CatalogueClassification {
   metadata: RecipeMetadata;
   sources: Record<string, 'source' | 'rule' | 'ai'>;
   complete: boolean;
+  classifierVersion?: number;
 }
 
 export interface CatalogueIngestionDependencies {
@@ -109,7 +111,8 @@ export interface CatalogueRunTelemetry {
 }
 
 export interface CatalogueRunSummary {
-  status: 'complete' | 'budget-exhausted' | 'provider-cap-exhausted' | 'lease-unavailable';
+  status: 'complete' | 'budget-exhausted' | 'provider-cap-exhausted'
+    | 'source-cap-exhausted' | 'lease-unavailable';
   quotaDate?: string;
   reservedWrites: number;
   consumedWrites: number;
@@ -155,20 +158,6 @@ function emptySourceMetrics(): CatalogueSourceRunMetrics {
     documentWrites: 0,
     estimatedDocumentBytes: 0,
     sampleRecipeIds: [],
-  };
-}
-
-function deterministicClassification(sourceMetadata: RecipeMetadata): CatalogueClassification {
-  const mealTypes = sourceMetadata.mealTypes ?? [];
-  const cuisines = sourceMetadata.cuisines ?? [];
-  return {
-    metadata: sourceMetadata,
-    sources: {
-      mealTypes: mealTypes.length ? 'source' : 'rule',
-      cuisines: cuisines.length ? 'source' : 'rule',
-      modifiers: sourceMetadata.modifiers?.length ? 'source' : 'rule',
-    },
-    complete: mealTypes.length > 0 && cuisines.length > 0,
   };
 }
 
@@ -377,6 +366,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       const processedBySource = new Map<string, number>();
       let discoveriesSinceLeaseCheck = 0;
       let providerCapExhausted = false;
+      let sourceCapExhausted = false;
 
       try {
         while (active.size > 0) {
@@ -456,7 +446,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 increment(adapter.sourceKey, 'parsed');
                 const classification = dependencies.classify
                   ? await dependencies.classify(parsed.content, parsed.sourceMetadata)
-                  : deterministicClassification(parsed.sourceMetadata);
+                  : classifyCatalogueDeterministically(parsed.content, parsed.sourceMetadata);
                 increment(adapter.sourceKey, 'classified');
                 const effective = buildEffectiveMetadata(classification.metadata);
                 const recipe: CompleteCanonicalRecipeV2 = {
@@ -481,7 +471,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   ),
                   classification: {
                     parserVersion,
-                    classifierVersion: 1,
+                    classifierVersion: classification.classifierVersion ?? 1,
                     taxonomyVersion,
                     sources: classification.sources,
                     complete: classification.complete,
@@ -589,6 +579,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
               const processed = (processedBySource.get(adapter.sourceKey) ?? 0) + 1;
               processedBySource.set(adapter.sourceKey, processed);
               if (options.maxPerSource !== undefined && processed >= options.maxPerSource) {
+                sourceCapExhausted = true;
                 active.delete(adapter.sourceKey);
               }
             }
@@ -611,7 +602,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         }
         const status = providerCapExhausted
           ? 'provider-cap-exhausted'
-          : active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
+          : sourceCapExhausted
+            ? 'source-cap-exhausted'
+            : active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
         const consumedWrites = totalReserved - Math.max(0, processingWrites);
         const summary = finishSummary({
           status,

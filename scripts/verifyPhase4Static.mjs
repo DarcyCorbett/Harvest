@@ -4,7 +4,9 @@ const phase4Files = [
   'functions/src/catalogue/backfill.ts',
   'functions/src/catalogue/backfillFirestore.ts',
   'functions/src/catalogue/ingestionCli.ts',
+  'functions/src/catalogue/sourceAdapters.ts',
   'scripts/run-phase4-backfill.ps1',
+  'scripts/run-wordpress-crawl.ps1',
   'scripts/deploy-phase4-backfill.ps1',
 ];
 const [backfillCore, ...otherSources] = await Promise.all(
@@ -31,6 +33,15 @@ if (!/ValidateRange\(0, 500\)/.test(otherSources.join('\n'))
 if (!/WriteCap = 8000/.test(otherSources.join('\n'))
   || !/MAX_PHASE4_WRITE_CAP = 18_000/.test(backfillCore)) {
   throw new Error('Phase 4 write caps do not match the approved limits');
+}
+const ingestionCli = await readFile('functions/src/catalogue/ingestionCli.ts', 'utf8');
+const crawlRunner = await readFile('scripts/run-wordpress-crawl.ps1', 'utf8');
+if (!/command\.mode === 'crawl-backfill'[\s\S]*classifyCatalogueDeterministically/.test(ingestionCli)
+  || /gemini/i.test(crawlRunner)) {
+  throw new Error('WordPress crawl must use deterministic classification without Gemini');
+}
+if (!/ValidateRange\(0, 18000\)\]\[int\]\$WriteCap = 18000/.test(crawlRunner)) {
+  throw new Error('WordPress crawl must retain the 18,000-write daily ceiling');
 }
 
 console.log('Phase 4 static safety checks passed.');

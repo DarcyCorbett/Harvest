@@ -52,6 +52,28 @@ describe('ingestion command arguments', () => {
     });
   });
 
+  it('supports WordPress crawl modes and restricts crawl-backfill sources', () => {
+    expect(parseIngestionArguments([
+      'crawl-backfill',
+      '--source', 'recipetineats,budgetbytes',
+      '--write-cap', '18000',
+      '--max-per-source', '500',
+      '--run-id', 'crawl-1',
+    ])).toEqual({
+      mode: 'crawl-backfill',
+      sourceKeys: ['recipetineats', 'budgetbytes'],
+      writeCap: 18000,
+      maxPerSource: 500,
+      runId: 'crawl-1',
+    });
+    expect(parseIngestionArguments(['crawl-canary'])).toEqual({ mode: 'crawl-canary' });
+    expect(parseIngestionArguments(['crawl-inventory'])).toEqual({ mode: 'crawl-inventory' });
+    expect(() => parseIngestionArguments([
+      'crawl-backfill',
+      '--source', 'seriouseats',
+    ])).toThrow('Invalid ingestion arguments');
+  });
+
   it.each([
     ['--write-cap', '18001'],
     ['--write-cap', '-1'],

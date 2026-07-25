@@ -143,6 +143,7 @@ export async function runSourceRefreshCanaries(options: {
   adapters: RecipeSourceAdapter[];
   now: () => Date;
   samplesPerSource?: number;
+  candidateMode?: 'unresolved' | 'any';
 }): Promise<{ mode: 'refresh-canary'; bySource: Record<string, SourceCanarySummary> }> {
   const sampleLimit = options.samplesPerSource ?? 5;
   if (!Number.isInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 5) {
@@ -151,8 +152,13 @@ export async function runSourceRefreshCanaries(options: {
   const db = getFirestore();
   const candidates = new Map<string, string[]>();
   await forEachV2Recipe((document) => {
-    if (document.get('status') !== 'review'
-      || (document.get('classification.parserVersion') ?? 0) !== 0) return;
+    const status = document.get('status');
+    if (options.candidateMode === 'any') {
+      if (status !== 'ready' && status !== 'review') return;
+    } else if (status !== 'review'
+      || (document.get('classification.parserVersion') ?? 0) !== 0) {
+      return;
+    }
     const sourceKey = document.get('source.key');
     const url = document.get('source.canonicalUrl');
     if (typeof sourceKey !== 'string' || typeof url !== 'string') return;
@@ -212,6 +218,16 @@ export async function runSourceRefreshCanaries(options: {
     });
   }
   return { mode: 'refresh-canary', bySource };
+}
+
+export async function loadEligibleSourceKeys(
+  requested: readonly string[],
+): Promise<string[]> {
+  const db = getFirestore();
+  const sourceStates = await db.collection(SOURCE_COLLECTION).get();
+  const eligible = new Set(sourceStates.docs.flatMap((document) =>
+    document.get('state') === 'eligible' ? [document.id] : []));
+  return [...new Set(requested)].filter((sourceKey) => eligible.has(sourceKey));
 }
 
 export async function loadEligibleRefreshWork(

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createCatalogueClassifier } from '../src/catalogue/classifier.js';
+import {
+  classifyCatalogueDeterministically,
+  createCatalogueClassifier,
+} from '../src/catalogue/classifier.js';
 
 const content = {
   title: 'Mediterranean chicken salad',
@@ -10,6 +13,26 @@ const content = {
 };
 
 describe('catalogue classification', () => {
+  it('marks deterministic classifications current only when required taxonomy is complete', () => {
+    expect(classifyCatalogueDeterministically(content, {
+      mealTypes: ['dinner'],
+      cuisines: ['mediterranean'],
+      modifiers: [],
+    })).toMatchObject({
+      classifierVersion: 1,
+      complete: true,
+      metadata: { modifiers: ['salad'] },
+    });
+
+    expect(classifyCatalogueDeterministically(
+      { ...content, title: 'Unknown dish' },
+      { mealTypes: ['dinner'], cuisines: [], modifiers: [] },
+    )).toMatchObject({
+      classifierVersion: 0,
+      complete: false,
+    });
+  });
+
   it('uses source fields and deterministic rules without Gemini when classification is complete', async () => {
     const requestJson = vi.fn();
     const classify = createCatalogueClassifier({ requestJson });
