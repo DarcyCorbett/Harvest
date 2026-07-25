@@ -64,3 +64,5 @@ app-example
 # generated native folders
 /ios
 /android
+# Local tagging-evaluation reports contain public recipe titles and ingredients.
+artifacts/catalogue-tagging-evaluation/
