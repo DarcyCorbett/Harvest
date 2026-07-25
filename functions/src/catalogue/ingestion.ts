@@ -623,11 +623,17 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
   };
 }
 
-export function cloudStorageManifestStore(bucketName?: string): CatalogueManifestStore {
+export function cloudStorageManifestStore(
+  bucketName?: string,
+  prefix = 'manifests',
+): CatalogueManifestStore {
+  if (!/^[a-z0-9][a-z0-9/-]{0,127}$/.test(prefix)) {
+    throw new Error('Invalid catalogue manifest prefix');
+  }
   const bucket = bucketName ? getStorage().bucket(bucketName) : getStorage().bucket();
   return {
     async load(sourceKey) {
-      const file = bucket.file(`manifests/${sourceKey}.json`);
+      const file = bucket.file(`${prefix}/${sourceKey}.json`);
       const [exists] = await file.exists();
       if (!exists) return { sourceKey, entries: {}, updatedAt: new Date(0).toISOString() };
       const [contents] = await file.download();
@@ -638,7 +644,7 @@ export function cloudStorageManifestStore(bucketName?: string): CatalogueManifes
       return parsed;
     },
     async save(manifest) {
-      await bucket.file(`manifests/${manifest.sourceKey}.json`).save(
+      await bucket.file(`${prefix}/${manifest.sourceKey}.json`).save(
         JSON.stringify(manifest),
         { contentType: 'application/json', resumable: false },
       );

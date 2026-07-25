@@ -197,7 +197,10 @@ async function main(): Promise<void> {
     const crawlWriteCap = command.writeCap ?? 18_000;
     const crawlEngine = createCatalogueIngestionEngine({
       adapters: wordpressAdapters,
-      manifests: cloudStorageManifestStore(process.env.CATALOGUE_MANIFEST_BUCKET),
+      manifests: cloudStorageManifestStore(
+        process.env.CATALOGUE_MANIFEST_BUCKET,
+        'wordpress-crawl-manifests',
+      ),
       recipes: firestoreCatalogueRecipeStore(),
       runs: firestoreCatalogueRunStore(),
       lease: createLeaseManager(operational.lease, {
