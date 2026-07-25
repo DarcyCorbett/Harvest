@@ -189,6 +189,24 @@ describe('catalogue ingestion engine', () => {
     expect(result.metrics.written).toBe(1);
   });
 
+  it('checkpoints manifests in bounded batches and flushes the final cursor', async () => {
+    const source = adapter('source', [
+      'https://source.test/1',
+      'https://source.test/2',
+      'https://source.test/3',
+    ]);
+    const { injected, savedManifests } = dependencies([source]);
+
+    await createCatalogueIngestionEngine(injected).run({
+      runId: 'manifest-checkpoints',
+      manifestCheckpointInterval: 2,
+    });
+
+    expect(savedManifests).toHaveLength(2);
+    expect(savedManifests.at(-1)?.cursor).toBe('source-2');
+    expect(Object.keys(savedManifests.at(-1)?.entries ?? {})).toHaveLength(3);
+  });
+
   it('reserves the daily budget in bounded batches instead of claiming the full cap upfront', async () => {
     const urls = Array.from({ length: 300 }, (_, index) => `https://bulk.test/${index}`);
     const source = adapter('bulk', urls);

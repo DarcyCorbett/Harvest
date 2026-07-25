@@ -131,6 +131,7 @@ export interface CatalogueIngestionOptions {
   forceRefresh?: boolean;
   writeCap?: number;
   maxPerSource?: number;
+  manifestCheckpointInterval?: number;
   targetUrls?: Record<string, string[]>;
   parserVersion?: number;
   taxonomyVersion?: number;
@@ -312,6 +313,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         && (!Number.isInteger(options.maxPerSource) || options.maxPerSource < 1)) {
         throw new Error('Maximum recipes per source must be a positive integer');
       }
+      if (options.manifestCheckpointInterval !== undefined
+        && (!Number.isInteger(options.manifestCheckpointInterval)
+          || options.manifestCheckpointInterval < 1
+          || options.manifestCheckpointInterval > 100)) {
+        throw new Error('Invalid manifest checkpoint interval');
+      }
 
       if (requestedWrites === 0) {
         return finishSummary({
@@ -364,6 +371,20 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       const active = new Set(adapters.map((adapter) => adapter.sourceKey));
       const consecutiveFailures = new Map<string, number>();
       const processedBySource = new Map<string, number>();
+      const unsavedManifestChanges = new Map<string, number>();
+      const manifestCheckpointInterval = options.manifestCheckpointInterval ?? 1;
+      const saveManifestProgress = async (
+        manifest: CatalogueManifest,
+        force = false,
+      ): Promise<void> => {
+        const changes = (unsavedManifestChanges.get(manifest.sourceKey) ?? 0) + 1;
+        if (force || changes >= manifestCheckpointInterval) {
+          await dependencies.manifests.save(manifest);
+          unsavedManifestChanges.set(manifest.sourceKey, 0);
+        } else {
+          unsavedManifestChanges.set(manifest.sourceKey, changes);
+        }
+      };
       let discoveriesSinceLeaseCheck = 0;
       let providerCapExhausted = false;
       let sourceCapExhausted = false;
@@ -405,7 +426,6 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             progressed = true;
             const discovered = next.value;
             const manifest = manifests.get(adapter.sourceKey) as CatalogueManifest;
-            manifest.cursor = discovered.cursor;
             increment(adapter.sourceKey, 'discovered');
             discoveriesSinceLeaseCheck += 1;
             if (discoveriesSinceLeaseCheck >= 100) {
@@ -429,8 +449,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
               now: dependencies.now(),
             })) {
               increment(adapter.sourceKey, 'unchanged');
+              manifest.cursor = discovered.cursor;
               manifest.updatedAt = dependencies.now().toISOString();
-              await dependencies.manifests.save(manifest);
+              await saveManifestProgress(manifest);
               continue;
             }
             if (options.dryRun) continue;
@@ -583,8 +604,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 active.delete(adapter.sourceKey);
               }
             }
+            manifest.cursor = discovered.cursor;
             manifest.updatedAt = now;
-            await dependencies.manifests.save(manifest);
+            await saveManifestProgress(manifest);
             if (processingWrites <= 0) break;
           }
           if (!progressed) break;
@@ -592,6 +614,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
 
         for (const adapter of adapters) {
           const manifest = manifests.get(adapter.sourceKey) as CatalogueManifest;
+          if ((unsavedManifestChanges.get(adapter.sourceKey) ?? 0) > 0) {
+            await saveManifestProgress(manifest, true);
+          }
           await dependencies.runs.checkpoint(
             options.runId,
             adapter.sourceKey,
