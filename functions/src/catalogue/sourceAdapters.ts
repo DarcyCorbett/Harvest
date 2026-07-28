@@ -23,6 +23,7 @@ export interface SourceConfig {
   host: string;
   discoveryUrl: string;
   minDelayMs: number;
+  rateLimitCooldownMs?: number;
   sitemapChildPattern?: RegExp;
 }
 
@@ -57,7 +58,7 @@ export const SOURCE_CONFIGS: readonly SourceConfig[] = [
   { sourceKey: 'budgetbytes', host: 'www.budgetbytes.com', discoveryUrl: 'https://www.budgetbytes.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'thewoksoflife', host: 'thewoksoflife.com', discoveryUrl: 'https://thewoksoflife.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'themediterraneandish', host: 'www.themediterraneandish.com', discoveryUrl: 'https://www.themediterraneandish.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
+  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/sitemap_index.xml', minDelayMs: 10_000, rateLimitCooldownMs: 60_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'cafedelites', host: 'cafedelites.com', discoveryUrl: 'https://cafedelites.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
   { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
@@ -126,8 +127,19 @@ function decodeCursor(value: string | undefined): { sitemapUrl: string; index: n
   return undefined;
 }
 
-function retryDelay(response: SourceHttpResponse, attempt: number): number {
+function retryDelay(
+  response: SourceHttpResponse,
+  attempt: number,
+  rateLimitCooldownMs?: number,
+): number {
   const retryAfter = Number(header(response, 'retry-after'));
+  if (response.status === 429 && rateLimitCooldownMs) {
+    const configured = rateLimitCooldownMs * (attempt + 1);
+    const advertised = Number.isFinite(retryAfter) && retryAfter >= 0
+      ? retryAfter * 1_000
+      : 0;
+    return Math.min(15 * 60_000, Math.max(configured, advertised));
+  }
   return Number.isFinite(retryAfter) && retryAfter >= 0
     ? retryAfter * 1_000
     : Math.min(30_000, 1_000 * (2 ** attempt));
@@ -185,11 +197,15 @@ export function createSourceAdapter(
         last = await dependencies.request(url);
       } catch {
         last = { status: 0, body: '', headers: {} };
-        if (attempt < 2) await dependencies.sleep(retryDelay(last, attempt));
+        if (attempt < 2) {
+          await dependencies.sleep(retryDelay(last, attempt, config.rateLimitCooldownMs));
+        }
         continue;
       }
       if (last.status !== 429 && last.status < 500) return last;
-      if (attempt < 2) await dependencies.sleep(retryDelay(last, attempt));
+      if (attempt < 2 || (last.status === 429 && config.rateLimitCooldownMs)) {
+        await dependencies.sleep(retryDelay(last, attempt, config.rateLimitCooldownMs));
+      }
     }
     return last as SourceHttpResponse;
   };

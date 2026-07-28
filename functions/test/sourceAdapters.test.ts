@@ -143,6 +143,39 @@ describe('catalogue source adapters', () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
+  it('uses a conservative adaptive cooldown for configured HTTP 429 responses', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(response(429))
+      .mockResolvedValueOnce(response(429))
+      .mockResolvedValueOnce(response(200, '<html>ok</html>'));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const adapter = createSourceAdapter({
+      ...SOURCE_CONFIGS[4],
+      rateLimitCooldownMs: 60_000,
+    }, { request, sleep });
+
+    await expect(adapter.fetch('https://www.spendwithpennies.com/recipe')).resolves.toMatchObject({
+      kind: 'ok',
+    });
+    expect(sleep).toHaveBeenNthCalledWith(1, 60_000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 120_000);
+  });
+
+  it('cools down after a final configured HTTP 429 before yielding to the engine', async () => {
+    const request = vi.fn().mockResolvedValue(response(429));
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const adapter = createSourceAdapter({
+      ...SOURCE_CONFIGS[4],
+      rateLimitCooldownMs: 60_000,
+    }, { request, sleep });
+
+    await expect(adapter.fetch('https://www.spendwithpennies.com/recipe')).resolves.toEqual({
+      kind: 'retryable',
+      status: 429,
+    });
+    expect(sleep).toHaveBeenNthCalledWith(3, 180_000);
+  });
+
   it('retries network failures and maps exhausted attempts to retryable state', async () => {
     const request = vi.fn()
       .mockRejectedValueOnce(new Error('timeout'))
