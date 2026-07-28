@@ -189,6 +189,24 @@ describe('catalogue ingestion engine', () => {
     expect(result.metrics.written).toBe(1);
   });
 
+  it('reports an incomplete source instead of complete after bounded consecutive failures', async () => {
+    const urls = Array.from({ length: 6 }, (_, index) => `https://source.test/${index}`);
+    const source = adapter('source', urls, vi.fn(async () => ({
+      kind: 'retryable' as const,
+      status: 503,
+    })));
+    const { injected } = dependencies([source]);
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'source-failures',
+      maxConsecutiveFailures: 4,
+    });
+
+    expect(result.status).toBe('source-failure-exhausted');
+    expect(result.metrics.discovered).toBe(4);
+    expect(result.metrics.retryable).toBe(4);
+  });
+
   it('checkpoints manifests in bounded batches and flushes the final cursor', async () => {
     const source = adapter('source', [
       'https://source.test/1',

@@ -112,7 +112,7 @@ export interface CatalogueRunTelemetry {
 
 export interface CatalogueRunSummary {
   status: 'complete' | 'budget-exhausted' | 'provider-cap-exhausted'
-    | 'source-cap-exhausted' | 'lease-unavailable';
+    | 'source-cap-exhausted' | 'source-failure-exhausted' | 'lease-unavailable';
   quotaDate?: string;
   reservedWrites: number;
   consumedWrites: number;
@@ -131,6 +131,7 @@ export interface CatalogueIngestionOptions {
   forceRefresh?: boolean;
   writeCap?: number;
   maxPerSource?: number;
+  maxConsecutiveFailures?: number;
   manifestCheckpointInterval?: number;
   targetUrls?: Record<string, string[]>;
   parserVersion?: number;
@@ -313,6 +314,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         && (!Number.isInteger(options.maxPerSource) || options.maxPerSource < 1)) {
         throw new Error('Maximum recipes per source must be a positive integer');
       }
+      if (options.maxConsecutiveFailures !== undefined
+        && (!Number.isInteger(options.maxConsecutiveFailures)
+          || options.maxConsecutiveFailures < 3
+          || options.maxConsecutiveFailures > 100)) {
+        throw new Error('Invalid consecutive source failure cap');
+      }
       if (options.manifestCheckpointInterval !== undefined
         && (!Number.isInteger(options.manifestCheckpointInterval)
           || options.manifestCheckpointInterval < 1
@@ -388,6 +395,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       let discoveriesSinceLeaseCheck = 0;
       let providerCapExhausted = false;
       let sourceCapExhausted = false;
+      let sourceFailureExhausted = false;
 
       try {
         while (active.size > 0) {
@@ -592,7 +600,10 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
               };
               const failures = (consecutiveFailures.get(adapter.sourceKey) ?? 0) + 1;
               consecutiveFailures.set(adapter.sourceKey, failures);
-              if (failures >= 3) active.delete(adapter.sourceKey);
+              if (failures >= (options.maxConsecutiveFailures ?? 3)) {
+                sourceFailureExhausted = true;
+                active.delete(adapter.sourceKey);
+              }
             }
 
             if (wrote) processingWrites -= 1;
@@ -627,9 +638,11 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         }
         const status = providerCapExhausted
           ? 'provider-cap-exhausted'
-          : sourceCapExhausted
-            ? 'source-cap-exhausted'
-            : active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
+          : sourceFailureExhausted
+            ? 'source-failure-exhausted'
+            : sourceCapExhausted
+              ? 'source-cap-exhausted'
+              : active.size > 0 && !options.dryRun ? 'budget-exhausted' : 'complete';
         const consumedWrites = totalReserved - Math.max(0, processingWrites);
         const summary = finishSummary({
           status,

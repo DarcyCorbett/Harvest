@@ -229,6 +229,7 @@ async function main(): Promise<void> {
       sourceKeys: eligibleSourceKeys,
       writeCap: crawlWriteCap,
       maxPerSource: command.maxPerSource,
+      maxConsecutiveFailures: 25,
       manifestCheckpointInterval: 25,
       parserVersion: 1,
       taxonomyVersion: 1,
