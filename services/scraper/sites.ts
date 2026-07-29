@@ -20,7 +20,6 @@ export const TRUSTED_SITES = [
   'www.skinnytaste.com',
   'pinchofyum.com',
   'natashaskitchen.com',
-  'www.seriouseats.com',
   'akispetretzikis.com',
   'cooking.nytimes.com',
   'www.americastestkitchen.com',
@@ -30,7 +29,6 @@ export const TRUSTED_SITES = [
 // pool with lazy Gemini tagging at generation time, instead of the WP REST API.
 // recipeScraperService.scrapeRecipe dispatches to fetchIndexedCandidates for these.
 export const INDEXED_SITES: readonly string[] = [
-  'www.seriouseats.com',
   'akispetretzikis.com',
   'cooking.nytimes.com',
   'www.americastestkitchen.com',

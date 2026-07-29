@@ -2,7 +2,7 @@
 # Daily wrapper for the recipe index scrape + tag pipeline.
 #
 # Phase A — URL discovery (buildRecipeIndex.ts):
-#   Picks one of the 4 indexed sites by ISO day-of-week, runs
+#   Picks one of the 3 active indexed sites by ISO day-of-week, runs
 #   scripts/buildRecipeIndex.ts with a per-run write cap.
 #
 # Phase B — Gemini tagging (tagRecipeIndex.ts):
@@ -12,12 +12,12 @@
 # Day rotation (Phase A only):
 #   Mon -> akispetretzikis.com
 #   Tue -> www.americastestkitchen.com
-#   Wed -> www.seriouseats.com
+#   Wed -> rest day
 #   Thu -> cooking.nytimes.com
 #   Fri/Sat/Sun -> rest day (Phase A skipped, Phase B still runs)
 #
 # Why rotation: per-site existing-set reads sum to ~70K/day across all
-# four sites after full population, exceeding the 50K/day Firestore Spark
+# three sites after full population, exceeding the 50K/day Firestore Spark
 # read quota. Spreading the work across the week keeps each day under
 # quota with comfortable headroom for the app's normal usage.
 #
@@ -44,8 +44,8 @@ $env:GOOGLE_CLOUD_PROJECT = 'meal-wizard-ad202'
 
 # Conservative daily allocation: 12,000 discovery + 4,000 tag/cache = 16,000
 # worst-case writes. This leaves at least 2,000 writes below the approved
-# 18,000 ingestion ceiling. The tagger visits four sites and performs at most
-# two writes per newly cached recipe (500 x 4 x 2). An already-cached recipe
+# 18,000 ingestion ceiling. The tagger visits three sites and performs at most
+# two writes per newly cached recipe (500 x 3 x 2). An already-cached recipe
 # consumes only the one index-marker write and is never rewritten.
 $DailyWriteCeiling = 18000
 $DiscoveryWriteLimit = 12000
@@ -63,7 +63,6 @@ if (-not $site) {
   switch ($isoDow) {
     1 { $site = 'akispetretzikis.com' }
     2 { $site = 'www.americastestkitchen.com' }
-    3 { $site = 'www.seriouseats.com' }
     4 { $site = 'cooking.nytimes.com' }
     default {
       $isRestDay = $true

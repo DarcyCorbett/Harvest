@@ -1,6 +1,6 @@
 # Daily Recipe Index Scrape — Setup
 
-Sets up a Windows scheduled task that runs the recipe index Phase A scraper daily, rotating through the four indexed sites by day-of-week. After this is installed, no further manual intervention is needed — the index stays fresh automatically.
+Sets up a Windows scheduled task that runs the recipe index Phase A scraper daily, rotating through the three active indexed sites by day-of-week. After this is installed, no further manual intervention is needed — the index stays fresh automatically.
 
 ## Site rotation
 
@@ -8,7 +8,7 @@ Sets up a Windows scheduled task that runs the recipe index Phase A scraper dail
 |---|---|
 | Mon | akispetretzikis.com |
 | Tue | www.americastestkitchen.com |
-| Wed | www.seriouseats.com |
+| Wed | rest day |
 | Thu | cooking.nytimes.com |
 | Fri / Sat / Sun | rest day (no scrape) |
 

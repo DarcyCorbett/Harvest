@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  FROZEN_CATALOGUE_SOURCE_KEYS,
   SOURCE_CONFIGS,
   WORDPRESS_SOURCE_KEYS,
   createSourceAdapter,
@@ -13,7 +14,7 @@ function response(status: number, body = '', headers: Record<string, string> = {
 }
 
 describe('catalogue source adapters', () => {
-  it('defines exactly the 13 trusted sources', () => {
+  it('defines 12 active sources and freezes Serious Eats outside ingestion', () => {
     expect(SOURCE_CONFIGS.map((source) => source.host)).toEqual([
       'www.recipetineats.com',
       'www.budgetbytes.com',
@@ -24,11 +25,11 @@ describe('catalogue source adapters', () => {
       'www.skinnytaste.com',
       'pinchofyum.com',
       'natashaskitchen.com',
-      'www.seriouseats.com',
       'akispetretzikis.com',
       'cooking.nytimes.com',
       'www.americastestkitchen.com',
     ]);
+    expect(FROZEN_CATALOGUE_SOURCE_KEYS).toEqual(['seriouseats']);
   });
 
   it('uses every WordPress post sitemap shard and excludes non-post sitemaps', async () => {
@@ -106,12 +107,14 @@ describe('catalogue source adapters', () => {
   });
 
   it('recurses through sitemap indexes and resumes after the durable child cursor', async () => {
-    const config = SOURCE_CONFIGS[9];
+    const config = SOURCE_CONFIGS.find((source) =>
+      source.sourceKey === 'americastestkitchen');
+    if (!config) throw new Error('missing source');
     const request = vi.fn(async (url: string) => {
       if (url === config.discoveryUrl) {
         return response(200, '<sitemapindex><sitemap><loc>https://maps.test/one.xml</loc></sitemap><sitemap><loc>https://maps.test/two.xml</loc></sitemap></sitemapindex>');
       }
-      return response(200, `<urlset><url><loc>https://${config.host}/${url.includes('one') ? 'one-recipe' : 'two-recipe'}</loc></url></urlset>`);
+      return response(200, `<urlset><url><loc>https://${config.host}/recipes/${url.includes('one') ? 'one-recipe' : 'two-recipe'}</loc></url></urlset>`);
     });
     const adapter = createSourceAdapter(config, { request, sleep: vi.fn() });
 
@@ -120,7 +123,7 @@ describe('catalogue source adapters', () => {
     const discovered = [];
     for await (const item of adapter.discover(firstPass[0].cursor)) discovered.push(item.url);
 
-    expect(discovered).toEqual([`https://${config.host}/two-recipe`]);
+    expect(discovered).toEqual([`https://${config.host}/recipes/two-recipe`]);
   });
 
   it('retries transient fetches and marks protected access unsupported without bypassing it', async () => {
@@ -159,6 +162,29 @@ describe('catalogue source adapters', () => {
     });
     expect(sleep).toHaveBeenNthCalledWith(1, 60_000);
     expect(sleep).toHaveBeenNthCalledWith(2, 120_000);
+  });
+
+  it('renders Akis sitemap discovery after a blocked direct request', async () => {
+    const config = SOURCE_CONFIGS.find((source) =>
+      source.sourceKey === 'akispetretzikis');
+    if (!config) throw new Error('missing source');
+    const request = vi.fn().mockResolvedValue(response(403));
+    const renderDiscovery = vi.fn().mockResolvedValue(
+      '<urlset><url><loc>https://akispetretzikis.com/en/recipe/1/test</loc></url></urlset>',
+    );
+    const adapter = createSourceAdapter(config, {
+      request,
+      renderDiscovery,
+      sleep: vi.fn(),
+    });
+
+    const discovered = [];
+    for await (const item of adapter.discover()) discovered.push(item.url);
+
+    expect(discovered).toEqual([
+      'https://akispetretzikis.com/en/recipe/1/test',
+    ]);
+    expect(renderDiscovery).toHaveBeenCalledWith(config.discoveryUrl);
   });
 
   it('renews the lease before and after long rate-limit cooldowns', async () => {

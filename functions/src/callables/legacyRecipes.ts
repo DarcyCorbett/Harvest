@@ -21,7 +21,6 @@ const TRUSTED_HOSTS = new Set([
   'www.skinnytaste.com',
   'pinchofyum.com',
   'natashaskitchen.com',
-  'www.seriouseats.com',
   'akispetretzikis.com',
   'cooking.nytimes.com',
   'www.americastestkitchen.com',

@@ -24,6 +24,7 @@ export interface SourceConfig {
   discoveryUrl: string;
   minDelayMs: number;
   rateLimitCooldownMs?: number;
+  renderDiscoveryOnBlocked?: boolean;
   sitemapChildPattern?: RegExp;
   recipePathPattern?: RegExp;
 }
@@ -43,6 +44,7 @@ export interface SourceAdapterDependencies {
   random?: () => number;
   heartbeat?: () => Promise<void>;
   render?: (url: string) => Promise<string | undefined>;
+  renderDiscovery?: (url: string) => Promise<string | undefined>;
 }
 
 export const WORDPRESS_SOURCE_KEYS = [
@@ -57,6 +59,12 @@ export const WORDPRESS_SOURCE_KEYS = [
   'natashaskitchen',
 ] as const;
 
+export const FROZEN_CATALOGUE_SOURCE_KEYS = ['seriouseats'] as const;
+
+export function isFrozenCatalogueSource(sourceKey: string): boolean {
+  return (FROZEN_CATALOGUE_SOURCE_KEYS as readonly string[]).includes(sourceKey);
+}
+
 const WORDPRESS_POST_SITEMAP = /\/post-sitemap\d*\.xml(?:$|\?)/i;
 
 export const SOURCE_CONFIGS: readonly SourceConfig[] = [
@@ -69,8 +77,7 @@ export const SOURCE_CONFIGS: readonly SourceConfig[] = [
   { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
   { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
   { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
-  { sourceKey: 'seriouseats', host: 'www.seriouseats.com', discoveryUrl: 'https://www.seriouseats.com/sitemap.xml', minDelayMs: 1_500, recipePathPattern: /(?:\/recipes\/|[-/]recipe(?:-\d+)?\/?$)/i },
-  { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500, recipePathPattern: /\/recipes?\//i },
+  { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500, renderDiscoveryOnBlocked: true, recipePathPattern: /\/recipes?\//i },
   { sourceKey: 'nytcooking', host: 'cooking.nytimes.com', discoveryUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
   { sourceKey: 'americastestkitchen', host: 'www.americastestkitchen.com', discoveryUrl: 'https://www.americastestkitchen.com/sitemap.xml', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
 ] as const;
@@ -158,11 +165,15 @@ function retryDelay(
 async function defaultRequest(url: string): Promise<SourceHttpResponse> {
   const response = await fetch(url, {
     headers: {
-      accept: 'text/html,application/xml,text/xml,application/json',
-      'accept-encoding': 'gzip, deflate, br',
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'accept-encoding': 'gzip, deflate',
       'accept-language': 'en-US,en;q=0.9',
       'cache-control': 'no-cache',
-      'user-agent': 'Mozilla/5.0 (compatible; MealWizardCatalogue/1.0; +private recipe catalogue)',
+      'sec-fetch-dest': 'document',
+      'sec-fetch-mode': 'navigate',
+      'sec-fetch-site': 'none',
+      'upgrade-insecure-requests': '1',
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     },
     redirect: 'follow',
     signal: AbortSignal.timeout(30_000),
@@ -186,6 +197,30 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
       return defaultRequest(url);
     },
     sleep,
+    async renderDiscovery(url) {
+      const { chromium } = await import('playwright');
+      const browser = await chromium.launch({ headless: true });
+      try {
+        const page = await browser.newPage({
+          locale: 'en-US',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        });
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 45_000,
+        });
+        await page.waitForFunction(() => {
+          const value = `${document.documentElement.outerHTML}\n${document.body?.innerText ?? ''}`;
+          return /<(?:sitemapindex|urlset)[\s>]/i.test(value);
+        }, undefined, { timeout: 45_000 }).catch(() => undefined);
+        const html = await page.content();
+        if (/<(?:sitemapindex|urlset)[\s>]/i.test(html)) return html;
+        const text = await page.locator('body').innerText().catch(() => '');
+        return /<(?:sitemapindex|urlset)[\s>]/i.test(text) ? text : undefined;
+      } finally {
+        await browser.close();
+      }
+    },
     async render(url) {
       const { chromium } = await import('playwright');
       const browser = await chromium.launch({ headless: true });
@@ -262,8 +297,20 @@ export function createSourceAdapter(
     return last as SourceHttpResponse;
   };
 
+  const requestDiscovery = async (url: string): Promise<SourceHttpResponse> => {
+    const response = await requestWithRetries(url);
+    if (response.status !== 403 || !config.renderDiscoveryOnBlocked
+      || !dependencies.renderDiscovery) {
+      return response;
+    }
+    const rendered = await dependencies.renderDiscovery(url);
+    return rendered
+      ? { status: 200, body: rendered, headers: {} }
+      : response;
+  };
+
   async function* discover(cursor?: string): AsyncIterable<DiscoveredUrl> {
-    const root = await requestWithRetries(config.discoveryUrl);
+    const root = await requestDiscovery(config.discoveryUrl);
     if (root.status !== 200) throw new Error(`Discovery failed with HTTP ${root.status}`);
     const allChildren = sitemapChildren(root.body);
     const children = config.sitemapChildPattern
@@ -283,7 +330,7 @@ export function createSourceAdapter(
       }
       const response = sitemapUrl === config.discoveryUrl
         ? root
-        : await requestWithRetries(sitemapUrl);
+        : await requestDiscovery(sitemapUrl);
       if (response.status !== 200) throw new Error(`Discovery failed with HTTP ${response.status}`);
 
       const discoveredUrls = sitemapUrls(response.body);

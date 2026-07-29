@@ -16,7 +16,6 @@
  *
  * Usage:
  *   npx tsx scripts/buildRecipeIndex.ts --site akispetretzikis.com
- *   npx tsx scripts/buildRecipeIndex.ts --site www.seriouseats.com
  *   npx tsx scripts/buildRecipeIndex.ts --site cooking.nytimes.com
  */
 
@@ -43,15 +42,6 @@ const SITE_CONFIGS: Record<string, SiteConfig> = {
     site: 'akispetretzikis.com',
     rootUrl: 'https://akispetretzikis.com/sitemap.xml',
     urlPattern: /\/en\/recipe\/\d+\//,
-  },
-  'www.seriouseats.com': {
-    site: 'www.seriouseats.com',
-    rootUrl: 'https://www.seriouseats.com/sitemap.xml',
-    // SE recipe slugs end in a numeric internal ID like -11969711.
-    // Category pages also have suffixes like -5117985 (smaller IDs); we cast
-    // a wide net here and rely on Phase B to validate that fetched pages
-    // actually contain a JSON-LD Recipe block before tagging.
-    urlPattern: /-\d{6,}$/,
   },
   'cooking.nytimes.com': {
     site: 'cooking.nytimes.com',

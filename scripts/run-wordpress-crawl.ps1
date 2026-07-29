@@ -30,7 +30,6 @@ $allowedSources = @(
   'skinnytaste',
   'pinchofyum',
   'natashaskitchen',
-  'seriouseats',
   'akispetretzikis',
   'nytcooking',
   'americastestkitchen'

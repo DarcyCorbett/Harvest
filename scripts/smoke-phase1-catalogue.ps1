@@ -11,9 +11,9 @@ $stamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss')
 $firstRun = "phase1-smoke-$stamp-first"
 $secondRun = "phase1-smoke-$stamp-second"
 $recipeTin = 'https://www.recipetineats.com/poulet-roti-french-roast-chicken/'
-$seriousEats = 'https://www.seriouseats.com/the-best-roast-potatoes-ever-recipe'
-$targets = "recipetineats=$recipeTin,seriouseats=$seriousEats"
-$baseArguments = "^~^--source~recipetineats,seriouseats~--target~$targets~--write-cap~25~--max-per-source~1"
+$akis = 'https://akispetretzikis.com/en/recipe/9777/garidomakaronada-me-garides-saganaki'
+$targets = "recipetineats=$recipeTin,akispetretzikis=$akis"
+$baseArguments = "^~^--source~recipetineats,akispetretzikis~--target~$targets~--write-cap~25~--max-per-source~1"
 
 Invoke-CheckedNativeCommand -Command 'gcloud' -Arguments @('run', 'jobs', 'execute', $JobName, "--region=$Region", "--project=$ProjectId", '--wait', "--args=$baseArguments~--force-refresh~--run-id~$firstRun")
 Invoke-CheckedNativeCommand -Command 'gcloud' -Arguments @('run', 'jobs', 'execute', $JobName, "--region=$Region", "--project=$ProjectId", '--wait', "--args=$baseArguments~--run-id~$secondRun")

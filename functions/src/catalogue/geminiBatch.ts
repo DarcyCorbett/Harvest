@@ -14,6 +14,7 @@ import { classifyStoredRecipe } from './backfill.js';
 import type { StoredRecipeClassifier } from './backfill.js';
 import type { CatalogueBudget } from './ingestion.js';
 import { hasDisplayContent } from './snapshotFirestore.js';
+import { isFrozenCatalogueSource } from './sourceAdapters.js';
 
 export const GEMINI_BATCH_MODEL = 'gemini-3.1-flash-lite';
 export const MAX_BATCH_RECIPES = 5_000;
@@ -69,7 +70,8 @@ function isCompleteRecipe(value: unknown): value is CompleteCanonicalRecipeV2 {
 }
 
 export function recipeRequiresAi(recipe: CompleteCanonicalRecipeV2): boolean {
-  return hasDisplayContent(recipe)
+  return !isFrozenCatalogueSource(recipe.source.key)
+    && hasDisplayContent(recipe)
     && (recipe.effective.mealTypes.length === 0 || recipe.effective.cuisines.length === 0);
 }
 
