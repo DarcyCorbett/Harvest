@@ -187,6 +187,28 @@ describe('catalogue source adapters', () => {
     expect(renderDiscovery).toHaveBeenCalledWith(config.discoveryUrl);
   });
 
+  it('renders an Akis recipe page after a blocked direct request', async () => {
+    const config = SOURCE_CONFIGS.find((source) =>
+      source.sourceKey === 'akispetretzikis');
+    if (!config) throw new Error('missing source');
+    const request = vi.fn().mockResolvedValue(response(403));
+    const render = vi.fn().mockResolvedValue(
+      '<script type="application/ld+json">{"@type":"Recipe"}</script>',
+    );
+    const adapter = createSourceAdapter(config, {
+      request,
+      render,
+      sleep: vi.fn(),
+    });
+    const url = 'https://akispetretzikis.com/en/recipe/1/test';
+
+    await expect(adapter.fetch(url)).resolves.toEqual({
+      kind: 'ok',
+      html: '<script type="application/ld+json">{"@type":"Recipe"}</script>',
+    });
+    expect(render).toHaveBeenCalledWith(url);
+  });
+
   it('renews the lease before and after long rate-limit cooldowns', async () => {
     const request = vi.fn()
       .mockResolvedValueOnce(response(429, '', { 'retry-after': '60' }))
