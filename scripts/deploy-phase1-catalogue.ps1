@@ -67,23 +67,41 @@ if (Test-GcloudResource -Arguments @('run', 'jobs', 'describe', $JobName, "--reg
 
 gcloud run jobs add-iam-policy-binding $JobName --region=$Region --project=$ProjectId --member="serviceAccount:$schedulerAccount" --role=roles/run.invoker --quiet
 
-$schedulerFlags = @(
-  '--location=europe-west1',
-  "--project=$ProjectId",
-  '--schedule=0 3 * * 0',
-  '--time-zone=Asia/Nicosia',
-  "--uri=$runUri",
-  '--http-method=POST',
-  '--headers=Content-Type=application/json',
-  '--message-body={"overrides":{"containerOverrides":[{"args":["weekly-new"]}]}}',
-  "--oauth-service-account-email=$schedulerAccount"
+$schedulerBodyPath = Join-Path ([System.IO.Path]::GetTempPath()) "mealwizard-scheduler-$PID.json"
+[System.IO.File]::WriteAllText(
+  $schedulerBodyPath,
+  '{"overrides":{"containerOverrides":[{"args":["weekly-new"]}]}}',
+  [System.Text.UTF8Encoding]::new($false)
 )
-if (Test-GcloudResource -Arguments @('scheduler', 'jobs', 'describe', $SchedulerName, '--location=europe-west1', "--project=$ProjectId")) {
-  gcloud scheduler jobs update http $SchedulerName @schedulerFlags
-} else {
-  gcloud scheduler jobs create http $SchedulerName @schedulerFlags
+try {
+  $schedulerFlags = @(
+    '--location=europe-west1',
+    "--project=$ProjectId",
+    '--schedule=0 3 * * 0',
+    '--time-zone=Asia/Nicosia',
+    "--uri=$runUri",
+    '--http-method=POST',
+    "--message-body-from-file=$schedulerBodyPath",
+    "--oauth-service-account-email=$schedulerAccount"
+  )
+  if (Test-GcloudResource -Arguments @('scheduler', 'jobs', 'describe', $SchedulerName, '--location=europe-west1', "--project=$ProjectId")) {
+    Invoke-CheckedNativeCommand -Command 'gcloud.cmd' -Arguments (@(
+      'scheduler', 'jobs', 'update', 'http', $SchedulerName,
+      '--update-headers=Content-Type=application/json'
+    ) + $schedulerFlags)
+  } else {
+    Invoke-CheckedNativeCommand -Command 'gcloud.cmd' -Arguments (@(
+      'scheduler', 'jobs', 'create', 'http', $SchedulerName,
+      '--headers=Content-Type=application/json'
+    ) + $schedulerFlags)
+  }
+} finally {
+  Remove-Item -LiteralPath $schedulerBodyPath -Force -ErrorAction SilentlyContinue
 }
-gcloud scheduler jobs pause $SchedulerName --location=europe-west1 --project=$ProjectId
+Invoke-CheckedNativeCommand -Command 'gcloud.cmd' -Arguments @(
+  'scheduler', 'jobs', 'pause', $SchedulerName,
+  '--location=europe-west1', "--project=$ProjectId"
+)
 
 Invoke-CheckedNativeCommand -Command 'npx.cmd' -Arguments @('firebase-tools', 'deploy', '--only', 'functions:selectCatalogueRecipes,functions:updateCanonicalRecipeMetadata,firestore:rules,firestore:indexes', "--project=$ProjectId")
 Invoke-CheckedNativeCommand -Command 'node' -Arguments @('scripts/setCatalogueConfig.mjs', '--project', $ProjectId)
