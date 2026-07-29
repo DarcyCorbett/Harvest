@@ -10,15 +10,36 @@ import {
 
 type ParsedCatalogueRecipe = Pick<CompleteCanonicalRecipeV2, 'content' | 'sourceMetadata'>;
 
-function text(value: unknown): string {
-  if (typeof value !== 'string') return '';
+export type CatalogueParseFailureReason =
+  | 'non-recipe-page'
+  | 'missing-recipe-markup'
+  | 'missing-display-content'
+  | 'unsupported-markup';
+
+export class CatalogueParseError extends Error {
+  constructor(public readonly reasonCode: CatalogueParseFailureReason, detail?: string) {
+    super(detail ?? reasonCode);
+    this.name = 'CatalogueParseError';
+  }
+}
+
+function decodeEntities(value: string): string {
   return value
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#(\d+);/g, (_match, code: string) =>
+      String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 16)))
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ')
+    .replace(/&nbsp;/g, ' ');
+}
+
+function text(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return decodeEntities(value
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -42,10 +63,12 @@ function visitJsonLd(value: unknown, recipes: Record<string, unknown>[]): void {
   if (!value || typeof value !== 'object') return;
   const node = value as Record<string, unknown>;
   if (hasType(node, 'Recipe')) recipes.push(node);
-  if (node['@graph']) visitJsonLd(node['@graph'], recipes);
+  for (const nested of Object.values(node)) {
+    if (nested && typeof nested === 'object') visitJsonLd(nested, recipes);
+  }
 }
 
-function recipeNode(html: string): Record<string, unknown> | undefined {
+function jsonLdRecipeNode(html: string): Record<string, unknown> | undefined {
   const recipes: Record<string, unknown>[] = [];
   const scripts = html.matchAll(
     /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
@@ -58,6 +81,102 @@ function recipeNode(html: string): Record<string, unknown> | undefined {
     }
   }
   return recipes[0];
+}
+
+function embeddedStateRecipeNode(html: string): Record<string, unknown> | undefined {
+  const recipes: Record<string, unknown>[] = [];
+  const scripts = html.matchAll(
+    /<script\b[^>]*(?:id=["']__NEXT_DATA__["']|type=["']application\/json["'])[^>]*>([\s\S]*?)<\/script>/gi,
+  );
+  for (const match of scripts) {
+    try {
+      visitJsonLd(JSON.parse(decodeEntities(match[1].trim())), recipes);
+    } catch {
+      // Ignore unrelated or malformed public state blocks.
+    }
+  }
+  return recipes[0];
+}
+
+function attribute(tag: string, name: string): string | undefined {
+  const match = new RegExp(`\\b${name}=["']([^"']+)["']`, 'i').exec(tag);
+  return match ? decodeEntities(match[1]) : undefined;
+}
+
+function itemPropValues(html: string, property: string): string[] {
+  const values: string[] = [];
+  const pattern = new RegExp(
+    `<([a-z0-9:-]+)\\b([^>]*\\bitemprop=["'][^"']*\\b${property}\\b[^"']*["'][^>]*)>([\\s\\S]*?)<\\/\\1>|<([a-z0-9:-]+)\\b([^>]*\\bitemprop=["'][^"']*\\b${property}\\b[^"']*["'][^>]*)\\/?>`,
+    'gi',
+  );
+  for (const match of html.matchAll(pattern)) {
+    const tag = `<${match[1] ?? match[4]} ${match[2] ?? match[5]}>`;
+    const value = attribute(tag, 'content')
+      ?? attribute(tag, 'datetime')
+      ?? attribute(tag, 'href')
+      ?? attribute(tag, 'src')
+      ?? text(match[3]);
+    if (value?.trim()) values.push(value.trim());
+  }
+  return values;
+}
+
+function classValues(html: string, className: string): string[] {
+  const values: string[] = [];
+  const pattern = new RegExp(
+    `<([a-z0-9:-]+)\\b[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/\\1>`,
+    'gi',
+  );
+  for (const match of html.matchAll(pattern)) {
+    const value = text(match[2]);
+    if (value) values.push(value);
+  }
+  return values;
+}
+
+function markupRecipeNode(html: string): Record<string, unknown> | undefined {
+  const hasRecipeMicrodata = /\bitemtype=["'][^"']*schema\.org\/Recipe/i.test(html);
+  const plugin = /\b(?:wprm-recipe|tasty-recipes)\b/i.test(html);
+  if (!hasRecipeMicrodata && !plugin) return undefined;
+
+  const wprm = /\bwprm-recipe\b/i.test(html);
+  const tasty = /\btasty-recipes\b/i.test(html);
+  const first = (...groups: string[][]): string | undefined => groups.flat().find(Boolean);
+  const name = first(
+    itemPropValues(html, 'name'),
+    wprm ? classValues(html, 'wprm-recipe-name') : [],
+    tasty ? classValues(html, 'tasty-recipes-title') : [],
+  );
+  const ingredients = [
+    ...itemPropValues(html, 'recipeIngredient'),
+    ...(wprm ? classValues(html, 'wprm-recipe-ingredient') : []),
+    ...(tasty ? classValues(html, 'ingredient') : []),
+  ];
+  const instructions = [
+    ...itemPropValues(html, 'recipeInstructions'),
+    ...(wprm ? classValues(html, 'wprm-recipe-instruction-text') : []),
+    ...(tasty ? classValues(html, 'instruction') : []),
+  ];
+  return {
+    '@type': 'Recipe',
+    name,
+    recipeIngredient: [...new Set(ingredients)],
+    recipeInstructions: [...new Set(instructions)],
+    recipeYield: first(itemPropValues(html, 'recipeYield')),
+    prepTime: first(itemPropValues(html, 'prepTime')),
+    cookTime: first(itemPropValues(html, 'cookTime')),
+    totalTime: first(itemPropValues(html, 'totalTime')),
+    image: first(itemPropValues(html, 'image')),
+    recipeCategory: itemPropValues(html, 'recipeCategory'),
+    recipeCuisine: itemPropValues(html, 'recipeCuisine'),
+    keywords: itemPropValues(html, 'keywords'),
+  };
+}
+
+function recipeNode(html: string): Record<string, unknown> | undefined {
+  return jsonLdRecipeNode(html)
+    ?? markupRecipeNode(html)
+    ?? embeddedStateRecipeNode(html);
 }
 
 export function parseIsoDurationMinutes(value: unknown): number | undefined {
@@ -152,16 +271,27 @@ function modifiers(tags: readonly string[]): Modifier[] {
 
 export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCatalogueRecipe {
   const node = recipeNode(html);
-  if (!node) throw new Error('Recipe JSON-LD was not found');
+  if (!node) {
+    const hasRecipeSignal = /\b(?:recipe|wprm|tasty-recipes|schema\.org\/Recipe)\b/i.test(html);
+    throw new CatalogueParseError(
+      hasRecipeSignal ? 'missing-recipe-markup' : 'non-recipe-page',
+    );
+  }
 
   const title = text(node.name ?? node.headline);
-  if (!title) throw new Error('Recipe JSON-LD is missing a title');
+  if (!title) {
+    throw new CatalogueParseError('missing-display-content', 'Recipe is missing a title');
+  }
 
   const ingredients = values(node.recipeIngredient).map((name) => ({ name }));
-  if (ingredients.length === 0) throw new Error('Recipe JSON-LD is missing ingredients');
+  if (ingredients.length === 0) {
+    throw new CatalogueParseError('missing-display-content', 'Recipe is missing ingredients');
+  }
 
   const instructions = instructionSteps(node.recipeInstructions);
-  if (instructions.length === 0) throw new Error('Recipe JSON-LD is missing instructions');
+  if (instructions.length === 0) {
+    throw new CatalogueParseError('missing-display-content', 'Recipe is missing instructions');
+  }
 
   const tags = normalizedTags(node);
   const prepMinutes = parseIsoDurationMinutes(node.prepTime);

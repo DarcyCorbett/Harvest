@@ -12,7 +12,7 @@ import {
   validateReadyRecipe,
   type CompleteCanonicalRecipeV2,
 } from './domain.js';
-import { parseCatalogueRecipe } from './parser.js';
+import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
 import type { RecipeSourceAdapter } from './sourceAdapters.js';
 
 const CHECKPOINT_COLLECTION = 'catalogueBackfillCheckpoints';
@@ -143,17 +143,28 @@ export async function runSourceRefreshCanaries(options: {
   adapters: RecipeSourceAdapter[];
   now: () => Date;
   samplesPerSource?: number;
-  candidateMode?: 'unresolved' | 'any';
+  candidateMode?: 'unresolved' | 'any' | 'snapshot';
 }): Promise<{ mode: 'refresh-canary'; bySource: Record<string, SourceCanarySummary> }> {
   const sampleLimit = options.samplesPerSource ?? 5;
-  if (!Number.isInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 5) {
+  if (!Number.isInteger(sampleLimit) || sampleLimit < 1 || sampleLimit > 10) {
     throw new Error('Invalid source canary sample limit');
   }
   const db = getFirestore();
   const candidates = new Map<string, string[]>();
+  const priorFailures = new Map<string, string[]>();
   await forEachV2Recipe((document) => {
     const status = document.get('status');
-    if (options.candidateMode === 'any') {
+    if (options.candidateMode === 'snapshot'
+      && status !== 'ready' && status !== 'review') {
+      const sourceKey = document.get('source.key');
+      const url = document.get('source.canonicalUrl');
+      if (typeof sourceKey !== 'string' || typeof url !== 'string') return;
+      const values = priorFailures.get(sourceKey) ?? [];
+      if (values.length < sampleLimit) values.push(url);
+      priorFailures.set(sourceKey, values);
+      return;
+    }
+    if (options.candidateMode === 'any' || options.candidateMode === 'snapshot') {
       if (status !== 'ready' && status !== 'review') return;
     } else if (status !== 'review'
       || (document.get('classification.parserVersion') ?? 0) !== 0) {
@@ -169,7 +180,20 @@ export async function runSourceRefreshCanaries(options: {
 
   const bySource: Record<string, SourceCanarySummary> = {};
   for (const adapter of options.adapters) {
-    const urls = candidates.get(adapter.sourceKey) ?? [];
+    const urls = [
+      ...(priorFailures.get(adapter.sourceKey) ?? []),
+      ...(candidates.get(adapter.sourceKey) ?? []),
+    ].filter((url, index, all) => all.indexOf(url) === index).slice(0, sampleLimit);
+    if (options.candidateMode === 'snapshot' && urls.length < sampleLimit) {
+      try {
+        for await (const discovered of adapter.discover()) {
+          if (!urls.includes(discovered.url)) urls.push(discovered.url);
+          if (urls.length >= sampleLimit) break;
+        }
+      } catch {
+        // Existing samples can still establish whether public fallbacks work.
+      }
+    }
     const outcomes: SourceCanaryOutcome[] = [];
     const reasons = new Set<string>();
     for (const url of urls) {
@@ -177,11 +201,23 @@ export async function runSourceRefreshCanaries(options: {
         const fetched = await adapter.fetch(url);
         if (fetched.kind === 'ok') {
           try {
-            parseCatalogueRecipe(fetched.html, url);
+            try {
+              parseCatalogueRecipe(fetched.html, url);
+            } catch (initialError) {
+              if (!adapter.render || initialError instanceof CatalogueParseError
+                && initialError.reasonCode === 'non-recipe-page') {
+                throw initialError;
+              }
+              const rendered = await adapter.render(url);
+              if (!rendered) throw initialError;
+              parseCatalogueRecipe(rendered, url);
+            }
             outcomes.push('success');
           } catch (error) {
             outcomes.push('invalid');
-            reasons.add(`parse-${boundedReason(error)}`);
+            reasons.add(error instanceof CatalogueParseError
+              ? error.reasonCode
+              : `parse-${boundedReason(error)}`);
           }
         } else if (fetched.kind === 'unsupported') {
           outcomes.push('protected');

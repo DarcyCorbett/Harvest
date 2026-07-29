@@ -44,6 +44,21 @@ describe('manifest refresh decisions', () => {
     expect(shouldRefreshManifestEntry(permanent, { parserVersion: 3, now: new Date() })).toBe(false);
     expect(shouldRefreshManifestEntry(permanent, { parserVersion: 3, force: true, now: new Date() })).toBe(true);
   });
+
+  it('retries invalid entries and retryable entries only when their backoff is due', () => {
+    expect(shouldRefreshManifestEntry(
+      { ...entry, state: 'invalid' },
+      { parserVersion: 2, now: new Date('2026-07-01T00:00:00.000Z') },
+    )).toBe(true);
+    expect(shouldRefreshManifestEntry(
+      { ...entry, state: 'retryable', nextRetryAt: '2026-07-02T00:00:00.000Z' },
+      { parserVersion: 2, now: new Date('2026-07-01T00:00:00.000Z') },
+    )).toBe(false);
+    expect(shouldRefreshManifestEntry(
+      { ...entry, state: 'retryable', nextRetryAt: '2026-07-02T00:00:00.000Z' },
+      { parserVersion: 2, now: new Date('2026-07-03T00:00:00.000Z') },
+    )).toBe(true);
+  });
 });
 
 describe('renewable ingestion lease', () => {

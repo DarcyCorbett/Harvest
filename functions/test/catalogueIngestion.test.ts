@@ -105,6 +105,38 @@ describe('catalogue ingestion engine', () => {
     expect(recipeStore.writeComplete).not.toHaveBeenCalled();
   });
 
+  it('never refetches an existing displayable recipe during a snapshot crawl', async () => {
+    const url = 'https://www.recipetineats.com/existing';
+    const fetch = vi.fn();
+    const source = adapter('recipetineats', [url], fetch);
+    const key = canonicalRecipeId(url);
+    const { injected, recipeStore } = dependencies([source], {
+      recipetineats: {
+        sourceKey: 'recipetineats',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        entries: {
+          [key]: {
+            urlHash: key,
+            sourceLastModified: '2025-01-01',
+            parserVersion: 0,
+            lastFetchedAt: '2025-01-01T00:00:00.000Z',
+            state: 'ready',
+          },
+        },
+      },
+    });
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'snapshot-existing',
+      snapshotMode: true,
+      parserVersion: 2,
+    });
+
+    expect(result.metrics).toMatchObject({ unchanged: 1, fetched: 0, written: 0 });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(recipeStore.writeComplete).not.toHaveBeenCalled();
+  });
+
   it('recovers a missing manifest entry from Firestore without refetching the recipe', async () => {
     const url = 'https://www.recipetineats.com/recovered';
     const fetch = vi.fn();
@@ -248,7 +280,7 @@ describe('catalogue ingestion engine', () => {
 
     expect(operational).toEqual([expect.objectContaining({
       status: 'disabled',
-      reasonCode: 'unsupported-403',
+      reasonCode: 'protected-access',
     })]);
     expect(result.metrics).toMatchObject({ permanentSkipped: 1 });
   });
@@ -407,6 +439,60 @@ describe('ingestion refresh merging', () => {
     expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
     expect(merged.ingestion.lastChangedAt).toBe('2026-07-20T00:00:00.000Z');
     expect(merged.classification.parserVersion).toBe(1);
+  });
+
+  it('preserves valid stored classification while filling incomplete display content', () => {
+    const existingMetadata = {
+      totalMinutes: 30,
+      mealTypes: ['dinner'] as const,
+      cuisines: ['italian'] as const,
+      modifiers: ['vegetarian'] as const,
+    };
+    const effective = buildEffectiveMetadata(existingMetadata);
+    const existing = {
+      schemaVersion: 2,
+      id: 'id',
+      status: 'review',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: { title: 'Old', originalServings: 4, ingredients: [{ name: 'Pasta' }], instructions: [{ text: 'Cook.' }] },
+      sourceMetadata: existingMetadata,
+      effective,
+      search: buildSearchFields(effective, ['Pasta'], 0.1),
+      classification: {
+        parserVersion: 0,
+        classifierVersion: 1,
+        taxonomyVersion: 1,
+        sources: { mealTypes: 'ai' as const, cuisines: 'ai' as const, modifiers: 'ai' as const },
+        complete: true,
+      },
+      ingestion: { contentHash: 'old' },
+    } satisfies CompleteCanonicalRecipeV2;
+    const incoming = {
+      ...existing,
+      sourceMetadata: { totalMinutes: 35, mealTypes: [], cuisines: [], modifiers: [] },
+      classification: {
+        ...existing.classification,
+        parserVersion: 2,
+        classifierVersion: 0,
+        sources: { mealTypes: 'rule' as const, cuisines: 'rule' as const, modifiers: 'rule' as const },
+        complete: false,
+      },
+    };
+
+    const merged = mergeIngestedRecipe(existing, incoming);
+
+    expect(merged.sourceMetadata).toMatchObject({
+      totalMinutes: 35,
+      mealTypes: ['dinner'],
+      cuisines: ['italian'],
+      modifiers: ['vegetarian'],
+    });
+    expect(merged.classification.sources).toMatchObject({
+      mealTypes: 'ai',
+      cuisines: 'ai',
+      modifiers: 'ai',
+    });
+    expect(merged.classification.classifierVersion).toBe(1);
   });
 
   it('does not change lastChangedAt when refreshed content is unchanged', () => {

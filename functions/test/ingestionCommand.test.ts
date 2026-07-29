@@ -74,6 +74,33 @@ describe('ingestion command arguments', () => {
     ])).toThrow('Invalid ingestion arguments');
   });
 
+  it('supports all-source snapshot, cost-gated batch, and weekly modes', () => {
+    expect(parseIngestionArguments([
+      'snapshot-crawl',
+      '--source', 'seriouseats,nytcooking',
+      '--write-cap', '18000',
+      '--run-id', 'snapshot-1',
+    ])).toMatchObject({
+      mode: 'snapshot-crawl',
+      sourceKeys: ['seriouseats', 'nytcooking'],
+      writeCap: 18000,
+    });
+    expect(parseIngestionArguments([
+      'tag-batch-submit',
+      '--confirm-paid-batch',
+    ])).toEqual({
+      mode: 'tag-batch-submit',
+      confirmPaidBatch: true,
+    });
+    expect(parseIngestionArguments([
+      'weekly-new',
+      '--write-cap', '17500',
+      '--gemini-call-cap', '500',
+    ])).toMatchObject({ mode: 'weekly-new', writeCap: 17500, geminiCallCap: 500 });
+    expect(() => parseIngestionArguments(['tag-batch-submit'])).toThrow();
+    expect(() => parseIngestionArguments(['weekly-new', '--write-cap', '18000'])).toThrow();
+  });
+
   it.each([
     ['--write-cap', '18001'],
     ['--write-cap', '-1'],

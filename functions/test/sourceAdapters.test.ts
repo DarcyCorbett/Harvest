@@ -111,7 +111,7 @@ describe('catalogue source adapters', () => {
       if (url === config.discoveryUrl) {
         return response(200, '<sitemapindex><sitemap><loc>https://maps.test/one.xml</loc></sitemap><sitemap><loc>https://maps.test/two.xml</loc></sitemap></sitemapindex>');
       }
-      return response(200, `<urlset><url><loc>https://${config.host}/${url.includes('one') ? 'one' : 'two'}</loc></url></urlset>`);
+      return response(200, `<urlset><url><loc>https://${config.host}/${url.includes('one') ? 'one-recipe' : 'two-recipe'}</loc></url></urlset>`);
     });
     const adapter = createSourceAdapter(config, { request, sleep: vi.fn() });
 
@@ -120,7 +120,7 @@ describe('catalogue source adapters', () => {
     const discovered = [];
     for await (const item of adapter.discover(firstPass[0].cursor)) discovered.push(item.url);
 
-    expect(discovered).toEqual([`https://${config.host}/two`]);
+    expect(discovered).toEqual([`https://${config.host}/two-recipe`]);
   });
 
   it('retries transient fetches and marks protected access unsupported without bypassing it', async () => {
@@ -161,6 +161,23 @@ describe('catalogue source adapters', () => {
     expect(sleep).toHaveBeenNthCalledWith(2, 120_000);
   });
 
+  it('renews the lease before and after long rate-limit cooldowns', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce(response(429, '', { 'retry-after': '60' }))
+      .mockResolvedValueOnce(response(200, '<html>ok</html>'));
+    const heartbeat = vi.fn().mockResolvedValue(undefined);
+    const adapter = createSourceAdapter(SOURCE_CONFIGS[4], {
+      request,
+      sleep: vi.fn().mockResolvedValue(undefined),
+      heartbeat,
+      random: () => 0.5,
+    });
+
+    await expect(adapter.fetch('https://www.spendwithpennies.com/recipe'))
+      .resolves.toMatchObject({ kind: 'ok' });
+    expect(heartbeat).toHaveBeenCalledTimes(2);
+  });
+
   it('cools down after a final configured HTTP 429 before yielding to the engine', async () => {
     const request = vi.fn().mockResolvedValue(response(429));
     const sleep = vi.fn().mockResolvedValue(undefined);
@@ -173,7 +190,7 @@ describe('catalogue source adapters', () => {
       kind: 'retryable',
       status: 429,
     });
-    expect(sleep).toHaveBeenNthCalledWith(3, 180_000);
+    expect(sleep).toHaveBeenNthCalledWith(3, 240_000);
   });
 
   it('retries network failures and maps exhausted attempts to retryable state', async () => {

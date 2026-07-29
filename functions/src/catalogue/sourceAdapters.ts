@@ -25,6 +25,7 @@ export interface SourceConfig {
   minDelayMs: number;
   rateLimitCooldownMs?: number;
   sitemapChildPattern?: RegExp;
+  recipePathPattern?: RegExp;
 }
 
 export interface RecipeSourceAdapter {
@@ -32,11 +33,16 @@ export interface RecipeSourceAdapter {
   discover(cursor?: string): AsyncIterable<DiscoveredUrl>;
   canonicalize(url: string): string;
   fetch(url: string): Promise<SourceFetchResult>;
+  render?(url: string): Promise<string | undefined>;
+  setHeartbeat?(heartbeat: () => Promise<void>): void;
 }
 
 export interface SourceAdapterDependencies {
   request(url: string): Promise<SourceHttpResponse>;
   sleep(milliseconds: number): Promise<void>;
+  random?: () => number;
+  heartbeat?: () => Promise<void>;
+  render?: (url: string) => Promise<string | undefined>;
 }
 
 export const WORDPRESS_SOURCE_KEYS = [
@@ -54,19 +60,19 @@ export const WORDPRESS_SOURCE_KEYS = [
 const WORDPRESS_POST_SITEMAP = /\/post-sitemap\d*\.xml(?:$|\?)/i;
 
 export const SOURCE_CONFIGS: readonly SourceConfig[] = [
-  { sourceKey: 'recipetineats', host: 'www.recipetineats.com', discoveryUrl: 'https://www.recipetineats.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'budgetbytes', host: 'www.budgetbytes.com', discoveryUrl: 'https://www.budgetbytes.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'thewoksoflife', host: 'thewoksoflife.com', discoveryUrl: 'https://thewoksoflife.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'themediterraneandish', host: 'www.themediterraneandish.com', discoveryUrl: 'https://www.themediterraneandish.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/sitemap_index.xml', minDelayMs: 10_000, rateLimitCooldownMs: 60_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'cafedelites', host: 'cafedelites.com', discoveryUrl: 'https://cafedelites.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP },
-  { sourceKey: 'seriouseats', host: 'www.seriouseats.com', discoveryUrl: 'https://www.seriouseats.com/sitemap.xml', minDelayMs: 1_500 },
-  { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500 },
-  { sourceKey: 'nytcooking', host: 'cooking.nytimes.com', discoveryUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz', minDelayMs: 2_000 },
-  { sourceKey: 'americastestkitchen', host: 'www.americastestkitchen.com', discoveryUrl: 'https://www.americastestkitchen.com/sitemap.xml', minDelayMs: 2_000 },
+  { sourceKey: 'recipetineats', host: 'www.recipetineats.com', discoveryUrl: 'https://www.recipetineats.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/|about(?:\/|$)|privacy(?:\/|$))[^/]+\/?$/i },
+  { sourceKey: 'budgetbytes', host: 'www.budgetbytes.com', discoveryUrl: 'https://www.budgetbytes.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'thewoksoflife', host: 'thewoksoflife.com', discoveryUrl: 'https://thewoksoflife.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'themediterraneandish', host: 'www.themediterraneandish.com', discoveryUrl: 'https://www.themediterraneandish.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'spendwithpennies', host: 'www.spendwithpennies.com', discoveryUrl: 'https://www.spendwithpennies.com/sitemap_index.xml', minDelayMs: 10_000, rateLimitCooldownMs: 60_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'cafedelites', host: 'cafedelites.com', discoveryUrl: 'https://cafedelites.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
+  { sourceKey: 'seriouseats', host: 'www.seriouseats.com', discoveryUrl: 'https://www.seriouseats.com/sitemap.xml', minDelayMs: 1_500, recipePathPattern: /(?:\/recipes\/|[-/]recipe(?:-\d+)?\/?$)/i },
+  { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500, recipePathPattern: /\/recipes?\//i },
+  { sourceKey: 'nytcooking', host: 'cooking.nytimes.com', discoveryUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
+  { sourceKey: 'americastestkitchen', host: 'www.americastestkitchen.com', discoveryUrl: 'https://www.americastestkitchen.com/sitemap.xml', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
 ] as const;
 
 function decodeXml(value: string): string {
@@ -131,25 +137,32 @@ function retryDelay(
   response: SourceHttpResponse,
   attempt: number,
   rateLimitCooldownMs?: number,
+  random: () => number = Math.random,
 ): number {
-  const retryAfter = Number(header(response, 'retry-after'));
-  if (response.status === 429 && rateLimitCooldownMs) {
-    const configured = rateLimitCooldownMs * (attempt + 1);
-    const advertised = Number.isFinite(retryAfter) && retryAfter >= 0
-      ? retryAfter * 1_000
+  const retryAfterValue = header(response, 'retry-after');
+  const retryAfterSeconds = Number(retryAfterValue);
+  const retryAfterDate = retryAfterValue ? Date.parse(retryAfterValue) : Number.NaN;
+  const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
+    ? retryAfterSeconds * 1_000
+    : Number.isFinite(retryAfterDate)
+      ? Math.max(0, retryAfterDate - Date.now())
       : 0;
-    return Math.min(15 * 60_000, Math.max(configured, advertised));
+  const jitter = 0.8 + random() * 0.4;
+  if (response.status === 429 && rateLimitCooldownMs) {
+    const configured = rateLimitCooldownMs * (2 ** attempt);
+    return Math.min(15 * 60_000, Math.ceil(Math.max(configured, retryAfterMs) * jitter));
   }
-  return Number.isFinite(retryAfter) && retryAfter >= 0
-    ? retryAfter * 1_000
-    : Math.min(30_000, 1_000 * (2 ** attempt));
+  return Math.ceil((retryAfterMs || Math.min(30_000, 1_000 * (2 ** attempt))) * jitter);
 }
 
 async function defaultRequest(url: string): Promise<SourceHttpResponse> {
   const response = await fetch(url, {
     headers: {
       accept: 'text/html,application/xml,text/xml,application/json',
-      'user-agent': 'MealWizardCatalogue/1.0 (+private recipe catalogue)',
+      'accept-encoding': 'gzip, deflate, br',
+      'accept-language': 'en-US,en;q=0.9',
+      'cache-control': 'no-cache',
+      'user-agent': 'Mozilla/5.0 (compatible; MealWizardCatalogue/1.0; +private recipe catalogue)',
     },
     redirect: 'follow',
     signal: AbortSignal.timeout(30_000),
@@ -173,6 +186,25 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
       return defaultRequest(url);
     },
     sleep,
+    async render(url) {
+      const { chromium } = await import('playwright');
+      const browser = await chromium.launch({ headless: true });
+      try {
+        const page = await browser.newPage({
+          locale: 'en-US',
+          userAgent: 'Mozilla/5.0 (compatible; MealWizardCatalogue/1.0; +private recipe catalogue)',
+        });
+        const response = await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 45_000,
+        });
+        if (!response || [401, 402, 403, 429].includes(response.status())) return undefined;
+        await page.waitForTimeout(1_500);
+        return await page.content();
+      } finally {
+        await browser.close();
+      }
+    },
   };
 }
 
@@ -181,11 +213,21 @@ export function createSourceAdapter(
   injectedDependencies?: SourceAdapterDependencies,
 ): RecipeSourceAdapter {
   const dependencies = injectedDependencies ?? createDefaultDependencies(config.minDelayMs);
+  const random = dependencies.random ?? (injectedDependencies ? () => 0.5 : Math.random);
+  let heartbeat = dependencies.heartbeat;
+  const sleepWithHeartbeat = async (milliseconds: number): Promise<void> => {
+    if (milliseconds >= 60_000) await heartbeat?.();
+    await dependencies.sleep(milliseconds);
+    if (milliseconds >= 60_000) await heartbeat?.();
+  };
   const canonicalize = (value: string): string => {
     const canonical = canonicalizeRecipeUrl(value);
     const parsed = new URL(canonical);
     if (parsed.protocol !== 'https:' || parsed.hostname !== config.host) {
       throw new Error(`URL is outside source ${config.sourceKey}`);
+    }
+    if (config.recipePathPattern && !config.recipePathPattern.test(parsed.pathname)) {
+      throw new Error(`URL is not an admitted recipe path for ${config.sourceKey}`);
     }
     return canonical;
   };
@@ -198,13 +240,23 @@ export function createSourceAdapter(
       } catch {
         last = { status: 0, body: '', headers: {} };
         if (attempt < 2) {
-          await dependencies.sleep(retryDelay(last, attempt, config.rateLimitCooldownMs));
+          await sleepWithHeartbeat(retryDelay(
+            last,
+            attempt,
+            config.rateLimitCooldownMs,
+            random,
+          ));
         }
         continue;
       }
       if (last.status !== 429 && last.status < 500) return last;
       if (attempt < 2 || (last.status === 429 && config.rateLimitCooldownMs)) {
-        await dependencies.sleep(retryDelay(last, attempt, config.rateLimitCooldownMs));
+        await sleepWithHeartbeat(retryDelay(
+          last,
+          attempt,
+          config.rateLimitCooldownMs,
+          random,
+        ));
       }
     }
     return last as SourceHttpResponse;
@@ -255,6 +307,10 @@ export function createSourceAdapter(
     sourceKey: config.sourceKey,
     discover,
     canonicalize,
+    setHeartbeat(value) {
+      heartbeat = value;
+    },
+    ...(dependencies.render ? { render: dependencies.render } : {}),
     async fetch(url) {
       const response = await requestWithRetries(canonicalize(url));
       if (response.status === 200) {

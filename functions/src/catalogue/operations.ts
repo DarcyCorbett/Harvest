@@ -23,11 +23,18 @@ export function shouldRefreshManifestEntry(
     discoveredLastModified?: string;
     parserVersion: number;
     force?: boolean;
+    preserveReady?: boolean;
     now: Date;
   },
 ): boolean {
   if (!entry || options.force) return true;
+  if (options.preserveReady && entry.state === 'ready') return false;
   if (entry.state === 'permanent-skip') return false;
+  if (entry.state === 'invalid') return true;
+  if (entry.state === 'retryable') {
+    const retryAt = Date.parse(entry.nextRetryAt ?? '');
+    return !Number.isFinite(retryAt) || retryAt <= options.now.getTime();
+  }
   if (entry.parserVersion !== options.parserVersion) return true;
 
   if (options.discoveredLastModified) {
@@ -54,21 +61,46 @@ export function createLeaseManager(
   options: { ownerId: string; ttlMs: number },
 ) {
   if (!options.ownerId || options.ttlMs <= 0) throw new Error('Invalid lease options');
-  let renewAfterMs = 0;
+  let held = false;
   return {
     async acquire(nowMs = Date.now()) {
       const acquired = await documents.acquire(options.ownerId, nowMs, nowMs + options.ttlMs);
-      if (acquired) renewAfterMs = nowMs + Math.floor(options.ttlMs / 2);
+      held = acquired;
       return acquired;
     },
     async renew(nowMs = Date.now()) {
-      if (nowMs < renewAfterMs) return true;
+      if (!held) return false;
       const renewed = await documents.renew(options.ownerId, nowMs, nowMs + options.ttlMs);
-      if (renewed) renewAfterMs = nowMs + Math.floor(options.ttlMs / 2);
+      held = renewed;
       return renewed;
     },
-    release() {
-      return documents.release(options.ownerId);
+    startHeartbeat(intervalMs = 60_000, onLost?: () => void) {
+      if (!Number.isInteger(intervalMs) || intervalMs < 1_000 || intervalMs >= options.ttlMs) {
+        throw new Error('Invalid lease heartbeat interval');
+      }
+      let stopped = false;
+      let running = false;
+      const timer = setInterval(async () => {
+        if (stopped || running || !held) return;
+        running = true;
+        try {
+          if (!(await this.renew())) onLost?.();
+        } catch {
+          held = false;
+          onLost?.();
+        } finally {
+          running = false;
+        }
+      }, intervalMs);
+      timer.unref?.();
+      return () => {
+        stopped = true;
+        clearInterval(timer);
+      };
+    },
+    async release() {
+      held = false;
+      await documents.release(options.ownerId);
     },
   };
 }

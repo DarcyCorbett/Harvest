@@ -243,10 +243,12 @@ export type SourceBackfillState = 'eligible' | 'unsupported' | 'failed';
 
 export function evaluateSourceCanary(outcomes: readonly SourceCanaryOutcome[]): SourceBackfillState {
   const protectedCount = outcomes.filter((outcome) => outcome === 'protected').length;
-  if (protectedCount >= 2) return 'unsupported';
+  if (outcomes.length > 0 && protectedCount === outcomes.length) return 'unsupported';
   const transientCount = outcomes.filter((outcome) => outcome === 'transient').length;
   const successCount = outcomes.filter((outcome) => outcome === 'success').length;
   if (successCount === outcomes.length && outcomes.length > 0) return 'eligible';
-  if (outcomes.length === 5 && successCount >= 4 && transientCount <= 1) return 'eligible';
+  if (outcomes.length >= 5
+    && successCount >= Math.ceil(outcomes.length * 0.8)
+    && transientCount <= Math.floor(outcomes.length * 0.2)) return 'eligible';
   return 'failed';
 }

@@ -10,6 +10,7 @@ export interface IngestionArguments {
   targetUrls?: Record<string, string[]>;
   runId?: string;
   geminiCallCap?: number;
+  confirmPaidBatch?: boolean;
 }
 
 export const INGESTION_MODES = [
@@ -21,6 +22,14 @@ export const INGESTION_MODES = [
   'crawl-canary',
   'crawl-inventory',
   'crawl-backfill',
+  'snapshot-inventory',
+  'snapshot-canary',
+  'snapshot-crawl',
+  'snapshot-verify',
+  'tag-batch-prepare',
+  'tag-batch-submit',
+  'tag-batch-collect',
+  'weekly-new',
 ] as const;
 
 export type IngestionMode = typeof INGESTION_MODES[number];
@@ -49,6 +58,11 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
     if (argument === '--force-refresh') {
       if (result.forceRefresh) invalid();
       result.forceRefresh = true;
+      continue;
+    }
+    if (argument === '--confirm-paid-batch') {
+      if (result.confirmPaidBatch) invalid();
+      result.confirmPaidBatch = true;
       continue;
     }
     if (argument === '--source') {
@@ -122,6 +136,26 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
       && (result.writeCap !== undefined || result.maxPerSource !== undefined)) {
       invalid();
     }
+  }
+  if (result.mode?.startsWith('snapshot-')) {
+    if (result.forceRefresh || result.targetUrls || result.geminiCallCap !== undefined
+      || result.confirmPaidBatch) invalid();
+    if (result.mode !== 'snapshot-crawl'
+      && (result.writeCap !== undefined || result.maxPerSource !== undefined)) invalid();
+    if ((result.mode === 'snapshot-inventory' || result.mode === 'snapshot-verify')
+      && result.sourceKeys) invalid();
+  }
+  if (result.mode?.startsWith('tag-batch-')) {
+    if (result.sourceKeys || result.dryRun || result.forceRefresh || result.writeCap !== undefined
+      || result.maxPerSource !== undefined || result.targetUrls
+      || result.geminiCallCap !== undefined) invalid();
+    if (result.mode === 'tag-batch-submit' && !result.confirmPaidBatch) invalid();
+    if (result.mode !== 'tag-batch-submit' && result.confirmPaidBatch) invalid();
+  }
+  if (result.mode === 'weekly-new') {
+    if (result.forceRefresh || result.targetUrls || result.confirmPaidBatch
+      || result.dryRun) invalid();
+    if (result.writeCap !== undefined && result.writeCap > 17_500) invalid();
   }
 
   return result;

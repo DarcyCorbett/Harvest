@@ -269,8 +269,10 @@ describe('source refresh canary decisions', () => {
       .toBe('failed');
   });
 
-  it('marks repeated protected responses unsupported and never treats them as transient', () => {
+  it('defers a source only when every applicable public canary is protected', () => {
     expect(evaluateSourceCanary(['protected', 'protected', 'success', 'success', 'success']))
+      .toBe('failed');
+    expect(evaluateSourceCanary(['protected', 'protected', 'protected']))
       .toBe('unsupported');
   });
 });

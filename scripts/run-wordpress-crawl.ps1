@@ -2,14 +2,19 @@
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-z][a-z0-9-]{4,29}$')][string]$ProjectId,
   [Parameter(Mandatory = $true)]
-  [ValidateSet('crawl-canary', 'crawl-inventory', 'crawl-backfill')]
+  [ValidateSet(
+    'crawl-canary', 'crawl-inventory', 'crawl-backfill',
+    'snapshot-inventory', 'snapshot-canary', 'snapshot-crawl', 'snapshot-verify',
+    'tag-batch-prepare', 'tag-batch-submit', 'tag-batch-collect', 'weekly-new'
+  )]
   [string]$Mode,
   [string]$Region = 'europe-west1',
   [string]$JobName = 'mealwizard-catalogue-ingestion',
   [string]$SchedulerName = 'mealwizard-catalogue-daily',
   [ValidateRange(0, 18000)][int]$WriteCap = 18000,
   [ValidateRange(1, 10000)][int]$MaxPerSource = 500,
-  [string[]]$SourceKeys
+  [string[]]$SourceKeys,
+  [switch]$ConfirmPaidBatch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,13 +29,20 @@ $allowedSources = @(
   'cafedelites',
   'skinnytaste',
   'pinchofyum',
-  'natashaskitchen'
+  'natashaskitchen',
+  'seriouseats',
+  'akispetretzikis',
+  'nytcooking',
+  'americastestkitchen'
 )
 if ($SourceKeys) {
   $invalidSources = @($SourceKeys | Where-Object { $_ -notin $allowedSources })
   if ($invalidSources.Count -gt 0) {
-    throw "Unsupported WordPress crawl source: $($invalidSources -join ', ')"
+    throw "Unsupported catalogue source: $($invalidSources -join ', ')"
   }
+}
+if ($Mode -eq 'tag-batch-submit' -and -not $ConfirmPaidBatch) {
+  throw 'Tag batch submission requires -ConfirmPaidBatch after reviewing prepare-mode cost.'
 }
 
 $runId = "wordpress-$Mode-$([DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss'))"
@@ -49,11 +61,14 @@ try {
   if ($SourceKeys) {
     $jobArgs += @('--source', ($SourceKeys -join ','))
   }
-  if ($Mode -eq 'crawl-backfill') {
+  if ($Mode -in @('crawl-backfill', 'snapshot-crawl', 'weekly-new')) {
     $jobArgs += @(
       '--write-cap', [string]$WriteCap,
       '--max-per-source', [string]$MaxPerSource
     )
+  }
+  if ($Mode -eq 'tag-batch-submit') {
+    $jobArgs += '--confirm-paid-batch'
   }
   $encodedArgs = '^|^' + ($jobArgs -join '|')
   gcloud run jobs execute $JobName `

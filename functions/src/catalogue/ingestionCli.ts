@@ -29,6 +29,13 @@ import {
   firestoreCatalogueRecipeStore,
   firestoreCatalogueRunStore,
 } from './ingestion.js';
+import {
+  collectGeminiTagBatch,
+  createGeminiBatchApi,
+  prepareGeminiTagBatch,
+  submitNextGeminiTagBatch,
+  tagWeeklyNewRecipes,
+} from './geminiBatch.js';
 import { parseIngestionArguments } from './ingestionCommand.js';
 import {
   createBudgetManager,
@@ -40,6 +47,14 @@ import {
   createTrustedSourceAdapters,
   inventorySourceDiscovery,
 } from './sourceAdapters.js';
+import {
+  buildSnapshotInventory,
+  cloudStorageSnapshotStore,
+  inventoryTargets,
+  newInventoryTargets,
+  nextReconciliation,
+} from './snapshot.js';
+import { verifySnapshotInventory } from './snapshotFirestore.js';
 
 initializeApp();
 
@@ -107,6 +122,299 @@ async function main(): Promise<void> {
   const wordpressSourceKeys = command.sourceKeys ?? [...WORDPRESS_SOURCE_KEYS];
   const wordpressAdapters = adapters.filter((adapter) =>
     wordpressSourceKeys.includes(adapter.sourceKey));
+  const selectedAdapters = adapters.filter((adapter) =>
+    !command.sourceKeys || command.sourceKeys.includes(adapter.sourceKey));
+  const snapshotStore = cloudStorageSnapshotStore(process.env.CATALOGUE_MANIFEST_BUCKET);
+  const deterministicCrawlEngine = (
+    crawlAdapters: typeof adapters,
+    manifestPrefix: string,
+    writeCap: number,
+  ) => createCatalogueIngestionEngine({
+    adapters: crawlAdapters,
+    manifests: cloudStorageManifestStore(
+      process.env.CATALOGUE_MANIFEST_BUCKET,
+      manifestPrefix,
+    ),
+    recipes: firestoreCatalogueRecipeStore(),
+    runs: firestoreCatalogueRunStore(),
+    lease: createLeaseManager(operational.lease, {
+      ownerId: runId,
+      ttlMs: 5 * 60 * 1_000,
+    }),
+    budget: createBudgetManager(operational.budget, {
+      limit: 18_000,
+      commandCap: writeCap,
+    }),
+    classify: async (content, sourceMetadata) =>
+      classifyCatalogueDeterministically(content, sourceMetadata),
+    now: () => new Date(),
+    random: Math.random,
+    getTelemetry: () => ({
+      gemini: {
+        calls: 0,
+        promptTokenCount: 0,
+        candidatesTokenCount: 0,
+        totalTokenCount: 0,
+      },
+    }),
+  });
+
+  if (command.mode === 'snapshot-inventory') {
+    const inventory = await buildSnapshotInventory({
+      adapters: selectedAdapters,
+      snapshotId: runId,
+      now: () => new Date(),
+    });
+    await snapshotStore.saveImmutable(inventory);
+    const inventoryComplete = Object.values(inventory.bySource)
+      .every(({ status }) => status === 'complete');
+    if (inventoryComplete) await snapshotStore.setLatest(inventory.snapshotId);
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'snapshot-inventory',
+      snapshotId: inventory.snapshotId,
+      hash: inventory.hash,
+      total: inventory.total,
+      inventoryComplete,
+      bySource: Object.fromEntries(Object.entries(inventory.bySource)
+        .map(([sourceKey, source]) => [sourceKey, {
+          status: source.status,
+          count: source.count,
+          hash: source.hash,
+          ...(source.reasonCode ? { reasonCode: source.reasonCode } : {}),
+        }])),
+    }));
+    return;
+  }
+
+  if (command.mode === 'snapshot-canary') {
+    const lease = createLeaseManager(operational.lease, {
+      ownerId: runId,
+      ttlMs: 5 * 60 * 1_000,
+    });
+    if (!(await lease.acquire())) throw new Error('Catalogue ingestion lease unavailable');
+    const stopHeartbeat = lease.startHeartbeat(60_000);
+    for (const adapter of selectedAdapters) {
+      adapter.setHeartbeat?.(async () => {
+        if (!(await lease.renew())) throw new Error('Catalogue ingestion lease was lost');
+      });
+    }
+    try {
+      const summary = await runSourceRefreshCanaries({
+        adapters: selectedAdapters,
+        now: () => new Date(),
+        samplesPerSource: 10,
+        candidateMode: 'snapshot',
+      });
+      await recordPhase4Run(runId, { ...summary, mode: 'snapshot-canary' });
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify({ ...summary, mode: 'snapshot-canary' }));
+      return;
+    } finally {
+      stopHeartbeat();
+      await lease.release();
+    }
+  }
+
+  if (command.mode === 'snapshot-crawl') {
+    const inventory = await snapshotStore.loadLatest();
+    const targets = inventoryTargets(inventory, command.sourceKeys);
+    const sourceKeys = Object.keys(targets);
+    const crawlWriteCap = command.writeCap ?? 18_000;
+    const summary = await deterministicCrawlEngine(
+      selectedAdapters,
+      `snapshot-crawl-manifests/${inventory.snapshotId}`,
+      crawlWriteCap,
+    ).run({
+      runId,
+      sourceKeys,
+      targetUrls: targets,
+      writeCap: crawlWriteCap,
+      maxPerSource: command.maxPerSource,
+      maxConsecutiveFailures: 25,
+      manifestCheckpointInterval: 25,
+      parserVersion: 2,
+      taxonomyVersion: 1,
+      snapshotMode: true,
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'snapshot-crawl',
+      snapshotId: inventory.snapshotId,
+      ...sanitizedIngestionSummary(summary),
+    }));
+    return;
+  }
+
+  if (command.mode === 'snapshot-verify') {
+    const inventory = await buildSnapshotInventory({
+      adapters: selectedAdapters,
+      snapshotId: runId,
+      now: () => new Date(),
+    });
+    await snapshotStore.saveImmutable(inventory);
+    const inventoryComplete = Object.values(inventory.bySource)
+      .every(({ status }) => status === 'complete');
+    if (!inventoryComplete) {
+      const summary = {
+        runId,
+        mode: 'snapshot-verify',
+        status: 'discovery-incomplete',
+        snapshotId: inventory.snapshotId,
+        hash: inventory.hash,
+        total: inventory.total,
+        failedSources: Object.entries(inventory.bySource)
+          .filter(([, source]) => source.status === 'failed')
+          .map(([sourceKey]) => sourceKey),
+      };
+      await recordPhase4Run(runId, summary);
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify(summary));
+      return;
+    }
+    await snapshotStore.setLatest(inventory.snapshotId);
+    const verification = await verifySnapshotInventory(inventory);
+    const reconciliation = nextReconciliation(
+      await snapshotStore.loadReconciliation(),
+      inventory,
+    );
+    const frozen = reconciliation.frozen && verification.complete;
+    await snapshotStore.saveReconciliation({
+      ...reconciliation,
+      snapshotId: inventory.snapshotId,
+      frozen,
+      updatedAt: new Date().toISOString(),
+    });
+    await recordPhase4Run(runId, { ...verification, reconciliation, frozen });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({ runId, ...verification, reconciliation, frozen }));
+    return;
+  }
+
+  if (command.mode === 'tag-batch-prepare') {
+    const reconciliation = await snapshotStore.loadReconciliation();
+    if (!reconciliation.frozen) {
+      throw new Error('Snapshot verification must be complete and stable before batch preparation');
+    }
+    const summary = await prepareGeminiTagBatch({
+      runId,
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'tag-batch-submit') {
+    const summary = await submitNextGeminiTagBatch({
+      api: createGeminiBatchApi({ apiKey: secret }),
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'tag-batch-collect') {
+    const summary = await collectGeminiTagBatch({
+      api: createGeminiBatchApi({ apiKey: secret }),
+      budget: createBudgetManager(operational.budget, {
+        limit: 18_000,
+        commandCap: 5_000,
+      }),
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'weekly-new') {
+    const reconciliation = await snapshotStore.loadReconciliation();
+    if (!reconciliation.frozen || !reconciliation.snapshotId) {
+      throw new Error('Completed snapshot baseline is required for weekly maintenance');
+    }
+    const baseline = await snapshotStore.load(reconciliation.snapshotId);
+    const current = await buildSnapshotInventory({
+      adapters: selectedAdapters,
+      snapshotId: runId,
+      now: () => new Date(),
+    });
+    await snapshotStore.saveImmutable(current);
+    const targets = newInventoryTargets(baseline, current);
+    const sourceKeys = Object.entries(targets)
+      .filter(([, urls]) => urls.length > 0)
+      .map(([sourceKey]) => sourceKey);
+    if (sourceKeys.length === 0) {
+      await snapshotStore.saveReconciliation({
+        lastHash: current.hash,
+        stableCount: 2,
+        snapshotId: current.snapshotId,
+        frozen: true,
+        updatedAt: new Date().toISOString(),
+      });
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify({
+        runId,
+        mode: 'weekly-new',
+        status: 'complete',
+        discoveredNew: 0,
+        fetched: 0,
+        tagged: 0,
+      }));
+      return;
+    }
+    const weeklyWriteCap = command.writeCap ?? 17_500;
+    const crawlSummary = await deterministicCrawlEngine(
+      selectedAdapters.filter((adapter) => sourceKeys.includes(adapter.sourceKey)),
+      'weekly-new-manifests',
+      weeklyWriteCap,
+    ).run({
+      runId,
+      sourceKeys,
+      targetUrls: targets,
+      writeCap: weeklyWriteCap,
+      maxPerSource: command.maxPerSource,
+      maxConsecutiveFailures: 25,
+      manifestCheckpointInterval: 25,
+      parserVersion: 2,
+      taxonomyVersion: 1,
+      snapshotMode: true,
+    });
+    const newRecipeIds = Object.entries(current.bySource).flatMap(([sourceKey, source]) => {
+      const selected = new Set(targets[sourceKey] ?? []);
+      return source.items.filter(({ url }) => selected.has(url)).map(({ id }) => id);
+    });
+    const tagging = await tagWeeklyNewRecipes({
+      recipeIds: newRecipeIds,
+      classify: classifier,
+      callCap: command.geminiCallCap ?? 500,
+    });
+    if (crawlSummary.status === 'complete'
+      && tagging.failed === 0 && tagging.overflow === 0) {
+      await snapshotStore.saveReconciliation({
+        lastHash: current.hash,
+        stableCount: 2,
+        snapshotId: current.snapshotId,
+        frozen: true,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'weekly-new',
+      discoveredNew: newRecipeIds.length,
+      crawl: sanitizedIngestionSummary(crawlSummary),
+      tagging,
+    }));
+    return;
+  }
 
   if (command.mode === 'crawl-inventory') {
     const summary = await inventorySourceDiscovery(wordpressAdapters);

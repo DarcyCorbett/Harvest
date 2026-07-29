@@ -18,7 +18,7 @@ import {
   type CatalogueManifest,
   type CatalogueManifestEntry,
 } from './operations.js';
-import { parseCatalogueRecipe } from './parser.js';
+import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
 import { classifyCatalogueDeterministically } from './classifier.js';
 import type { DiscoveredUrl, RecipeSourceAdapter } from './sourceAdapters.js';
 
@@ -47,6 +47,7 @@ export interface CatalogueLease {
   acquire(nowMs?: number): Promise<boolean>;
   renew(nowMs?: number): Promise<boolean>;
   release(): Promise<void>;
+  startHeartbeat?(intervalMs?: number, onLost?: () => void): () => void;
 }
 
 export interface CatalogueBudget {
@@ -136,6 +137,7 @@ export interface CatalogueIngestionOptions {
   targetUrls?: Record<string, string[]>;
   parserVersion?: number;
   taxonomyVersion?: number;
+  snapshotMode?: boolean;
 }
 
 function emptyMetrics(): CatalogueRunMetrics {
@@ -172,7 +174,20 @@ export function mergeIngestedRecipe(
   incoming: CompleteCanonicalRecipeV2,
 ): CompleteCanonicalRecipeV2 {
   if (!existing) return incoming;
-  const effective = buildEffectiveMetadata(incoming.sourceMetadata, existing.manualOverrides);
+  const preserveClassification = existing.classification.complete;
+  const sourceMetadata: RecipeMetadata = preserveClassification ? {
+    ...incoming.sourceMetadata,
+    ...(existing.sourceMetadata.mealTypes
+      ? { mealTypes: existing.sourceMetadata.mealTypes }
+      : {}),
+    ...(existing.sourceMetadata.cuisines
+      ? { cuisines: existing.sourceMetadata.cuisines }
+      : {}),
+    ...(existing.sourceMetadata.modifiers
+      ? { modifiers: existing.sourceMetadata.modifiers }
+      : {}),
+  } : incoming.sourceMetadata;
+  const effective = buildEffectiveMetadata(sourceMetadata, existing.manualOverrides);
   const randomKey = existing.search.randomKey;
   const contentChanged = JSON.stringify(existing.content) !== JSON.stringify(incoming.content);
   const merged: CompleteCanonicalRecipeV2 = {
@@ -184,6 +199,7 @@ export function mergeIngestedRecipe(
       originalUrl: existing.source.originalUrl,
     },
     ...(existing.manualOverrides ? { manualOverrides: existing.manualOverrides } : {}),
+    sourceMetadata,
     effective,
     search: buildSearchFields(
       effective,
@@ -202,7 +218,9 @@ export function mergeIngestedRecipe(
     classification: {
       ...incoming.classification,
       sources: {
-        ...incoming.classification.sources,
+        ...(preserveClassification
+          ? existing.classification.sources
+          : incoming.classification.sources),
         ...(existing.manualOverrides?.mealTypes === null
           || existing.manualOverrides?.mealTypes === undefined
           ? {}
@@ -216,6 +234,9 @@ export function mergeIngestedRecipe(
           ? {}
           : { modifiers: 'manual' }),
       },
+      ...(preserveClassification && existing.classification.classifierVersion !== undefined
+        ? { classifierVersion: existing.classification.classifierVersion }
+        : {}),
       complete: effective.mealTypes.length > 0 && effective.cuisines.length > 0,
     },
   };
@@ -352,6 +373,18 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         });
       }
       remaining -= 1; // lease acquisition
+      let leaseLost = false;
+      const stopHeartbeat = dependencies.lease.startHeartbeat?.(60_000, () => {
+        leaseLost = true;
+      });
+      for (const adapter of adapters) {
+        adapter.setHeartbeat?.(async () => {
+          if (!(await dependencies.lease.renew(dependencies.now().getTime()))) {
+            leaseLost = true;
+            throw new Error('Catalogue ingestion lease was lost');
+          }
+        });
+      }
 
       const manifests = new Map<string, CatalogueManifest>();
       const iterators = new Map<string, AsyncIterator<DiscoveredUrl>>();
@@ -361,7 +394,15 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         const targets = options.targetUrls?.[adapter.sourceKey];
         const discovery = targets
           ? (async function* targetedDiscovery() {
-            for (let index = 0; index < targets.length; index += 1) {
+            const resume = /^target-(\d+)$/.exec(manifest.cursor ?? '');
+            const priorIndex = resume ? Number(resume[1]) : -1;
+            // Resume a partial frozen inventory from its durable cursor. Once
+            // a full pass finishes, start at zero so retryable/incomplete
+            // entries are reconsidered and an idempotency pass can prove zero writes.
+            const startIndex = priorIndex >= 0 && priorIndex < targets.length - 1
+              ? priorIndex + 1
+              : 0;
+            for (let index = startIndex; index < targets.length; index += 1) {
               yield {
                 url: adapter.canonicalize(targets[index]),
                 cursor: `target-${index}`,
@@ -392,7 +433,6 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
           unsavedManifestChanges.set(manifest.sourceKey, changes);
         }
       };
-      let discoveriesSinceLeaseCheck = 0;
       let providerCapExhausted = false;
       let sourceCapExhausted = false;
       let sourceFailureExhausted = false;
@@ -435,14 +475,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             const discovered = next.value;
             const manifest = manifests.get(adapter.sourceKey) as CatalogueManifest;
             increment(adapter.sourceKey, 'discovered');
-            discoveriesSinceLeaseCheck += 1;
-            if (discoveriesSinceLeaseCheck >= 100) {
-              if (!(await dependencies.lease.renew(dependencies.now().getTime()))) {
-                throw new Error('Catalogue ingestion lease was lost');
-              }
-              discoveriesSinceLeaseCheck = 0;
-              processingWrites = Math.max(0, processingWrites - 1);
-            }
+            if (leaseLost) throw new Error('Catalogue ingestion lease was lost');
             const recipeId = canonicalRecipeId(discovered.url);
             let prior: CatalogueManifestEntry | undefined = manifest.entries[recipeId];
             if (!prior && dependencies.recipes.recoverManifestEntry) {
@@ -454,6 +487,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
               discoveredLastModified: discovered.lastModified,
               parserVersion,
               force: options.forceRefresh,
+              preserveReady: options.snapshotMode,
               now: dependencies.now(),
             })) {
               increment(adapter.sourceKey, 'unchanged');
@@ -471,7 +505,18 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             let wrote = false;
             if (fetched.kind === 'ok') {
               try {
-                const parsed = parseCatalogueRecipe(fetched.html, discovered.url);
+                let parsed;
+                try {
+                  parsed = parseCatalogueRecipe(fetched.html, discovered.url);
+                } catch (initialError) {
+                  if (!adapter.render || initialError instanceof CatalogueParseError
+                    && initialError.reasonCode === 'non-recipe-page') {
+                    throw initialError;
+                  }
+                  const rendered = await adapter.render(discovered.url);
+                  if (!rendered) throw initialError;
+                  parsed = parseCatalogueRecipe(rendered, discovered.url);
+                }
                 increment(adapter.sourceKey, 'parsed');
                 const classification = dependencies.classify
                   ? await dependencies.classify(parsed.content, parsed.sourceMetadata)
@@ -539,7 +584,9 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   schemaVersion: 2,
                   id: recipeId,
                   status: 'invalid',
-                  reasonCode: 'parse-or-classification-invalid',
+                  reasonCode: error instanceof CatalogueParseError
+                    ? error.reasonCode
+                    : 'unsupported-markup',
                   source: {
                     key: adapter.sourceKey,
                     canonicalUrl: discovered.url,
@@ -551,21 +598,33 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 increment(adapter.sourceKey, 'failed');
                 recordDocument(adapter.sourceKey, recipeId, record);
                 wrote = true;
+                const terminalParseFailure = error instanceof CatalogueParseError;
                 manifest.entries[recipeId] = {
-                  ...manifestEntry(prior, { parserVersion, now, state: 'invalid' }),
+                  ...manifestEntry(prior, {
+                    parserVersion,
+                    now,
+                    state: terminalParseFailure ? 'permanent-skip' : 'invalid',
+                  }),
                   urlHash: recipeId,
                 };
               }
             } else {
               const permanent = fetched.kind === 'permanent' || fetched.kind === 'unsupported';
               const retryCount = (prior?.retryCount ?? 0) + 1;
+              const reasonCode = fetched.kind === 'unsupported'
+                ? 'protected-access'
+                : fetched.kind === 'permanent'
+                  ? 'non-recipe-page'
+                  : fetched.status === 429
+                    ? 'rate-limited'
+                    : 'fetch-retryable';
               const record: OperationalCanonicalRecipeV2 = {
                 schemaVersion: 2,
                 id: recipeId,
                 status: fetched.kind === 'unsupported'
                   ? 'disabled'
                   : permanent ? 'invalid' : 'retryable',
-                reasonCode: `${fetched.kind}-${fetched.status}`,
+                reasonCode,
                 source: {
                   key: adapter.sourceKey,
                   canonicalUrl: discovered.url,
@@ -655,6 +714,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         remaining -= 1;
         return summary;
       } finally {
+        stopHeartbeat?.();
         await dependencies.lease.release();
       }
     },
@@ -724,6 +784,15 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
       if (!snapshot.exists || snapshot.get('schemaVersion') !== 2) return null;
       const status = snapshot.get('status');
       const reasonCode = snapshot.get('reasonCode');
+      const content = snapshot.get('content') as {
+        title?: unknown;
+        ingredients?: unknown;
+        instructions?: unknown;
+      } | undefined;
+      const hasDisplayContent = typeof content?.title === 'string'
+        && content.title.trim().length > 0
+        && Array.isArray(content.ingredients) && content.ingredients.length > 0
+        && Array.isArray(content.instructions) && content.instructions.length > 0;
       const parserVersion = snapshot.get('classification.parserVersion');
       const lastFetched = snapshot.get('ingestion.lastAttemptAt')
         ?? snapshot.get('ingestion.lastChangedAt')
@@ -733,12 +802,19 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
         : typeof lastFetched?.toDate === 'function'
           ? lastFetched.toDate().toISOString()
           : new Date(0).toISOString();
-      const state: CatalogueManifestEntry['state'] = status === 'ready' || status === 'review'
+      const state: CatalogueManifestEntry['state'] =
+        (status === 'ready' || status === 'review') && hasDisplayContent
         ? 'ready'
         : status === 'retryable'
           ? 'retryable'
           : typeof reasonCode === 'string'
-            && (reasonCode.startsWith('permanent-') || reasonCode.startsWith('unsupported-'))
+            && [
+              'non-recipe-page',
+              'protected-access',
+              'unsupported-markup',
+              'missing-recipe-markup',
+              'missing-display-content',
+            ].includes(reasonCode)
             ? 'permanent-skip'
             : 'invalid';
       return {

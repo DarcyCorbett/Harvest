@@ -55,7 +55,7 @@ $jobFlags = @(
   '--tasks=1',
   '--parallelism=1',
   '--max-retries=3',
-  '--task-timeout=3600s',
+  '--task-timeout=86400s',
   "--set-env-vars=CATALOGUE_MANIFEST_BUCKET=$ManifestBucket",
   '--set-secrets=GEMINI_API_KEY=mealwizard-gemini-api-key:latest'
 )
@@ -70,10 +70,12 @@ gcloud run jobs add-iam-policy-binding $JobName --region=$Region --project=$Proj
 $schedulerFlags = @(
   '--location=europe-west1',
   "--project=$ProjectId",
-  '--schedule=0 3 * * *',
+  '--schedule=0 3 * * 0',
   '--time-zone=Asia/Nicosia',
   "--uri=$runUri",
   '--http-method=POST',
+  '--headers=Content-Type=application/json',
+  '--message-body={"overrides":{"containerOverrides":[{"args":["weekly-new"]}]}}',
   "--oauth-service-account-email=$schedulerAccount"
 )
 if (Test-GcloudResource -Arguments @('scheduler', 'jobs', 'describe', $SchedulerName, '--location=europe-west1', "--project=$ProjectId")) {
