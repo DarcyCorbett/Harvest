@@ -206,10 +206,14 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
           locale: 'en-US',
           userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         });
-        await page.goto(url, {
+        const initialResponse = await page.goto(url, {
           waitUntil: 'domcontentloaded',
           timeout: 45_000,
         });
+        if (initialResponse?.ok()) {
+          const body = await initialResponse.text();
+          if (/<(?:sitemapindex|urlset)[\s>]/i.test(body)) return body;
+        }
         await page.waitForFunction(() => {
           const value = `${document.documentElement.outerHTML}\n${document.body?.innerText ?? ''}`;
           return /<(?:sitemapindex|urlset)[\s>]/i.test(value);
@@ -313,7 +317,12 @@ export function createSourceAdapter(
   };
 
   const requestDiscovery = async (url: string): Promise<SourceHttpResponse> => {
-    const response = await requestWithRetries(url);
+    let response = await requestWithRetries(url);
+    for (let attempt = 0; attempt < 2 && response.status === 403
+      && config.renderDiscoveryOnBlocked; attempt += 1) {
+      await sleepWithHeartbeat(retryDelay(response, attempt, undefined, random));
+      response = await requestWithRetries(url);
+    }
     if (response.status !== 403 || !config.renderDiscoveryOnBlocked
       || !dependencies.renderDiscovery) {
       return response;

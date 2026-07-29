@@ -187,6 +187,31 @@ describe('catalogue source adapters', () => {
     expect(renderDiscovery).toHaveBeenCalledWith(config.discoveryUrl);
   });
 
+  it('retries Akis sitemap discovery before launching a browser', async () => {
+    const config = SOURCE_CONFIGS.find((source) =>
+      source.sourceKey === 'akispetretzikis');
+    if (!config) throw new Error('missing source');
+    const request = vi.fn()
+      .mockResolvedValueOnce(response(403))
+      .mockResolvedValueOnce(response(200,
+        '<urlset><url><loc>https://akispetretzikis.com/en/recipe/1/test</loc></url></urlset>'));
+    const renderDiscovery = vi.fn();
+    const adapter = createSourceAdapter(config, {
+      request,
+      renderDiscovery,
+      sleep: vi.fn(),
+    });
+
+    const discovered = [];
+    for await (const item of adapter.discover()) discovered.push(item.url);
+
+    expect(discovered).toEqual([
+      'https://akispetretzikis.com/en/recipe/1/test',
+    ]);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(renderDiscovery).not.toHaveBeenCalled();
+  });
+
   it('renders an Akis recipe page after a blocked direct request', async () => {
     const config = SOURCE_CONFIGS.find((source) =>
       source.sourceKey === 'akispetretzikis');
