@@ -75,6 +75,9 @@ try {
     --project=$ProjectId `
     --args=$encodedArgs `
     --wait
+  if ($LASTEXITCODE -ne 0) {
+    throw "Cloud Run catalogue execution failed with exit code $LASTEXITCODE"
+  }
 } finally {
   $finalMode = Get-SafetyMode
   if ($finalMode -ne $initialMode) {

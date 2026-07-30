@@ -211,10 +211,16 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
           },
         });
         const requestSitemap = async (): Promise<string | undefined> => {
-          const response = await context.request.get(url, { timeout: 45_000 });
-          if (!response.ok()) return undefined;
-          const body = await response.text();
-          return /<(?:sitemapindex|urlset)[\s>]/i.test(body) ? body : undefined;
+          try {
+            const response = await context.request.get(url, { timeout: 120_000 });
+            if (!response.ok()) return undefined;
+            const body = await response.text();
+            return /<(?:sitemapindex|urlset)[\s>]/i.test(body) ? body : undefined;
+          } catch {
+            // Playwright request errors can include cookies and request headers.
+            // Treat them as a bounded discovery failure without logging details.
+            return undefined;
+          }
         };
         const direct = await requestSitemap();
         if (direct) return direct;
