@@ -139,6 +139,16 @@ export interface SourceCanarySummary {
   reasonCodes: string[];
 }
 
+export function selectSourceCanaryUrls(
+  displayable: readonly string[],
+  priorFailures: readonly string[],
+  sampleLimit: number,
+): string[] {
+  return [...displayable, ...priorFailures]
+    .filter((url, index, all) => all.indexOf(url) === index)
+    .slice(0, sampleLimit);
+}
+
 export async function runSourceRefreshCanaries(options: {
   adapters: RecipeSourceAdapter[];
   now: () => Date;
@@ -180,10 +190,11 @@ export async function runSourceRefreshCanaries(options: {
 
   const bySource: Record<string, SourceCanarySummary> = {};
   for (const adapter of options.adapters) {
-    const urls = [
-      ...(priorFailures.get(adapter.sourceKey) ?? []),
-      ...(candidates.get(adapter.sourceKey) ?? []),
-    ].filter((url, index, all) => all.indexOf(url) === index).slice(0, sampleLimit);
+    const urls = selectSourceCanaryUrls(
+      candidates.get(adapter.sourceKey) ?? [],
+      priorFailures.get(adapter.sourceKey) ?? [],
+      sampleLimit,
+    );
     if (options.candidateMode === 'snapshot' && urls.length < sampleLimit) {
       try {
         for await (const discovered of adapter.discover()) {
