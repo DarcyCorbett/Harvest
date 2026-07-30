@@ -202,26 +202,35 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
       const { chromium } = await import('playwright');
       const browser = await chromium.launch({ headless: true });
       try {
-        const page = await browser.newPage({
+        const context = await browser.newContext({
           locale: 'en-US',
           userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          extraHTTPHeaders: {
+            accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
+          },
         });
-        const initialResponse = await page.goto(url, {
+        const requestSitemap = async (): Promise<string | undefined> => {
+          const response = await context.request.get(url, { timeout: 45_000 });
+          if (!response.ok()) return undefined;
+          const body = await response.text();
+          return /<(?:sitemapindex|urlset)[\s>]/i.test(body) ? body : undefined;
+        };
+        const direct = await requestSitemap();
+        if (direct) return direct;
+
+        const page = await context.newPage();
+        await page.goto(new URL(url).origin, {
           waitUntil: 'domcontentloaded',
           timeout: 45_000,
-        });
-        if (initialResponse?.ok()) {
-          const body = await initialResponse.text();
-          if (/<(?:sitemapindex|urlset)[\s>]/i.test(body)) return body;
-        }
+        }).catch(() => undefined);
         await page.waitForFunction(() => {
-          const value = `${document.documentElement.outerHTML}\n${document.body?.innerText ?? ''}`;
-          return /<(?:sitemapindex|urlset)[\s>]/i.test(value);
+          const title = document.title.toLowerCase();
+          return !title.includes('just a moment')
+            && !title.includes('attention required')
+            && !title.includes('cloudflare');
         }, undefined, { timeout: 45_000 }).catch(() => undefined);
-        const html = await page.content();
-        if (/<(?:sitemapindex|urlset)[\s>]/i.test(html)) return html;
-        const text = await page.locator('body').innerText().catch(() => '');
-        return /<(?:sitemapindex|urlset)[\s>]/i.test(text) ? text : undefined;
+        return requestSitemap();
       } finally {
         await browser.close();
       }
