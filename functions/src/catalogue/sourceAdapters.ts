@@ -24,8 +24,6 @@ export interface SourceConfig {
   discoveryUrl: string;
   minDelayMs: number;
   rateLimitCooldownMs?: number;
-  renderDiscoveryOnBlocked?: boolean;
-  renderPageOnBlocked?: boolean;
   sitemapChildPattern?: RegExp;
   recipePathPattern?: RegExp;
 }
@@ -45,7 +43,6 @@ export interface SourceAdapterDependencies {
   random?: () => number;
   heartbeat?: () => Promise<void>;
   render?: (url: string) => Promise<string | undefined>;
-  renderDiscovery?: (url: string) => Promise<string | undefined>;
 }
 
 export const WORDPRESS_SOURCE_KEYS = [
@@ -60,7 +57,7 @@ export const WORDPRESS_SOURCE_KEYS = [
   'natashaskitchen',
 ] as const;
 
-export const FROZEN_CATALOGUE_SOURCE_KEYS = ['seriouseats'] as const;
+export const FROZEN_CATALOGUE_SOURCE_KEYS = ['seriouseats', 'akispetretzikis'] as const;
 
 export function isFrozenCatalogueSource(sourceKey: string): boolean {
   return (FROZEN_CATALOGUE_SOURCE_KEYS as readonly string[]).includes(sourceKey);
@@ -78,7 +75,6 @@ export const SOURCE_CONFIGS: readonly SourceConfig[] = [
   { sourceKey: 'skinnytaste', host: 'www.skinnytaste.com', discoveryUrl: 'https://www.skinnytaste.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
   { sourceKey: 'pinchofyum', host: 'pinchofyum.com', discoveryUrl: 'https://pinchofyum.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
   { sourceKey: 'natashaskitchen', host: 'natashaskitchen.com', discoveryUrl: 'https://natashaskitchen.com/sitemap_index.xml', minDelayMs: 1_000, sitemapChildPattern: WORDPRESS_POST_SITEMAP, recipePathPattern: /^\/(?:recipes\/)?(?!category\/|tag\/|author\/)[^/]+\/?$/i },
-  { sourceKey: 'akispetretzikis', host: 'akispetretzikis.com', discoveryUrl: 'https://akispetretzikis.com/sitemap.xml', minDelayMs: 1_500, renderDiscoveryOnBlocked: true, renderPageOnBlocked: true, recipePathPattern: /\/recipes?\//i },
   { sourceKey: 'nytcooking', host: 'cooking.nytimes.com', discoveryUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
   { sourceKey: 'americastestkitchen', host: 'www.americastestkitchen.com', discoveryUrl: 'https://www.americastestkitchen.com/sitemap.xml', minDelayMs: 2_000, recipePathPattern: /^\/recipes\//i },
 ] as const;
@@ -198,49 +194,6 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
       return defaultRequest(url);
     },
     sleep,
-    async renderDiscovery(url) {
-      const { chromium } = await import('playwright');
-      const browser = await chromium.launch({ headless: true });
-      try {
-        const context = await browser.newContext({
-          locale: 'en-US',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          extraHTTPHeaders: {
-            accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'accept-language': 'en-US,en;q=0.9',
-          },
-        });
-        const requestSitemap = async (): Promise<string | undefined> => {
-          try {
-            const response = await context.request.get(url, { timeout: 120_000 });
-            if (!response.ok()) return undefined;
-            const body = await response.text();
-            return /<(?:sitemapindex|urlset)[\s>]/i.test(body) ? body : undefined;
-          } catch {
-            // Playwright request errors can include cookies and request headers.
-            // Treat them as a bounded discovery failure without logging details.
-            return undefined;
-          }
-        };
-        const direct = await requestSitemap();
-        if (direct) return direct;
-
-        const page = await context.newPage();
-        await page.goto(new URL(url).origin, {
-          waitUntil: 'domcontentloaded',
-          timeout: 45_000,
-        }).catch(() => undefined);
-        await page.waitForFunction(() => {
-          const title = document.title.toLowerCase();
-          return !title.includes('just a moment')
-            && !title.includes('attention required')
-            && !title.includes('cloudflare');
-        }, undefined, { timeout: 45_000 }).catch(() => undefined);
-        return requestSitemap();
-      } finally {
-        await browser.close();
-      }
-    },
     async render(url) {
       const { chromium } = await import('playwright');
       const browser = await chromium.launch({ headless: true });
@@ -253,19 +206,8 @@ function createDefaultDependencies(minDelayMs: number): SourceAdapterDependencie
           waitUntil: 'domcontentloaded',
           timeout: 45_000,
         });
-        if (!response || [401, 402, 429].includes(response.status())) return undefined;
-        if (response.status() === 403) {
-          await page.waitForFunction(() => {
-            const title = document.title.toLowerCase();
-            const challenged = title.includes('just a moment')
-              || title.includes('attention required')
-              || title.includes('cloudflare');
-            return !challenged
-              && Boolean(document.querySelector('script[type="application/ld+json"]'));
-          }, undefined, { timeout: 45_000 }).catch(() => undefined);
-        } else {
-          await page.waitForTimeout(1_500);
-        }
+        if (!response || [401, 402, 403, 429].includes(response.status())) return undefined;
+        await page.waitForTimeout(1_500);
         const html = await page.content();
         return /application\/ld\+json|wprm-recipe|itemtype=["'][^"']*Recipe/i.test(html)
           ? html
@@ -331,25 +273,8 @@ export function createSourceAdapter(
     return last as SourceHttpResponse;
   };
 
-  const requestDiscovery = async (url: string): Promise<SourceHttpResponse> => {
-    let response = await requestWithRetries(url);
-    for (let attempt = 0; attempt < 2 && response.status === 403
-      && config.renderDiscoveryOnBlocked; attempt += 1) {
-      await sleepWithHeartbeat(retryDelay(response, attempt, undefined, random));
-      response = await requestWithRetries(url);
-    }
-    if (response.status !== 403 || !config.renderDiscoveryOnBlocked
-      || !dependencies.renderDiscovery) {
-      return response;
-    }
-    const rendered = await dependencies.renderDiscovery(url);
-    return rendered
-      ? { status: 200, body: rendered, headers: {} }
-      : response;
-  };
-
   async function* discover(cursor?: string): AsyncIterable<DiscoveredUrl> {
-    const root = await requestDiscovery(config.discoveryUrl);
+    const root = await requestWithRetries(config.discoveryUrl);
     if (root.status !== 200) throw new Error(`Discovery failed with HTTP ${root.status}`);
     const allChildren = sitemapChildren(root.body);
     const children = config.sitemapChildPattern
@@ -369,7 +294,7 @@ export function createSourceAdapter(
       }
       const response = sitemapUrl === config.discoveryUrl
         ? root
-        : await requestDiscovery(sitemapUrl);
+        : await requestWithRetries(sitemapUrl);
       if (response.status !== 200) throw new Error(`Discovery failed with HTTP ${response.status}`);
 
       const discoveredUrls = sitemapUrls(response.body);
@@ -407,10 +332,6 @@ export function createSourceAdapter(
             ? { lastModified: header(response, 'last-modified') }
             : {}),
         };
-      }
-      if (response.status === 403 && config.renderPageOnBlocked && dependencies.render) {
-        const rendered = await dependencies.render(url);
-        if (rendered) return { kind: 'ok', html: rendered };
       }
       if ([401, 402, 403].includes(response.status)) {
         return { kind: 'unsupported', status: response.status };

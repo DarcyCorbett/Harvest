@@ -1,12 +1,12 @@
 # Daily Recipe Index Scrape — Setup
 
-Sets up a Windows scheduled task that runs the recipe index Phase A scraper daily, rotating through the three active indexed sites by day-of-week. After this is installed, no further manual intervention is needed — the index stays fresh automatically.
+Sets up a Windows scheduled task that runs the recipe index Phase A scraper daily, rotating through the two active indexed sites by day-of-week. After this is installed, no further manual intervention is needed — the index stays fresh automatically.
 
 ## Site rotation
 
 | Day | Site |
 |---|---|
-| Mon | akispetretzikis.com |
+| Mon | rest day |
 | Tue | www.americastestkitchen.com |
 | Wed | rest day |
 | Thu | cooking.nytimes.com |
@@ -51,10 +51,10 @@ Open the Task Scheduler GUI (`taskschd.msc`) → Task Scheduler Library → find
 
 ### Test on a rest day
 
-If today is Fri / Sat / Sun the wrapper will exit immediately with `[CRON] ISO day-of-week N is a rest day`. To run the wrapper anyway for testing, override the site:
+If today is a rest day, the wrapper skips discovery. To run it against an active site anyway for testing, override the site:
 
 ```powershell
-$env:RECIPE_INDEX_FORCE_SITE = 'akispetretzikis.com'
+$env:RECIPE_INDEX_FORCE_SITE = 'cooking.nytimes.com'
 powershell -NoProfile -File scripts/run-daily-crawl.ps1
 ```
 

@@ -5,23 +5,23 @@ import { parseIngestionArguments } from '../src/catalogue/ingestionCommand.js';
 describe('ingestion command arguments', () => {
   it('supports source selection, dry-run, force refresh, and a reducing write cap', () => {
     expect(parseIngestionArguments([
-      '--source', 'recipetineats,akispetretzikis',
+      '--source', 'recipetineats,nytcooking',
       '--dry-run',
       '--force-refresh',
       '--write-cap', '25',
       '--max-per-source', '1',
       '--target', 'recipetineats=https://www.recipetineats.com/chicken-salad',
-      '--target', 'akispetretzikis=https://akispetretzikis.com/en/recipe/1/test',
+      '--target', 'nytcooking=https://cooking.nytimes.com/recipes/1-test',
       '--run-id', 'smoke-1',
     ])).toEqual({
-      sourceKeys: ['recipetineats', 'akispetretzikis'],
+      sourceKeys: ['recipetineats', 'nytcooking'],
       dryRun: true,
       forceRefresh: true,
       writeCap: 25,
       maxPerSource: 1,
       targetUrls: {
         recipetineats: ['https://www.recipetineats.com/chicken-salad'],
-        akispetretzikis: ['https://akispetretzikis.com/en/recipe/1/test'],
+        nytcooking: ['https://cooking.nytimes.com/recipes/1-test'],
       },
       runId: 'smoke-1',
     });
@@ -29,11 +29,11 @@ describe('ingestion command arguments', () => {
 
   it('supports multiple source targets in one Cloud Run compatible argument', () => {
     expect(parseIngestionArguments([
-      '--target', 'recipetineats=https://www.recipetineats.com/chicken-salad,akispetretzikis=https://akispetretzikis.com/en/recipe/1/test',
+      '--target', 'recipetineats=https://www.recipetineats.com/chicken-salad,nytcooking=https://cooking.nytimes.com/recipes/1-test',
     ])).toEqual({
       targetUrls: {
         recipetineats: ['https://www.recipetineats.com/chicken-salad'],
-        akispetretzikis: ['https://akispetretzikis.com/en/recipe/1/test'],
+        nytcooking: ['https://cooking.nytimes.com/recipes/1-test'],
       },
     });
   });
@@ -77,12 +77,12 @@ describe('ingestion command arguments', () => {
   it('supports all-source snapshot, cost-gated batch, and weekly modes', () => {
     expect(parseIngestionArguments([
       'snapshot-crawl',
-      '--source', 'akispetretzikis,nytcooking',
+      '--source', 'nytcooking,americastestkitchen',
       '--write-cap', '18000',
       '--run-id', 'snapshot-1',
     ])).toMatchObject({
       mode: 'snapshot-crawl',
-      sourceKeys: ['akispetretzikis', 'nytcooking'],
+      sourceKeys: ['nytcooking', 'americastestkitchen'],
       writeCap: 18000,
     });
     expect(parseIngestionArguments([
@@ -108,6 +108,7 @@ describe('ingestion command arguments', () => {
     ['unknown-mode'],
     ['--source', 'unknown'],
     ['--source', 'seriouseats'],
+    ['--source', 'akispetretzikis'],
     ['--unexpected'],
   ])('rejects unsafe arguments: %s %s', (...args) => {
     expect(() => parseIngestionArguments(args.filter(Boolean))).toThrow('Invalid ingestion arguments');

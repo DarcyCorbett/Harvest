@@ -11,7 +11,6 @@ export const SOURCE_KEYS = [
   'skinnytaste',
   'pinchofyum',
   'natashaskitchen',
-  'akispetretzikis',
   'nytcooking',
   'americastestkitchen',
 ];

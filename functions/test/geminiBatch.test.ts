@@ -70,6 +70,15 @@ describe('Gemini initial backfill batches', () => {
         originalUrl: 'https://www.seriouseats.com/frozen-recipe',
       },
     })).toBe(false);
+    expect(recipeRequiresAi({
+      ...unresolved,
+      source: {
+        ...unresolved.source,
+        key: 'akispetretzikis',
+        canonicalUrl: 'https://akispetretzikis.com/en/recipe/1/frozen-recipe',
+        originalUrl: 'https://akispetretzikis.com/en/recipe/1/frozen-recipe',
+      },
+    })).toBe(false);
   });
 
   it('creates deterministic JSONL shards capped at 5,000 recipes', () => {

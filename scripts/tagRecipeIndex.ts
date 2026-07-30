@@ -7,7 +7,7 @@
 // Usage:
 //   npx tsx scripts/tagRecipeIndex.ts                         # all sites, 500/site
 //   npx tsx scripts/tagRecipeIndex.ts --limit 1000            # all sites, 1000/site
-//   npx tsx scripts/tagRecipeIndex.ts --site akispetretzikis.com --limit 200
+//   npx tsx scripts/tagRecipeIndex.ts --site cooking.nytimes.com --limit 200
 //
 // Designed to be called from scripts/run-daily-crawl.ps1 as
 // Phase B (after buildRecipeIndex.ts Phase A URL discovery).

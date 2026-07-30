@@ -15,7 +15,6 @@
  *      set GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json.
  *
  * Usage:
- *   npx tsx scripts/buildRecipeIndex.ts --site akispetretzikis.com
  *   npx tsx scripts/buildRecipeIndex.ts --site cooking.nytimes.com
  */
 
@@ -38,11 +37,6 @@ interface SiteConfig {
 }
 
 const SITE_CONFIGS: Record<string, SiteConfig> = {
-  'akispetretzikis.com': {
-    site: 'akispetretzikis.com',
-    rootUrl: 'https://akispetretzikis.com/sitemap.xml',
-    urlPattern: /\/en\/recipe\/\d+\//,
-  },
   'cooking.nytimes.com': {
     site: 'cooking.nytimes.com',
     rootUrl: 'https://www.nytimes.com/sitemaps/new/cooking.xml.gz',

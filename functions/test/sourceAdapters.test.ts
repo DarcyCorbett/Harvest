@@ -14,7 +14,7 @@ function response(status: number, body = '', headers: Record<string, string> = {
 }
 
 describe('catalogue source adapters', () => {
-  it('defines 12 active sources and freezes Serious Eats outside ingestion', () => {
+  it('defines 11 active sources and freezes blocked sources outside ingestion', () => {
     expect(SOURCE_CONFIGS.map((source) => source.host)).toEqual([
       'www.recipetineats.com',
       'www.budgetbytes.com',
@@ -25,11 +25,10 @@ describe('catalogue source adapters', () => {
       'www.skinnytaste.com',
       'pinchofyum.com',
       'natashaskitchen.com',
-      'akispetretzikis.com',
       'cooking.nytimes.com',
       'www.americastestkitchen.com',
     ]);
-    expect(FROZEN_CATALOGUE_SOURCE_KEYS).toEqual(['seriouseats']);
+    expect(FROZEN_CATALOGUE_SOURCE_KEYS).toEqual(['seriouseats', 'akispetretzikis']);
   });
 
   it('uses every WordPress post sitemap shard and excludes non-post sitemaps', async () => {
@@ -162,76 +161,6 @@ describe('catalogue source adapters', () => {
     });
     expect(sleep).toHaveBeenNthCalledWith(1, 60_000);
     expect(sleep).toHaveBeenNthCalledWith(2, 120_000);
-  });
-
-  it('renders Akis sitemap discovery after a blocked direct request', async () => {
-    const config = SOURCE_CONFIGS.find((source) =>
-      source.sourceKey === 'akispetretzikis');
-    if (!config) throw new Error('missing source');
-    const request = vi.fn().mockResolvedValue(response(403));
-    const renderDiscovery = vi.fn().mockResolvedValue(
-      '<urlset><url><loc>https://akispetretzikis.com/en/recipe/1/test</loc></url></urlset>',
-    );
-    const adapter = createSourceAdapter(config, {
-      request,
-      renderDiscovery,
-      sleep: vi.fn(),
-    });
-
-    const discovered = [];
-    for await (const item of adapter.discover()) discovered.push(item.url);
-
-    expect(discovered).toEqual([
-      'https://akispetretzikis.com/en/recipe/1/test',
-    ]);
-    expect(renderDiscovery).toHaveBeenCalledWith(config.discoveryUrl);
-  });
-
-  it('retries Akis sitemap discovery before launching a browser', async () => {
-    const config = SOURCE_CONFIGS.find((source) =>
-      source.sourceKey === 'akispetretzikis');
-    if (!config) throw new Error('missing source');
-    const request = vi.fn()
-      .mockResolvedValueOnce(response(403))
-      .mockResolvedValueOnce(response(200,
-        '<urlset><url><loc>https://akispetretzikis.com/en/recipe/1/test</loc></url></urlset>'));
-    const renderDiscovery = vi.fn();
-    const adapter = createSourceAdapter(config, {
-      request,
-      renderDiscovery,
-      sleep: vi.fn(),
-    });
-
-    const discovered = [];
-    for await (const item of adapter.discover()) discovered.push(item.url);
-
-    expect(discovered).toEqual([
-      'https://akispetretzikis.com/en/recipe/1/test',
-    ]);
-    expect(request).toHaveBeenCalledTimes(2);
-    expect(renderDiscovery).not.toHaveBeenCalled();
-  });
-
-  it('renders an Akis recipe page after a blocked direct request', async () => {
-    const config = SOURCE_CONFIGS.find((source) =>
-      source.sourceKey === 'akispetretzikis');
-    if (!config) throw new Error('missing source');
-    const request = vi.fn().mockResolvedValue(response(403));
-    const render = vi.fn().mockResolvedValue(
-      '<script type="application/ld+json">{"@type":"Recipe"}</script>',
-    );
-    const adapter = createSourceAdapter(config, {
-      request,
-      render,
-      sleep: vi.fn(),
-    });
-    const url = 'https://akispetretzikis.com/en/recipe/1/test';
-
-    await expect(adapter.fetch(url)).resolves.toEqual({
-      kind: 'ok',
-      html: '<script type="application/ld+json">{"@type":"Recipe"}</script>',
-    });
-    expect(render).toHaveBeenCalledWith(url);
   });
 
   it('renews the lease before and after long rate-limit cooldowns', async () => {
