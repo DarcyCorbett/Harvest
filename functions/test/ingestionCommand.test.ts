@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseIngestionArguments,
   sanitizedIngestionFailureReason,
+  sanitizedIngestionFailureStage,
 } from '../src/catalogue/ingestionCommand.js';
 
 describe('ingestion command arguments', () => {
@@ -15,6 +16,16 @@ describe('ingestion command arguments', () => {
     expect(sanitizedIngestionFailureReason({ code: 'unavailable' })).toBe('unavailable');
     expect(sanitizedIngestionFailureReason(new Error('private provider response')))
       .toBe('unexpected');
+  });
+
+  it('reports only allowlisted failure stages and classifies nested causes', () => {
+    const error = {
+      stage: 'manifest-save',
+      cause: { code: 14, message: 'private storage response' },
+    };
+    expect(sanitizedIngestionFailureStage(error)).toBe('manifest-save');
+    expect(sanitizedIngestionFailureReason(error)).toBe('unavailable');
+    expect(sanitizedIngestionFailureStage({ stage: 'private-stage' })).toBe('unexpected');
   });
 
   it('supports source selection, dry-run, force refresh, and a reducing write cap', () => {

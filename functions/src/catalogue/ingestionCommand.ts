@@ -41,22 +41,49 @@ export type SanitizedIngestionFailureReason =
   | 'internal'
   | 'unexpected';
 
+const FAILURE_STAGES = new Set([
+  'budget-reserve',
+  'lease-acquire',
+  'lease-renew',
+  'lease-release',
+  'manifest-load',
+  'manifest-save',
+  'recipe-recover',
+  'recipe-write-complete',
+  'recipe-write-operational',
+  'run-checkpoint',
+  'run-summarize',
+  'generation-mode-read',
+  'generation-mode-check',
+]);
+
+export function sanitizedIngestionFailureStage(error: unknown): string {
+  const stage = error && typeof error === 'object'
+    ? (error as { stage?: unknown }).stage
+    : undefined;
+  return typeof stage === 'string' && FAILURE_STAGES.has(stage) ? stage : 'unexpected';
+}
+
 export function sanitizedIngestionFailureReason(
   error: unknown,
 ): SanitizedIngestionFailureReason {
-  const value = error && typeof error === 'object'
-    ? error as { code?: unknown; message?: unknown }
-    : {};
-  const code = typeof value.code === 'string' || typeof value.code === 'number'
-    ? String(value.code).toLowerCase()
-    : '';
-  const message = typeof value.message === 'string' ? value.message.toLowerCase() : '';
-  if (message.includes('catalogue ingestion lease was lost')) return 'lease-lost';
-  if (code === '8' || code.includes('resource-exhausted')) return 'resource-exhausted';
-  if (code === '14' || code.includes('unavailable')) return 'unavailable';
-  if (code === '4' || code.includes('deadline-exceeded')) return 'deadline-exceeded';
-  if (code === '10' || code.includes('aborted')) return 'aborted';
-  if (code === '13' || code.includes('internal')) return 'internal';
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    const value = current && typeof current === 'object'
+      ? current as { code?: unknown; message?: unknown; cause?: unknown }
+      : {};
+    const code = typeof value.code === 'string' || typeof value.code === 'number'
+      ? String(value.code).toLowerCase()
+      : '';
+    const message = typeof value.message === 'string' ? value.message.toLowerCase() : '';
+    if (message.includes('catalogue ingestion lease was lost')) return 'lease-lost';
+    if (code === '8' || code.includes('resource-exhausted')) return 'resource-exhausted';
+    if (code === '14' || code.includes('unavailable')) return 'unavailable';
+    if (code === '4' || code.includes('deadline-exceeded')) return 'deadline-exceeded';
+    if (code === '10' || code.includes('aborted')) return 'aborted';
+    if (code === '13' || code.includes('internal')) return 'internal';
+    current = value.cause;
+  }
   return 'unexpected';
 }
 

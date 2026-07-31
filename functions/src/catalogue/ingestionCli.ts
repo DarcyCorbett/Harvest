@@ -24,6 +24,7 @@ import {
   createCatalogueClassifier,
 } from './classifier.js';
 import {
+  CatalogueIngestionStageError,
   cloudStorageManifestStore,
   createCatalogueIngestionEngine,
   firestoreCatalogueRecipeStore,
@@ -39,6 +40,7 @@ import {
 import {
   parseIngestionArguments,
   sanitizedIngestionFailureReason,
+  sanitizedIngestionFailureStage,
 } from './ingestionCommand.js';
 import {
   createBudgetManager,
@@ -64,7 +66,12 @@ initializeApp();
 type GenerationMode = 'legacy' | 'catalogue';
 
 async function readGenerationMode(): Promise<GenerationMode> {
-  const config = await getFirestore().collection('appConfig').doc('catalogue').get();
+  let config;
+  try {
+    config = await getFirestore().collection('appConfig').doc('catalogue').get();
+  } catch (error) {
+    throw new CatalogueIngestionStageError('generation-mode-read', error);
+  }
   const mode = config.get('generationMode');
   if (mode !== 'legacy' && mode !== 'catalogue') {
     throw new Error('Catalogue generation mode is invalid');
@@ -74,7 +81,10 @@ async function readGenerationMode(): Promise<GenerationMode> {
 
 async function assertGenerationMode(expected: GenerationMode): Promise<void> {
   if (await readGenerationMode() !== expected) {
-    throw new Error('Catalogue generation mode changed during ingestion');
+    throw new CatalogueIngestionStageError(
+      'generation-mode-check',
+      new Error('Catalogue generation mode changed during ingestion'),
+    );
   }
 }
 
@@ -617,6 +627,7 @@ main().catch((error: unknown) => {
     message: 'catalogue_ingestion_failed',
     code,
     reasonCode: sanitizedIngestionFailureReason(error),
+    stage: sanitizedIngestionFailureStage(error),
   }));
   process.exitCode = 1;
 });

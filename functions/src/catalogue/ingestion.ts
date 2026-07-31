@@ -22,6 +22,45 @@ import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
 import { classifyCatalogueDeterministically } from './classifier.js';
 import type { DiscoveredUrl, RecipeSourceAdapter } from './sourceAdapters.js';
 
+export type CatalogueIngestionFailureStage =
+  | 'budget-reserve'
+  | 'lease-acquire'
+  | 'lease-renew'
+  | 'lease-release'
+  | 'manifest-load'
+  | 'manifest-save'
+  | 'recipe-recover'
+  | 'recipe-write-complete'
+  | 'recipe-write-operational'
+  | 'run-checkpoint'
+  | 'run-summarize'
+  | 'generation-mode-read'
+  | 'generation-mode-check';
+
+export class CatalogueIngestionStageError extends Error {
+  readonly stage: CatalogueIngestionFailureStage;
+  readonly cause: unknown;
+
+  constructor(stage: CatalogueIngestionFailureStage, cause: unknown) {
+    super(`Catalogue ingestion failed during ${stage}`);
+    this.name = 'CatalogueIngestionStageError';
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
+async function atIngestionStage<T>(
+  stage: CatalogueIngestionFailureStage,
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof CatalogueIngestionStageError) throw error;
+    throw new CatalogueIngestionStageError(stage, error);
+  }
+}
+
 export interface CatalogueManifestStore {
   load(sourceKey: string): Promise<CatalogueManifest>;
   save(manifest: CatalogueManifest): Promise<void>;
@@ -356,14 +395,14 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
           metrics,
         });
       }
-      const reservation = await dependencies.budget.reserve(
-        Math.min(250, requestedWrites),
-        dependencies.now(),
-      );
+      const reservation = await atIngestionStage('budget-reserve', () =>
+        dependencies.budget.reserve(Math.min(250, requestedWrites), dependencies.now()));
       let totalReserved = reservation.granted;
       let quotaDate = reservation.quotaDate;
       let remaining = Math.max(0, reservation.granted - 1); // budget transaction
-      if (remaining === 0 || !(await dependencies.lease.acquire(dependencies.now().getTime()))) {
+      const acquired = remaining > 0 && await atIngestionStage('lease-acquire', () =>
+        dependencies.lease.acquire(dependencies.now().getTime()));
+      if (remaining === 0 || !acquired) {
         return finishSummary({
           status: remaining === 0 ? 'budget-exhausted' : 'lease-unavailable',
           quotaDate: reservation.quotaDate,
@@ -379,7 +418,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       });
       for (const adapter of adapters) {
         adapter.setHeartbeat?.(async () => {
-          if (!(await dependencies.lease.renew(dependencies.now().getTime()))) {
+          if (!(await atIngestionStage('lease-renew', () =>
+            dependencies.lease.renew(dependencies.now().getTime())))) {
             leaseLost = true;
             throw new Error('Catalogue ingestion lease was lost');
           }
@@ -389,7 +429,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       const manifests = new Map<string, CatalogueManifest>();
       const iterators = new Map<string, AsyncIterator<DiscoveredUrl>>();
       for (const adapter of adapters) {
-        const manifest = await dependencies.manifests.load(adapter.sourceKey);
+        const manifest = await atIngestionStage('manifest-load', () =>
+          dependencies.manifests.load(adapter.sourceKey));
         manifests.set(adapter.sourceKey, manifest);
         const targets = options.targetUrls?.[adapter.sourceKey];
         const discovery = targets
@@ -427,7 +468,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       ): Promise<void> => {
         const changes = (unsavedManifestChanges.get(manifest.sourceKey) ?? 0) + 1;
         if (force || changes >= manifestCheckpointInterval) {
-          await dependencies.manifests.save(manifest);
+          await atIngestionStage('manifest-save', () => dependencies.manifests.save(manifest));
           unsavedManifestChanges.set(manifest.sourceKey, 0);
         } else {
           unsavedManifestChanges.set(manifest.sourceKey, changes);
@@ -436,16 +477,15 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       let providerCapExhausted = false;
       let sourceCapExhausted = false;
       let sourceFailureExhausted = false;
+      let operationError: unknown;
 
       try {
         while (active.size > 0) {
           if (!options.dryRun && processingWrites <= 0) {
             const commandRemaining = requestedWrites - totalReserved;
             if (commandRemaining <= 0) break;
-            const nextReservation = await dependencies.budget.reserve(
-              Math.min(250, commandRemaining),
-              dependencies.now(),
-            );
+            const nextReservation = await atIngestionStage('budget-reserve', () =>
+              dependencies.budget.reserve(Math.min(250, commandRemaining), dependencies.now()));
             totalReserved += nextReservation.granted;
             quotaDate = nextReservation.quotaDate;
             processingWrites += Math.max(0, nextReservation.granted - 1);
@@ -480,7 +520,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             let prior: CatalogueManifestEntry | undefined = manifest.entries[recipeId];
             if (!prior && dependencies.recipes.recoverManifestEntry) {
               bySource[adapter.sourceKey].recipeReads += 1;
-              prior = await dependencies.recipes.recoverManifestEntry(recipeId) ?? undefined;
+              prior = await atIngestionStage('recipe-recover', () =>
+                dependencies.recipes.recoverManifestEntry!(recipeId)) ?? undefined;
               if (prior) manifest.entries[recipeId] = prior;
             }
             if (!shouldRefreshManifestEntry(prior, {
@@ -560,7 +601,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   recipe.status = 'review';
                   increment(adapter.sourceKey, 'review');
                 }
-                await dependencies.recipes.writeComplete(recipe);
+                await atIngestionStage('recipe-write-complete', () =>
+                  dependencies.recipes.writeComplete(recipe));
                 increment(adapter.sourceKey, 'written');
                 recordDocument(adapter.sourceKey, recipeId, recipe);
                 wrote = true;
@@ -575,6 +617,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                 };
                 consecutiveFailures.set(adapter.sourceKey, 0);
               } catch (error) {
+                if (error instanceof CatalogueIngestionStageError) throw error;
                 if (error instanceof Error && error.name === 'GeminiCallCapError') {
                   providerCapExhausted = true;
                   active.clear();
@@ -594,7 +637,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   },
                   ingestion: { lastAttemptAt: now, lastErrorCode: 'invalid' },
                 };
-                await dependencies.recipes.writeOperational(record);
+                await atIngestionStage('recipe-write-operational', () =>
+                  dependencies.recipes.writeOperational(record));
                 increment(adapter.sourceKey, 'failed');
                 recordDocument(adapter.sourceKey, recipeId, record);
                 wrote = true;
@@ -641,7 +685,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   } : {}),
                 },
               };
-              await dependencies.recipes.writeOperational(record);
+              await atIngestionStage('recipe-write-operational', () =>
+                dependencies.recipes.writeOperational(record));
               recordDocument(adapter.sourceKey, recipeId, record);
               wrote = true;
               if (permanent) increment(adapter.sourceKey, 'permanentSkipped');
@@ -687,12 +732,8 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
           if ((unsavedManifestChanges.get(adapter.sourceKey) ?? 0) > 0) {
             await saveManifestProgress(manifest, true);
           }
-          await dependencies.runs.checkpoint(
-            options.runId,
-            adapter.sourceKey,
-            manifest.cursor,
-            metrics,
-          );
+          await atIngestionStage('run-checkpoint', () => dependencies.runs.checkpoint(
+            options.runId, adapter.sourceKey, manifest.cursor, metrics));
           remaining -= 1;
         }
         const status = providerCapExhausted
@@ -710,12 +751,21 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
           consumedWrites,
           metrics,
         });
-        await dependencies.runs.summarize(options.runId, summary);
+        await atIngestionStage('run-summarize', () =>
+          dependencies.runs.summarize(options.runId, summary));
         remaining -= 1;
         return summary;
+      } catch (error) {
+        operationError = error;
+        throw error;
       } finally {
         stopHeartbeat?.();
-        await dependencies.lease.release();
+        try {
+          await atIngestionStage('lease-release', () => dependencies.lease.release());
+        } catch (releaseError) {
+          // Preserve the actionable primary stage if cleanup also fails.
+          if (!operationError) throw releaseError;
+        }
       }
     },
   };

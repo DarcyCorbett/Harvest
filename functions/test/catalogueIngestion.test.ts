@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildEffectiveMetadata, buildSearchFields, canonicalRecipeId, type CompleteCanonicalRecipeV2 } from '../src/catalogue/domain.js';
 import {
+  CatalogueIngestionStageError,
   createCatalogueIngestionEngine,
   mergeIngestedRecipe,
   type CatalogueIngestionDependencies,
@@ -389,6 +390,20 @@ describe('catalogue ingestion engine', () => {
     expect(result.status).toBe('provider-cap-exhausted');
     expect(recipes).toHaveLength(0);
     expect(result.metrics.failed).toBe(0);
+  });
+
+  it('preserves infrastructure write failures with an allowlisted stage', async () => {
+    const source = adapter('source', ['https://source.test/recipe']);
+    const { injected, recipeStore } = dependencies([source]);
+    vi.mocked(recipeStore.writeComplete).mockRejectedValueOnce({ code: 14 });
+
+    await expect(createCatalogueIngestionEngine(injected).run({ runId: 'run-write-failure' }))
+      .rejects.toMatchObject({
+        name: 'CatalogueIngestionStageError',
+        stage: 'recipe-write-complete',
+        cause: { code: 14 },
+      } satisfies Partial<CatalogueIngestionStageError>);
+    expect(recipeStore.writeOperational).not.toHaveBeenCalled();
   });
 });
 
