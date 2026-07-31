@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseIngestionArguments } from '../src/catalogue/ingestionCommand.js';
+import {
+  parseIngestionArguments,
+  sanitizedIngestionFailureReason,
+} from '../src/catalogue/ingestionCommand.js';
 
 describe('ingestion command arguments', () => {
+  it('reports only allowlisted infrastructure failure reasons', () => {
+    expect(sanitizedIngestionFailureReason(
+      new Error('Catalogue ingestion lease was lost'),
+    )).toBe('lease-lost');
+    expect(sanitizedIngestionFailureReason({ code: 8, message: 'sensitive detail' }))
+      .toBe('resource-exhausted');
+    expect(sanitizedIngestionFailureReason({ code: 'unavailable' })).toBe('unavailable');
+    expect(sanitizedIngestionFailureReason(new Error('private provider response')))
+      .toBe('unexpected');
+  });
+
   it('supports source selection, dry-run, force refresh, and a reducing write cap', () => {
     expect(parseIngestionArguments([
       '--source', 'recipetineats,nytcooking',

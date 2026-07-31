@@ -54,7 +54,7 @@ $jobFlags = @(
   "--service-account=$ingestionAccount",
   '--tasks=1',
   '--parallelism=1',
-  '--max-retries=3',
+  '--max-retries=0',
   '--task-timeout=86400s',
   "--set-env-vars=CATALOGUE_MANIFEST_BUCKET=$ManifestBucket",
   '--set-secrets=GEMINI_API_KEY=mealwizard-gemini-api-key:latest'

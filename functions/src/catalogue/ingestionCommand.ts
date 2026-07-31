@@ -32,6 +32,34 @@ export const INGESTION_MODES = [
   'weekly-new',
 ] as const;
 
+export type SanitizedIngestionFailureReason =
+  | 'lease-lost'
+  | 'resource-exhausted'
+  | 'unavailable'
+  | 'deadline-exceeded'
+  | 'aborted'
+  | 'internal'
+  | 'unexpected';
+
+export function sanitizedIngestionFailureReason(
+  error: unknown,
+): SanitizedIngestionFailureReason {
+  const value = error && typeof error === 'object'
+    ? error as { code?: unknown; message?: unknown }
+    : {};
+  const code = typeof value.code === 'string' || typeof value.code === 'number'
+    ? String(value.code).toLowerCase()
+    : '';
+  const message = typeof value.message === 'string' ? value.message.toLowerCase() : '';
+  if (message.includes('catalogue ingestion lease was lost')) return 'lease-lost';
+  if (code === '8' || code.includes('resource-exhausted')) return 'resource-exhausted';
+  if (code === '14' || code.includes('unavailable')) return 'unavailable';
+  if (code === '4' || code.includes('deadline-exceeded')) return 'deadline-exceeded';
+  if (code === '10' || code.includes('aborted')) return 'aborted';
+  if (code === '13' || code.includes('internal')) return 'internal';
+  return 'unexpected';
+}
+
 export type IngestionMode = typeof INGESTION_MODES[number];
 
 function invalid(): never {

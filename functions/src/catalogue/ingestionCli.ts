@@ -36,7 +36,10 @@ import {
   submitNextGeminiTagBatch,
   tagWeeklyNewRecipes,
 } from './geminiBatch.js';
-import { parseIngestionArguments } from './ingestionCommand.js';
+import {
+  parseIngestionArguments,
+  sanitizedIngestionFailureReason,
+} from './ingestionCommand.js';
 import {
   createBudgetManager,
   createLeaseManager,
@@ -609,6 +612,11 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   const code = error instanceof Error ? error.name : 'unknown';
-  console.error(JSON.stringify({ severity: 'ERROR', message: 'catalogue_ingestion_failed', code }));
+  console.error(JSON.stringify({
+    severity: 'ERROR',
+    message: 'catalogue_ingestion_failed',
+    code,
+    reasonCode: sanitizedIngestionFailureReason(error),
+  }));
   process.exitCode = 1;
 });
