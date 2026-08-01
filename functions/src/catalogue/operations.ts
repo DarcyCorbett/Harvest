@@ -140,6 +140,7 @@ export function createBudgetManager(
     throw new Error('Command cap cannot exceed the configured limit');
   }
   const limit = options.commandCap ?? options.limit;
+  let commandUsed = 0;
 
   return {
     limit,
@@ -148,7 +149,13 @@ export function createBudgetManager(
         throw new Error('Requested writes must be a non-negative integer');
       }
       const quotaDate = pacificQuotaDate(now);
-      const reservation = await documents.reserve(quotaDate, requested, limit);
+      const commandRemaining = Math.max(0, limit - commandUsed);
+      const reservation = await documents.reserve(
+        quotaDate,
+        Math.min(requested, commandRemaining),
+        options.limit,
+      );
+      commandUsed += reservation.granted;
       return { quotaDate, ...reservation };
     },
   };

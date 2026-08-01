@@ -122,9 +122,15 @@ describe('Pacific quota-day budget', () => {
     });
   });
 
-  it('allows command caps to reduce but never increase the configured limit', () => {
-    const manager = createBudgetManager(memoryBudget(), { limit: 18_000, commandCap: 25 });
+  it('enforces command caps independently without lowering the shared daily limit', async () => {
+    const documents = memoryBudget();
+    const manager = createBudgetManager(documents, { limit: 18_000, commandCap: 25 });
     expect(manager.limit).toBe(25);
+    await expect(manager.reserve(20)).resolves.toMatchObject({ granted: 20, used: 20 });
+    await expect(manager.reserve(20)).resolves.toMatchObject({ granted: 5, used: 25 });
+
+    const nextCommand = createBudgetManager(documents, { limit: 18_000, commandCap: 25 });
+    await expect(nextCommand.reserve(25)).resolves.toMatchObject({ granted: 25, used: 50 });
     expect(() => createBudgetManager(memoryBudget(), { limit: 18_000, commandCap: 18_001 }))
       .toThrow('cannot exceed');
   });
