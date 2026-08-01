@@ -52,13 +52,21 @@ export class CatalogueIngestionStageError extends Error {
 async function atIngestionStage<T>(
   stage: CatalogueIngestionFailureStage,
   operation: () => Promise<T>,
+  attempts = 1,
 ): Promise<T> {
-  try {
-    return await operation();
-  } catch (error) {
-    if (error instanceof CatalogueIngestionStageError) throw error;
-    throw new CatalogueIngestionStageError(stage, error);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof CatalogueIngestionStageError) throw error;
+      lastError = error;
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+      }
+    }
   }
+  throw new CatalogueIngestionStageError(stage, lastError);
 }
 
 export interface CatalogueManifestStore {
@@ -468,7 +476,14 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
       ): Promise<void> => {
         const changes = (unsavedManifestChanges.get(manifest.sourceKey) ?? 0) + 1;
         if (force || changes >= manifestCheckpointInterval) {
-          await atIngestionStage('manifest-save', () => dependencies.manifests.save(manifest));
+          // Replacing the same manifest object is idempotent. Retry a bounded
+          // number of times because Cloud Storage can acknowledge the object
+          // while the client receives a transient/ambiguous response.
+          await atIngestionStage(
+            'manifest-save',
+            () => dependencies.manifests.save(manifest),
+            3,
+          );
           unsavedManifestChanges.set(manifest.sourceKey, 0);
         } else {
           unsavedManifestChanges.set(manifest.sourceKey, changes);

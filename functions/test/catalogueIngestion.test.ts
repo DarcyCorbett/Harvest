@@ -405,6 +405,19 @@ describe('catalogue ingestion engine', () => {
       } satisfies Partial<CatalogueIngestionStageError>);
     expect(recipeStore.writeOperational).not.toHaveBeenCalled();
   });
+
+  it('retries idempotent manifest saves after a transient failure', async () => {
+    const source = adapter('source', ['https://source.test/recipe']);
+    const { injected } = dependencies([source]);
+    vi.mocked(injected.manifests.save).mockRejectedValueOnce({ code: 'ECONNRESET' });
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'run-manifest-retry',
+    });
+
+    expect(result.status).toBe('complete');
+    expect(injected.manifests.save).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('ingestion refresh merging', () => {
