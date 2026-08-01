@@ -40,6 +40,7 @@ import {
 import {
   parseIngestionArguments,
   sanitizedIngestionFailureReason,
+  sanitizedIngestionFailureSource,
   sanitizedIngestionFailureStage,
 } from './ingestionCommand.js';
 import {
@@ -627,6 +628,7 @@ main().catch((error: unknown) => {
     message: 'catalogue_ingestion_failed',
     code,
     reasonCode: sanitizedIngestionFailureReason(error),
+    sourceKey: sanitizedIngestionFailureSource(error),
     stage: sanitizedIngestionFailureStage(error),
   }));
   process.exitCode = 1;

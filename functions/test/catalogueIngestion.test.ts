@@ -407,6 +407,22 @@ describe('catalogue ingestion engine', () => {
     expect(recipeStore.writeOperational).not.toHaveBeenCalled();
   });
 
+  it('identifies the allowlisted source when an adapter fetch throws', async () => {
+    const source = adapter(
+      'nytcooking',
+      ['https://source.test/recipe'],
+      vi.fn(async () => { throw new Error('private transport detail'); }),
+    );
+    const { injected } = dependencies([source]);
+
+    await expect(createCatalogueIngestionEngine(injected).run({ runId: 'run-fetch-failure' }))
+      .rejects.toMatchObject({
+        name: 'CatalogueIngestionStageError',
+        stage: 'source-fetch',
+        sourceKey: 'nytcooking',
+      });
+  });
+
   it('retries idempotent manifest saves after a transient failure', async () => {
     const source = adapter('source', ['https://source.test/recipe']);
     const { injected } = dependencies([source]);

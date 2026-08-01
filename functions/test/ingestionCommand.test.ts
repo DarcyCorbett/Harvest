@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseIngestionArguments,
   sanitizedIngestionFailureReason,
+  sanitizedIngestionFailureSource,
   sanitizedIngestionFailureStage,
 } from '../src/catalogue/ingestionCommand.js';
 
@@ -26,6 +27,8 @@ describe('ingestion command arguments', () => {
     expect(sanitizedIngestionFailureStage(error)).toBe('manifest-save');
     expect(sanitizedIngestionFailureReason(error)).toBe('unavailable');
     expect(sanitizedIngestionFailureStage({ stage: 'private-stage' })).toBe('unexpected');
+    expect(sanitizedIngestionFailureSource({ sourceKey: 'nytcooking' })).toBe('nytcooking');
+    expect(sanitizedIngestionFailureSource({ sourceKey: 'private-source' })).toBe('unknown');
   });
 
   it('supports source selection, dry-run, force refresh, and a reducing write cap', () => {

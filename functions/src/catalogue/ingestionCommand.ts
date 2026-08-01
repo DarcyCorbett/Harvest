@@ -48,6 +48,7 @@ const FAILURE_STAGES = new Set([
   'lease-release',
   'manifest-load',
   'manifest-save',
+  'source-fetch',
   'recipe-recover',
   'recipe-write-complete',
   'recipe-write-operational',
@@ -62,6 +63,14 @@ export function sanitizedIngestionFailureStage(error: unknown): string {
     ? (error as { stage?: unknown }).stage
     : undefined;
   return typeof stage === 'string' && FAILURE_STAGES.has(stage) ? stage : 'unexpected';
+}
+
+export function sanitizedIngestionFailureSource(error: unknown): string {
+  const sourceKey = error && typeof error === 'object'
+    ? (error as { sourceKey?: unknown }).sourceKey
+    : undefined;
+  const allowedSources = new Set(SOURCE_CONFIGS.map((source) => source.sourceKey));
+  return typeof sourceKey === 'string' && allowedSources.has(sourceKey) ? sourceKey : 'unknown';
 }
 
 export function sanitizedIngestionFailureReason(

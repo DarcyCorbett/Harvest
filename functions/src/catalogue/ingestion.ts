@@ -29,6 +29,7 @@ export type CatalogueIngestionFailureStage =
   | 'lease-release'
   | 'manifest-load'
   | 'manifest-save'
+  | 'source-fetch'
   | 'recipe-recover'
   | 'recipe-write-complete'
   | 'recipe-write-operational'
@@ -40,12 +41,14 @@ export type CatalogueIngestionFailureStage =
 export class CatalogueIngestionStageError extends Error {
   readonly stage: CatalogueIngestionFailureStage;
   readonly cause: unknown;
+  readonly sourceKey?: string;
 
-  constructor(stage: CatalogueIngestionFailureStage, cause: unknown) {
+  constructor(stage: CatalogueIngestionFailureStage, cause: unknown, sourceKey?: string) {
     super(`Catalogue ingestion failed during ${stage}`);
     this.name = 'CatalogueIngestionStageError';
     this.stage = stage;
     this.cause = cause;
+    this.sourceKey = sourceKey;
   }
 }
 
@@ -53,6 +56,7 @@ async function atIngestionStage<T>(
   stage: CatalogueIngestionFailureStage,
   operation: () => Promise<T>,
   attempts = 1,
+  sourceKey?: string,
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -66,7 +70,7 @@ async function atIngestionStage<T>(
       }
     }
   }
-  throw new CatalogueIngestionStageError(stage, lastError);
+  throw new CatalogueIngestionStageError(stage, lastError, sourceKey);
 }
 
 export interface CatalogueManifestStore {
@@ -555,7 +559,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             if (options.dryRun) continue;
             if (processingWrites <= 0) break;
 
-            const fetched = await adapter.fetch(discovered.url);
+            const fetched = await atIngestionStage(
+              'source-fetch',
+              () => adapter.fetch(discovered.url),
+              1,
+              adapter.sourceKey,
+            );
             increment(adapter.sourceKey, 'fetched');
             const now = dependencies.now().toISOString();
             let wrote = false;
