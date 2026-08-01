@@ -807,12 +807,38 @@ export function cloudStorageManifestStore(
       return parsed;
     },
     async save(manifest) {
-      await bucket.file(`${prefix}/${manifest.sourceKey}.json`).save(
+      await saveVerifiedManifestObject(
+        bucket.file(`${prefix}/${manifest.sourceKey}.json`),
         JSON.stringify(manifest),
-        { contentType: 'application/json', resumable: false },
       );
     },
   };
+}
+
+export interface ManifestObjectFile {
+  save(
+    contents: Buffer,
+    options: { contentType: string; resumable: boolean },
+  ): Promise<unknown>;
+  download(): Promise<[Buffer, ...unknown[]]>;
+}
+
+export async function saveVerifiedManifestObject(
+  file: ManifestObjectFile,
+  serializedManifest: string,
+): Promise<void> {
+  const contents = Buffer.from(serializedManifest, 'utf8');
+  try {
+    await file.save(contents, { contentType: 'application/json', resumable: false });
+  } catch (saveError) {
+    try {
+      const [stored] = await file.download();
+      if (stored.equals(contents)) return;
+    } catch {
+      // Preserve the original save failure for stage classification/retry.
+    }
+    throw saveError;
+  }
 }
 
 export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {

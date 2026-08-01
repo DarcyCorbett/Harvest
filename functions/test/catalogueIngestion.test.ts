@@ -5,6 +5,7 @@ import {
   CatalogueIngestionStageError,
   createCatalogueIngestionEngine,
   mergeIngestedRecipe,
+  saveVerifiedManifestObject,
   type CatalogueIngestionDependencies,
   type CatalogueRecipeStore,
 } from '../src/catalogue/ingestion.js';
@@ -563,5 +564,22 @@ describe('ingestion refresh merging', () => {
 
     expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
     expect(merged.ingestion.lastChangedAt).toBe('2026-07-02T00:00:00.000Z');
+  });
+});
+
+describe('verified manifest object saves', () => {
+  it('accepts an ambiguous save failure only when stored bytes match exactly', async () => {
+    const saveError = new Error('ambiguous response');
+    const matching = {
+      save: vi.fn(async () => { throw saveError; }),
+      download: vi.fn(async () => [Buffer.from('{"ok":true}')]),
+    };
+    await expect(saveVerifiedManifestObject(matching, '{"ok":true}')).resolves.toBeUndefined();
+
+    const mismatched = {
+      save: vi.fn(async () => { throw saveError; }),
+      download: vi.fn(async () => [Buffer.from('{"ok":false}')]),
+    };
+    await expect(saveVerifiedManifestObject(mismatched, '{"ok":true}')).rejects.toBe(saveError);
   });
 });
