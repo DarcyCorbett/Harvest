@@ -829,7 +829,10 @@ export async function saveVerifiedManifestObject(
 ): Promise<void> {
   const contents = Buffer.from(serializedManifest, 'utf8');
   try {
-    await file.save(contents, { contentType: 'application/json', resumable: false });
+    await file.save(contents, {
+      contentType: 'application/json',
+      resumable: contents.byteLength >= 1_000_000,
+    });
   } catch (saveError) {
     try {
       const [stored] = await file.download();

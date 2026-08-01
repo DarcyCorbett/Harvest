@@ -568,6 +568,20 @@ describe('ingestion refresh merging', () => {
 });
 
 describe('verified manifest object saves', () => {
+  it('uses resumable uploads for large manifests', async () => {
+    const file = {
+      save: vi.fn(async () => undefined),
+      download: vi.fn(async () => [Buffer.alloc(0)]),
+    };
+
+    await saveVerifiedManifestObject(file, 'x'.repeat(1_000_000));
+
+    expect(file.save).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      { contentType: 'application/json', resumable: true },
+    );
+  });
+
   it('accepts an ambiguous save failure only when stored bytes match exactly', async () => {
     const saveError = new Error('ambiguous response');
     const matching = {
