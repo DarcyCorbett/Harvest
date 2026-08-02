@@ -60,7 +60,10 @@ import {
   newInventoryTargets,
   nextReconciliation,
 } from './snapshot.js';
-import { verifySnapshotInventory } from './snapshotFirestore.js';
+import {
+  snapshotReconciliationTargets,
+  verifySnapshotInventory,
+} from './snapshotFirestore.js';
 
 initializeApp();
 
@@ -257,6 +260,54 @@ async function main(): Promise<void> {
       runId,
       mode: 'snapshot-crawl',
       snapshotId: inventory.snapshotId,
+      ...sanitizedIngestionSummary(summary),
+    }));
+    return;
+  }
+
+  if (command.mode === 'snapshot-reconcile') {
+    const inventory = await snapshotStore.loadLatest();
+    const targets = await snapshotReconciliationTargets(inventory, {
+      sourceKeys: command.sourceKeys,
+    });
+    const sourceKeys = Object.keys(targets);
+    if (sourceKeys.length === 0) {
+      const summary = {
+        runId,
+        mode: 'snapshot-reconcile',
+        status: 'complete',
+        snapshotId: inventory.snapshotId,
+        targets: 0,
+      };
+      await recordPhase4Run(runId, summary);
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify(summary));
+      return;
+    }
+    const reconcileWriteCap = command.writeCap ?? 18_000;
+    const summary = await deterministicCrawlEngine(
+      selectedAdapters,
+      `snapshot-reconcile-manifests/${inventory.snapshotId}`,
+      reconcileWriteCap,
+    ).run({
+      runId,
+      sourceKeys,
+      targetUrls: targets,
+      forceRefresh: true,
+      writeCap: reconcileWriteCap,
+      maxPerSource: command.maxPerSource,
+      maxConsecutiveFailures: 25,
+      manifestCheckpointInterval: 25,
+      parserVersion: 2,
+      taxonomyVersion: 1,
+      snapshotMode: true,
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'snapshot-reconcile',
+      snapshotId: inventory.snapshotId,
+      targets: Object.values(targets).reduce((sum, urls) => sum + urls.length, 0),
       ...sanitizedIngestionSummary(summary),
     }));
     return;

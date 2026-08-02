@@ -25,6 +25,7 @@ export const INGESTION_MODES = [
   'snapshot-inventory',
   'snapshot-canary',
   'snapshot-crawl',
+  'snapshot-reconcile',
   'snapshot-verify',
   'tag-batch-prepare',
   'tag-batch-submit',
@@ -204,7 +205,7 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
   if (result.mode?.startsWith('snapshot-')) {
     if (result.forceRefresh || result.targetUrls || result.geminiCallCap !== undefined
       || result.confirmPaidBatch) invalid();
-    if (result.mode !== 'snapshot-crawl'
+    if (result.mode !== 'snapshot-crawl' && result.mode !== 'snapshot-reconcile'
       && (result.writeCap !== undefined || result.maxPerSource !== undefined)) invalid();
     if ((result.mode === 'snapshot-inventory' || result.mode === 'snapshot-verify')
       && result.sourceKeys) invalid();

@@ -114,6 +114,17 @@ describe('ingestion command arguments', () => {
       writeCap: 18000,
     });
     expect(parseIngestionArguments([
+      'snapshot-reconcile',
+      '--source', 'nytcooking',
+      '--write-cap', '1000',
+      '--max-per-source', '750',
+    ])).toMatchObject({
+      mode: 'snapshot-reconcile',
+      sourceKeys: ['nytcooking'],
+      writeCap: 1000,
+      maxPerSource: 750,
+    });
+    expect(parseIngestionArguments([
       'tag-batch-submit',
       '--confirm-paid-batch',
     ])).toEqual({

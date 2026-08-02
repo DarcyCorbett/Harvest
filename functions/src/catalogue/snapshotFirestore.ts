@@ -115,6 +115,43 @@ function emptyEvidence(discovered: number): SnapshotSourceEvidence {
   };
 }
 
+function requiresReconciliation(recipe: CanonicalRecipeV2 | undefined): boolean {
+  if (!recipe) return true;
+  if (completeRecipe(recipe)) return !hasDisplayContent(recipe);
+  if (recipe.status === 'retryable') return true;
+  return !(recipe.reasonCode === 'non-recipe-page'
+    || recipe.reasonCode.startsWith('permanent-')
+    || recipe.reasonCode === 'protected-access'
+    || recipe.reasonCode === 'unsupported-markup'
+    || recipe.reasonCode === 'missing-recipe-markup'
+    || recipe.reasonCode === 'missing-display-content');
+}
+
+export async function snapshotReconciliationTargets(
+  inventory: SnapshotInventory,
+  options: {
+    sourceKeys?: readonly string[];
+    loadRecipes?: InventoryRecipeLoader;
+  } = {},
+): Promise<Record<string, string[]>> {
+  const selected = options.sourceKeys ? new Set(options.sourceKeys) : undefined;
+  const loadRecipes = options.loadRecipes ?? loadInventoryRecipes;
+  const targets: Record<string, string[]> = {};
+  for (const [sourceKey, source] of Object.entries(inventory.bySource)) {
+    if (selected && !selected.has(sourceKey)) continue;
+    const sourceTargets: string[] = [];
+    for (let offset = 0; offset < source.items.length; offset += RECIPE_READ_BATCH_SIZE) {
+      const items = source.items.slice(offset, offset + RECIPE_READ_BATCH_SIZE);
+      const recipes = await loadRecipes(items.map(({ id }) => id));
+      for (const item of items) {
+        if (requiresReconciliation(recipes.get(item.id))) sourceTargets.push(item.url);
+      }
+    }
+    if (sourceTargets.length > 0) targets[sourceKey] = sourceTargets;
+  }
+  return targets;
+}
+
 export async function verifySnapshotInventory(
   inventory: SnapshotInventory,
   loadRecipes: InventoryRecipeLoader = loadInventoryRecipes,
