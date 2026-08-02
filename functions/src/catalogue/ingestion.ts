@@ -20,6 +20,7 @@ import {
 } from './operations.js';
 import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
 import { classifyCatalogueDeterministically } from './classifier.js';
+import { hasDisplayContent } from './snapshotFirestore.js';
 import type { DiscoveredUrl, RecipeSourceAdapter } from './sourceAdapters.js';
 
 export type CatalogueIngestionFailureStage =
@@ -874,6 +875,7 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
         const existing = snapshot.exists
           && snapshot.get('schemaVersion') === 2
           && ['ready', 'review'].includes(snapshot.get('status'))
+          && hasDisplayContent(snapshot.data())
           ? snapshot.data() as CompleteCanonicalRecipeV2
           : undefined;
         transaction.set(
@@ -887,15 +889,7 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
       if (!snapshot.exists || snapshot.get('schemaVersion') !== 2) return null;
       const status = snapshot.get('status');
       const reasonCode = snapshot.get('reasonCode');
-      const content = snapshot.get('content') as {
-        title?: unknown;
-        ingredients?: unknown;
-        instructions?: unknown;
-      } | undefined;
-      const hasDisplayContent = typeof content?.title === 'string'
-        && content.title.trim().length > 0
-        && Array.isArray(content.ingredients) && content.ingredients.length > 0
-        && Array.isArray(content.instructions) && content.instructions.length > 0;
+      const displayable = hasDisplayContent(snapshot.data());
       const parserVersion = snapshot.get('classification.parserVersion');
       const lastFetched = snapshot.get('ingestion.lastAttemptAt')
         ?? snapshot.get('ingestion.lastChangedAt')
@@ -906,7 +900,7 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
           ? lastFetched.toDate().toISOString()
           : new Date(0).toISOString();
       const state: CatalogueManifestEntry['state'] =
-        (status === 'ready' || status === 'review') && hasDisplayContent
+        (status === 'ready' || status === 'review') && displayable
         ? 'ready'
         : status === 'retryable'
           ? 'retryable'

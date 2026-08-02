@@ -162,7 +162,11 @@ function markupRecipeNode(html: string): Record<string, unknown> | undefined {
     name,
     recipeIngredient: [...new Set(ingredients)],
     recipeInstructions: [...new Set(instructions)],
-    recipeYield: first(itemPropValues(html, 'recipeYield')),
+    recipeYield: first(
+      itemPropValues(html, 'recipeYield'),
+      wprm ? classValues(html, 'wprm-recipe-servings') : [],
+      tasty ? classValues(html, 'tasty-recipes-yield') : [],
+    ),
     prepTime: first(itemPropValues(html, 'prepTime')),
     cookTime: first(itemPropValues(html, 'cookTime')),
     totalTime: first(itemPropValues(html, 'totalTime')),
@@ -292,6 +296,10 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
   if (instructions.length === 0) {
     throw new CatalogueParseError('missing-display-content', 'Recipe is missing instructions');
   }
+  const originalServings = servings(node.recipeYield);
+  if (originalServings <= 0) {
+    throw new CatalogueParseError('missing-display-content', 'Recipe is missing servings');
+  }
 
   const tags = normalizedTags(node);
   const prepMinutes = parseIsoDurationMinutes(node.prepTime);
@@ -305,7 +313,7 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
       title,
       ...(parsedImageUrl ? { imageUrl: parsedImageUrl } : {}),
       ...(description ? { description } : {}),
-      originalServings: servings(node.recipeYield),
+      originalServings,
       ingredients,
       instructions,
     },

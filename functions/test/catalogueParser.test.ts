@@ -91,12 +91,18 @@ describe('parseCatalogueRecipe', () => {
     expect(() => parseCatalogueRecipe('<html></html>', sourceUrl)).toThrow('non-recipe-page');
     expect(() => parseCatalogueRecipe(page({ name: 'Incomplete' }), sourceUrl))
       .toThrow('Recipe is missing ingredients');
+    expect(() => parseCatalogueRecipe(page({
+      name: 'Missing yield',
+      recipeIngredient: ['1 onion'],
+      recipeInstructions: ['Cook.'],
+    }), sourceUrl)).toThrow('Recipe is missing servings');
   });
 
   it('parses public WordPress Recipe Maker markup when JSON-LD is absent', () => {
     const result = parseCatalogueRecipe(`
       <div class="wprm-recipe">
         <h2 class="wprm-recipe-name">WPRM Soup</h2>
+        <span class="wprm-recipe-servings">4 servings</span>
         <li class="wprm-recipe-ingredient">1 onion</li>
         <div class="wprm-recipe-instruction-text">Simmer the soup.</div>
       </div>
@@ -112,6 +118,7 @@ describe('parseCatalogueRecipe', () => {
     const tasty = parseCatalogueRecipe(`
       <article class="tasty-recipes">
         <h2 class="tasty-recipes-title">Tasty Pasta</h2>
+        <span class="tasty-recipes-yield">Serves 2</span>
         <li class="ingredient">200g pasta</li>
         <li class="instruction">Boil the pasta.</li>
       </article>
@@ -121,6 +128,7 @@ describe('parseCatalogueRecipe', () => {
     const microdata = parseCatalogueRecipe(`
       <article itemscope itemtype="https://schema.org/Recipe">
         <h1 itemprop="name">Microdata Curry</h1>
+        <span itemprop="recipeYield">4</span>
         <span itemprop="recipeIngredient">1 onion</span>
         <div itemprop="recipeInstructions">Cook until tender.</div>
       </article>
@@ -134,6 +142,7 @@ describe('parseCatalogueRecipe', () => {
         '@graph': [{
           '@type': 'Recipe',
           name: 'State Stew',
+          recipeYield: '4',
           recipeIngredient: ['1 carrot'],
           recipeInstructions: ['Simmer.'],
         }],

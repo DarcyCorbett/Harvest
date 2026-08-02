@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
-import { verifySnapshotInventory } from '../src/catalogue/snapshotFirestore.js';
+import { hasDisplayContent, verifySnapshotInventory } from '../src/catalogue/snapshotFirestore.js';
 import type { SnapshotInventory } from '../src/catalogue/snapshot.js';
 
 describe('snapshot Firestore verification', () => {
+  it('rejects malformed and incomplete stored display content safely', () => {
+    expect(hasDisplayContent({})).toBe(false);
+    expect(hasDisplayContent({
+      content: {
+        title: 'Recipe',
+        originalServings: 0,
+        ingredients: [{ name: 'Ingredient' }],
+        instructions: [{ text: 'Cook.' }],
+      },
+    })).toBe(false);
+    expect(hasDisplayContent({
+      content: {
+        title: 'Recipe',
+        originalServings: 4,
+        ingredients: [{ name: 'Ingredient' }],
+        instructions: [{ text: ' ' }],
+      },
+    })).toBe(false);
+  });
+
   it('loads large inventories in bounded batches', async () => {
     const items = Array.from({ length: 501 }, (_, index) => ({
       id: `recipe-${index}`,

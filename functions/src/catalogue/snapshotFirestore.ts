@@ -52,13 +52,30 @@ function timestampMillis(value: unknown): number | undefined {
   return undefined;
 }
 
-export function hasDisplayContent(recipe: CompleteCanonicalRecipeV2): boolean {
-  return recipe.content.title.trim().length > 0
-    && recipe.content.originalServings > 0
-    && recipe.content.ingredients.length > 0
-    && recipe.content.instructions.length > 0
-    && recipe.content.instructions.every(({ text }) => text.trim().length > 0)
-    && Buffer.byteLength(JSON.stringify(recipe), 'utf8') <= 900_000;
+export function hasDisplayContent(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const content = (value as { content?: unknown }).content;
+  if (!content || typeof content !== 'object') return false;
+  const candidate = content as {
+    title?: unknown;
+    originalServings?: unknown;
+    ingredients?: unknown;
+    instructions?: unknown;
+  };
+  return typeof candidate.title === 'string'
+    && candidate.title.trim().length > 0
+    && typeof candidate.originalServings === 'number'
+    && candidate.originalServings > 0
+    && Array.isArray(candidate.ingredients)
+    && candidate.ingredients.length > 0
+    && Array.isArray(candidate.instructions)
+    && candidate.instructions.length > 0
+    && candidate.instructions.every((step) => Boolean(
+      step && typeof step === 'object'
+      && typeof (step as { text?: unknown }).text === 'string'
+      && (step as { text: string }).text.trim().length > 0,
+    ))
+    && Buffer.byteLength(JSON.stringify(value), 'utf8') <= 900_000;
 }
 
 const RECIPE_READ_BATCH_SIZE = 250;
