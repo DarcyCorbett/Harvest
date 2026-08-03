@@ -5,6 +5,7 @@ import {
   MAX_BATCH_RECIPES,
   buildGeminiBatchShards,
   createGeminiBatchApi,
+  isSuccessfulGeminiBatchState,
   recipeRequiresAi,
 } from '../src/catalogue/geminiBatch.js';
 import type { CompleteCanonicalRecipeV2 } from '../src/catalogue/domain.js';
@@ -119,5 +120,22 @@ describe('Gemini initial backfill batches', () => {
     expect(calls).toContain(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_BATCH_MODEL}:batchGenerateContent`,
     );
+  });
+
+  it('accepts the provider batch success state used by completed file batches', async () => {
+    const api = createGeminiBatchApi({
+      apiKey: 'secret',
+      fetchImpl: (async () => Response.json({
+        metadata: { state: 'BATCH_STATE_SUCCEEDED' },
+        response: { responsesFile: 'files/results' },
+      })) as typeof fetch,
+    });
+
+    await expect(api.getBatch('batches/job')).resolves.toEqual({
+      state: 'BATCH_STATE_SUCCEEDED',
+      resultFileName: 'files/results',
+    });
+    expect(isSuccessfulGeminiBatchState('BATCH_STATE_SUCCEEDED')).toBe(true);
+    expect(isSuccessfulGeminiBatchState('BATCH_STATE_RUNNING')).toBe(false);
   });
 });

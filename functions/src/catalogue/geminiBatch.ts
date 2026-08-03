@@ -275,6 +275,10 @@ export interface GeminiBatchApi {
   downloadFile(fileName: string): Promise<string>;
 }
 
+export function isSuccessfulGeminiBatchState(state: string): boolean {
+  return state === 'BATCH_STATE_SUCCEEDED' || state === 'JOB_STATE_SUCCEEDED';
+}
+
 export function createGeminiBatchApi(options: {
   apiKey: string;
   fetchImpl?: typeof fetch;
@@ -464,7 +468,7 @@ export async function collectGeminiTagBatch(options: {
   const shard = state.shards.find(({ status }) => status === 'submitted');
   if (!shard?.jobName) return { mode: 'tag-batch-collect', status: 'nothing-to-collect' };
   const job = await options.api.getBatch(shard.jobName);
-  if (job.state !== 'JOB_STATE_SUCCEEDED') {
+  if (!isSuccessfulGeminiBatchState(job.state)) {
     return { mode: 'tag-batch-collect', status: job.state, error: job.error };
   }
   if (!job.resultFileName) throw new Error('Completed Gemini batch has no result file');
