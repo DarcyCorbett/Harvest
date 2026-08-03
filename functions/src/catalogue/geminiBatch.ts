@@ -83,7 +83,7 @@ function classificationPrompt(recipe: AiBacklogRecipe): string {
     `modifiers: ${MODIFIERS.join(', ')}`,
     `Title: ${recipe.title.slice(0, 200)}`,
     `Ingredients: ${recipe.ingredients.join(', ').slice(0, 4_000)}`,
-    'Return mealTypes, cuisines, and modifiers arrays. Do not return other fields.',
+    'Return mealTypes, cuisines, and modifiers arrays. mealTypes and cuisines must each contain at least one value. Do not return other fields.',
   ].join('\n');
 }
 
@@ -101,8 +101,12 @@ function requestLine(recipe: AiBacklogRecipe): string {
           additionalProperties: false,
           required: ['mealTypes', 'cuisines', 'modifiers'],
           properties: {
-            mealTypes: { type: 'array', items: { type: 'string', enum: MEAL_TYPES } },
-            cuisines: { type: 'array', items: { type: 'string', enum: CUISINES } },
+            mealTypes: {
+              type: 'array', minItems: 1, items: { type: 'string', enum: MEAL_TYPES },
+            },
+            cuisines: {
+              type: 'array', minItems: 1, items: { type: 'string', enum: CUISINES },
+            },
             modifiers: { type: 'array', items: { type: 'string', enum: MODIFIERS } },
           },
         },

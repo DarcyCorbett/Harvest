@@ -95,6 +95,15 @@ describe('Gemini initial backfill batches', () => {
     expect(first[0].recipeIds).toHaveLength(MAX_BATCH_RECIPES);
     expect(first.map(({ jsonl }) => jsonl)).toEqual(second.map(({ jsonl }) => jsonl));
     expect(first[0].jsonl).toContain('"responseJsonSchema"');
+    const request = JSON.parse(first[0].jsonl.split('\n')[0]) as {
+      request: { generationConfig: { responseJsonSchema: {
+        properties: { mealTypes: { minItems?: number }; cuisines: { minItems?: number } };
+      } } };
+    };
+    expect(request.request.generationConfig.responseJsonSchema.properties.mealTypes.minItems)
+      .toBe(1);
+    expect(request.request.generationConfig.responseJsonSchema.properties.cuisines.minItems)
+      .toBe(1);
   });
 
   it('uses the stable model and official file Batch API endpoints', async () => {
