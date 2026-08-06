@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSnapshotInventory,
   inventoryTargets,
+  newAvailableInventoryTargets,
   newInventoryTargets,
   nextReconciliation,
   type SnapshotInventory,
@@ -99,5 +100,36 @@ describe('catalogue snapshot inventory', () => {
       },
     } satisfies SnapshotInventory;
     expect(() => inventoryTargets(inventory)).toThrow('failed sources');
+  });
+
+  it('weekly discovery skips failed sources while retaining new targets from complete sources', async () => {
+    const baseline = await buildSnapshotInventory({
+      adapters: [
+        adapter('available', ['https://available.test/old']),
+        adapter('unavailable', ['https://unavailable.test/old']),
+      ],
+      snapshotId: 'baseline',
+      now: () => new Date(),
+    });
+    const current = await buildSnapshotInventory({
+      adapters: [adapter('available', [
+        'https://available.test/new',
+        'https://available.test/old',
+      ])],
+      snapshotId: 'weekly',
+      now: () => new Date(),
+    });
+    current.bySource.unavailable = {
+      status: 'failed',
+      hash: 'failed',
+      count: 0,
+      items: [],
+      reasonCode: 'discovery-failed-with-http-403',
+    };
+
+    expect(newAvailableInventoryTargets(baseline, current)).toEqual({
+      available: ['https://available.test/new'],
+      unavailable: [],
+    });
   });
 });

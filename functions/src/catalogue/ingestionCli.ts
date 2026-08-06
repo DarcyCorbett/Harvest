@@ -57,6 +57,7 @@ import {
   buildSnapshotInventory,
   cloudStorageSnapshotStore,
   inventoryTargets,
+  newAvailableInventoryTargets,
   newInventoryTargets,
   nextReconciliation,
 } from './snapshot.js';
@@ -411,26 +412,35 @@ async function main(): Promise<void> {
       now: () => new Date(),
     });
     await snapshotStore.saveImmutable(current);
-    const targets = newInventoryTargets(baseline, current);
+    const discoveryFailures = Object.entries(current.bySource)
+      .filter(([, source]) => source.status !== 'complete')
+      .map(([sourceKey, source]) => ({
+        sourceKey,
+        reasonCode: source.reasonCode ?? 'discovery-failed',
+      }));
+    const targets = newAvailableInventoryTargets(baseline, current);
     const sourceKeys = Object.entries(targets)
       .filter(([, urls]) => urls.length > 0)
       .map(([sourceKey]) => sourceKey);
     if (sourceKeys.length === 0) {
-      await snapshotStore.saveReconciliation({
-        lastHash: current.hash,
-        stableCount: 2,
-        snapshotId: current.snapshotId,
-        frozen: true,
-        updatedAt: new Date().toISOString(),
-      });
+      if (discoveryFailures.length === 0) {
+        await snapshotStore.saveReconciliation({
+          lastHash: current.hash,
+          stableCount: 2,
+          snapshotId: current.snapshotId,
+          frozen: true,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       await assertGenerationMode(initialGenerationMode);
       console.log(JSON.stringify({
         runId,
         mode: 'weekly-new',
-        status: 'complete',
+        status: discoveryFailures.length === 0 ? 'complete' : 'partial',
         discoveredNew: 0,
         fetched: 0,
         tagged: 0,
+        discoveryFailures,
       }));
       return;
     }
@@ -460,7 +470,7 @@ async function main(): Promise<void> {
       classify: classifier,
       callCap: command.geminiCallCap ?? 500,
     });
-    if (crawlSummary.status === 'complete'
+    if (discoveryFailures.length === 0 && crawlSummary.status === 'complete'
       && tagging.failed === 0 && tagging.overflow === 0) {
       await snapshotStore.saveReconciliation({
         lastHash: current.hash,
@@ -475,6 +485,7 @@ async function main(): Promise<void> {
       runId,
       mode: 'weekly-new',
       discoveredNew: newRecipeIds.length,
+      discoveryFailures,
       crawl: sanitizedIngestionSummary(crawlSummary),
       tagging,
     }));

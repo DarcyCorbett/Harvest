@@ -153,6 +153,21 @@ export function newInventoryTargets(
   ]));
 }
 
+export function newAvailableInventoryTargets(
+  baseline: SnapshotInventory,
+  current: SnapshotInventory,
+): Record<string, string[]> {
+  assertCompleteInventory(baseline);
+  const known = new Set(Object.values(baseline.bySource)
+    .flatMap(({ items }) => items.map(({ id }) => id)));
+  return Object.fromEntries(Object.entries(current.bySource).map(([sourceKey, source]) => [
+    sourceKey,
+    source.status === 'complete'
+      ? source.items.filter(({ id }) => !known.has(id)).map(({ url }) => url)
+      : [],
+  ]));
+}
+
 export function nextReconciliation(
   prior: { lastHash?: string; stableCount: number },
   inventory: SnapshotInventory,
