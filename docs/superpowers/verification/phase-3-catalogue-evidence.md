@@ -2,6 +2,25 @@
 
 Status: complete. Production recipe and reference migration, reconciliation, idempotency, and final verification passed.
 
+## Final pre-cutover maintenance (2026-08-07)
+
+- A fresh Firestore export completed before writes at sanitized URI
+  `gs://<private-catalogue-bucket>/phase3-backups/20260807173459`.
+- Reconciliation `phase3-reconcile-20260807173742` scanned 89,843 recipe
+  documents, retained 27,656 durable mapping no-ops, and reconciled 64 late
+  legacy recipes as 26 new canonical targets plus 38 links to existing targets.
+  It used 90 data writes and reported zero failures, concurrent changes, or
+  cleanup errors.
+- Reference pass `phase3-migrate-references-20260807183511` scanned 220
+  references and reported 104 canonical no-ops plus 116 unchanged pre-existing
+  orphans, with zero updates, moves, collisions, failures, or concurrent
+  changes.
+- Terminal verifier `phase3-verify-20260807183754` reported checkpoint epoch 2,
+  stage `complete`, completed recipe/meal-plan/cookbook stages, 27,720 mappings,
+  89,869 recipe documents, and generation mode `legacy`.
+- The Sunday catalogue scheduler was restored to `ENABLED` after maintenance;
+  the generation mode remained `legacy` throughout.
+
 ## Local verification
 
 - Phase 3 implementation uses stored legacy data only; Gemini and recipe-site fetching are excluded by static checks.
