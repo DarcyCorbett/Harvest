@@ -10,6 +10,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { updateMealPlanServings } from '@/services/firestoreService';
 import { legacyRecipeClient } from '@/services/legacyRecipeClient';
 import { applyServingScale, calculateRequiredServings } from '@/services/recipeScraperService';
+import { hasMeaningfulNutrition, mergeRecipeLabels } from '@/services/recipePresentation';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
@@ -314,6 +315,8 @@ export default function RecipeDetailModal({
   const [localCourse, setLocalCourse] = useState<string[]>([]);
   const [localTags, setLocalTags] = useState<string[]>([]);
   const isCatalogueRecipe = recipe?.schemaVersion === 2;
+  const nutrition = recipe?.nutrition;
+  const nutritionAvailable = hasMeaningfulNutrition(nutrition);
 
   useEffect(() => {
     setLocalCourse(recipe?.course ?? []);
@@ -334,7 +337,7 @@ export default function RecipeDetailModal({
     } catch {
       Alert.alert('Error', 'Could not save changes.');
     }
-  }, [householdId, recipe?.id, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
+  }, [householdId, recipe?.id, recipe?.schemaVersion, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
 
   const handleCancelLabels = useCallback(() => {
     setLocalCourse(recipe?.course ?? []);
@@ -460,12 +463,8 @@ export default function RecipeDetailModal({
           <View style={styles.courseRow}>
             {!editingLabels && (
               <View style={styles.coursePills}>
-                {Array.from(
-                  new Map(
-                    [...localCourse, ...localTags].map((l) => [l.toLowerCase(), l]),
-                  ).values(),
-                ).map((label, i) => (
-                  <View key={i} style={styles.coursePill}>
+                {mergeRecipeLabels(localCourse, localTags).map((label) => (
+                  <View key={label.toLowerCase()} style={styles.coursePill}>
                     <Text style={styles.coursePillText}>
                       {label.replace(/\b\w/g, (ch) => ch.toUpperCase())}
                     </Text>
@@ -534,12 +533,16 @@ export default function RecipeDetailModal({
           )}
 
           {/* Macro strip */}
-          <View style={styles.macroStrip}>
-            <MacroBadge value={String(recipe.nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} styles={styles} />
-            <MacroBadge value={`${recipe.nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} styles={styles} />
-            <MacroBadge value={`${recipe.nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} styles={styles} />
-            <MacroBadge value={`${recipe.nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} styles={styles} />
-          </View>
+          {nutritionAvailable ? (
+            <View style={styles.macroStrip}>
+              <MacroBadge value={nutrition.calories === undefined ? '—' : String(nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} styles={styles} />
+              <MacroBadge value={nutrition.protein === undefined ? '—' : `${nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} styles={styles} />
+              <MacroBadge value={nutrition.carbs === undefined ? '—' : `${nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} styles={styles} />
+              <MacroBadge value={nutrition.fat === undefined ? '—' : `${nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} styles={styles} />
+            </View>
+          ) : (
+            <Text style={[styles.nutritionUnavailable, { color: colors.textTertiary }]}>Nutrition unavailable</Text>
+          )}
 
           {/* Time chips */}
           <View style={styles.metaRow}>
@@ -956,6 +959,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   macroStrip: {
     flexDirection: 'row',
     gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  nutritionUnavailable: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.medium,
     marginBottom: Spacing.lg,
   },
   macroBadge: {

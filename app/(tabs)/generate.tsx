@@ -26,6 +26,7 @@ import {
   type GeneratedMeal,
 } from '@/services/generatorService';
 import type { CookbookEntry, CuisineStyle, HouseholdSettings, MealType, Recipe } from '@/services/types';
+import { mergeRecipeLabels } from '@/services/recipePresentation';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -1217,6 +1218,7 @@ const MealResultCard = React.memo(function MealResultCard({
   onPreview: () => void;
   colors: (typeof Colors)['light'];
 }) {
+  const labels = mergeRecipeLabels(meal.recipe.course, meal.recipe.tags);
   return (
     <TouchableOpacity
       style={[styles.resultCard, { backgroundColor: colors.surface }, Shadows.sm]}
@@ -1266,10 +1268,10 @@ const MealResultCard = React.memo(function MealResultCard({
           </Text>
         </View>
 
-        {((meal.recipe.course?.length ?? 0) + (meal.recipe.tags?.length ?? 0)) > 0 ? (
+        {labels.length > 0 ? (
           <View style={styles.resultCoursePills}>
-            {[...(meal.recipe.course ?? []), ...(meal.recipe.tags ?? [])].map((label, i) => (
-              <View key={i} style={[styles.resultCoursePill, { borderColor: colors.border }]}>
+            {labels.map((label) => (
+              <View key={label.toLowerCase()} style={[styles.resultCoursePill, { borderColor: colors.border }]}>
                 <Text style={[styles.resultCoursePillText, { color: colors.textSecondary }]}>
                   {label.replace(/\b\w/g, (ch) => ch.toUpperCase())}
                 </Text>

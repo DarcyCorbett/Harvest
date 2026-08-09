@@ -132,14 +132,17 @@ function decodeInstructions(value: unknown): InstructionStep[] {
   });
 }
 
-function decodeNutrition(value: unknown): Nutrition {
-  const data = isRecord(value) ? value : {};
-  return {
-    calories: asNumber(data.calories),
-    protein: asNumber(data.protein),
-    carbs: asNumber(data.carbs),
-    fat: asNumber(data.fat),
-  };
+function decodeNutrition(value: unknown): Nutrition | undefined {
+  if (!isRecord(value)) return undefined;
+  const nutrition: Nutrition = {};
+  for (const key of ['calories', 'protein', 'carbs', 'fat'] as const) {
+    const raw = value[key];
+    const decoded = asNumber(raw, Number.NaN);
+    if (Number.isFinite(decoded) && decoded >= 0) nutrition[key] = decoded;
+  }
+  return Object.values(nutrition).some((entry) => entry !== undefined && entry > 0)
+    ? nutrition
+    : undefined;
 }
 
 function minuteLabel(value: unknown): string {
@@ -168,6 +171,7 @@ function decodeCatalogueRecipe(documentId: string, data: UnknownRecord): Recipe 
   const imageUrl = asString(content.imageUrl);
   const videoEmbedUrl = asString(content.videoEmbedUrl);
   const description = asString(content.description);
+  const nutrition = decodeNutrition(content.nutrition);
 
   return {
     id: documentId,
@@ -182,14 +186,14 @@ function decodeCatalogueRecipe(documentId: string, data: UnknownRecord): Recipe 
     ...(minuteLabel(effective.totalMinutes) ? { totalTime: minuteLabel(effective.totalMinutes) } : {}),
     originalServings: Math.max(1, asNumber(content.originalServings, 1)),
     course: mealTypes,
-    tags: unique([...mealTypes, ...cuisines, ...modifiers]),
+    tags: unique([...cuisines, ...modifiers]),
     ...(description ? { description } : {}),
     ...(cuisines[0] ? { cuisine: cuisines[0] } : {}),
     ingredients: decodeIngredients(content.ingredients),
     ...(groups ? { ingredientGroups: groups } : {}),
     instructions: decodeInstructions(content.instructions),
     notes: asString(content.notes) ?? '',
-    nutrition: decodeNutrition(content.nutrition),
+    ...(nutrition ? { nutrition } : {}),
     ...(typeof data.needsDefrost === 'boolean' ? { needsDefrost: data.needsDefrost } : {}),
     ...(typeof data.needsMarinate === 'boolean' ? { needsMarinate: data.needsMarinate } : {}),
     scrapedAt: asDate(ingestion.lastChangedAt)
@@ -202,8 +206,10 @@ function decodeLegacyRecipe(documentId: string, data: UnknownRecord): Recipe | n
   const title = asString(data.title);
   const sourceUrl = asString(data.sourceUrl);
   if (!title || !sourceUrl) return null;
+  const nutrition = decodeNutrition(data.nutrition);
+  const { nutrition: _rawNutrition, ...legacy } = data;
   return {
-    ...data,
+    ...legacy,
     id: documentId,
     title,
     sourceUrl,
@@ -214,7 +220,7 @@ function decodeLegacyRecipe(documentId: string, data: UnknownRecord): Recipe | n
     ...(decodeGroups(data.ingredientGroups) ? { ingredientGroups: decodeGroups(data.ingredientGroups) } : {}),
     instructions: decodeInstructions(data.instructions),
     notes: asString(data.notes) ?? '',
-    nutrition: decodeNutrition(data.nutrition),
+    ...(nutrition ? { nutrition } : {}),
     scrapedAt: asDate(data.scrapedAt) ?? new Date(0),
   } as Recipe;
 }

@@ -5,12 +5,14 @@ import {
   CatalogueIngestionStageError,
   createCatalogueIngestionEngine,
   mergeIngestedRecipe,
+  mergeStoredOperationalRecipe,
   saveVerifiedManifestObject,
   type CatalogueIngestionDependencies,
   type CatalogueRecipeStore,
 } from '../src/catalogue/ingestion.js';
 import type { CatalogueManifest } from '../src/catalogue/operations.js';
 import type { RecipeSourceAdapter } from '../src/catalogue/sourceAdapters.js';
+import { CATALOGUE_PARSER_VERSION } from '../src/catalogue/version.js';
 
 const HTML = `<script type="application/ld+json">${JSON.stringify({
   '@context': 'https://schema.org',
@@ -92,7 +94,7 @@ describe('catalogue ingestion engine', () => {
         [key]: {
           urlHash: key,
           sourceLastModified: '2026-07-01',
-          parserVersion: 1,
+          parserVersion: CATALOGUE_PARSER_VERSION,
           lastFetchedAt: '2026-07-01T00:00:00.000Z',
           state: 'ready',
         },
@@ -147,7 +149,7 @@ describe('catalogue ingestion engine', () => {
     recipeStore.recoverManifestEntry = vi.fn(async (recipeId) => ({
       urlHash: recipeId,
       sourceLastModified: '2026-07-01',
-      parserVersion: 1,
+      parserVersion: CATALOGUE_PARSER_VERSION,
       lastFetchedAt: '2026-07-01T00:00:00.000Z',
       state: 'ready',
     }));
@@ -438,6 +440,84 @@ describe('catalogue ingestion engine', () => {
 });
 
 describe('ingestion refresh merging', () => {
+  it('marks terminal nutrition checks current while leaving transient failures pending', () => {
+    const sourceMetadata = { totalMinutes: 30, mealTypes: ['dinner'] as const, cuisines: ['global'] as const, modifiers: [] };
+    const effective = buildEffectiveMetadata(sourceMetadata);
+    const existing = {
+      schemaVersion: 2,
+      id: 'id',
+      status: 'ready',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: { title: 'Soup', originalServings: 4, ingredients: [{ name: 'Onion' }], instructions: [{ text: 'Cook.' }] },
+      sourceMetadata,
+      effective,
+      search: buildSearchFields(effective, ['Onion'], 0.25),
+      classification: { parserVersion: 2, taxonomyVersion: 1, sources: {}, complete: true },
+      ingestion: { contentHash: 'old' },
+    } satisfies CompleteCanonicalRecipeV2;
+    const operational = (status: 'invalid' | 'retryable', reasonCode: string) => ({
+      schemaVersion: 2 as const,
+      id: 'id',
+      status,
+      reasonCode,
+      source: existing.source,
+      ingestion: { lastAttemptAt: '2026-08-09T00:00:00.000Z' },
+    });
+
+    expect(mergeStoredOperationalRecipe(
+      existing,
+      operational('invalid', 'missing-recipe-markup'),
+      CATALOGUE_PARSER_VERSION,
+    ).classification.parserVersion).toBe(CATALOGUE_PARSER_VERSION);
+    expect(mergeStoredOperationalRecipe(
+      existing,
+      operational('retryable', 'fetch-retryable'),
+      CATALOGUE_PARSER_VERSION,
+    ).classification.parserVersion).toBe(2);
+  });
+
+  it('adds nutrition at parser version 3 while preserving Gemini and manual metadata', () => {
+    const sourceMetadata = { totalMinutes: 30, mealTypes: ['dinner'] as const, cuisines: ['italian'] as const, modifiers: [] };
+    const effective = buildEffectiveMetadata(sourceMetadata, { modifiers: ['healthy'] });
+    const existing = {
+      schemaVersion: 2,
+      id: 'id',
+      status: 'ready',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: { title: 'Soup', originalServings: 4, ingredients: [{ name: 'Onion' }], instructions: [{ text: 'Cook.' }] },
+      sourceMetadata,
+      manualOverrides: { modifiers: ['healthy'] as const },
+      effective,
+      search: buildSearchFields(effective, ['Onion'], 0.25),
+      classification: {
+        parserVersion: 2, classifierVersion: 1, taxonomyVersion: 1,
+        sources: { mealTypes: 'ai' as const, cuisines: 'ai' as const, modifiers: 'manual' as const },
+        complete: true,
+      },
+      ingestion: { contentHash: 'old', firstIngestedAt: '2026-07-01T00:00:00.000Z' },
+    } satisfies CompleteCanonicalRecipeV2;
+    const incoming = {
+      ...existing,
+      content: { ...existing.content, nutrition: { calories: 250, protein: 10 } },
+      manualOverrides: undefined,
+      classification: {
+        ...existing.classification,
+        parserVersion: CATALOGUE_PARSER_VERSION,
+        sources: { mealTypes: 'source' as const, cuisines: 'source' as const, modifiers: 'source' as const },
+      },
+      ingestion: { contentHash: 'new', firstIngestedAt: '2026-08-09T00:00:00.000Z' },
+    };
+
+    const merged = mergeIngestedRecipe(existing, incoming);
+
+    expect(merged.content.nutrition).toEqual({ calories: 250, protein: 10 });
+    expect(merged.classification.parserVersion).toBe(CATALOGUE_PARSER_VERSION);
+    expect(merged.classification.sources).toEqual(existing.classification.sources);
+    expect(merged.manualOverrides).toEqual(existing.manualOverrides);
+    expect(merged.search.randomKey).toBe(0.25);
+    expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
+  });
+
   it('preserves overrides, deterministic fields, and stable timestamps while rebuilding refreshed metadata', () => {
     const sourceMetadata = { totalMinutes: 50, mealTypes: ['dinner'] as const, cuisines: ['mediterranean'] as const, modifiers: [] };
     const effective = buildEffectiveMetadata(sourceMetadata, { totalMinutes: 25, modifiers: ['salad'] });

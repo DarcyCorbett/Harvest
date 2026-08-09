@@ -19,10 +19,10 @@ export interface IngredientGroup {
 
 /** Nutritional information per serving */
 export interface Nutrition {
-  calories: number;
-  protein: number; // grams
-  carbs: number;   // grams
-  fat: number;     // grams
+  calories?: number;
+  protein?: number; // grams
+  carbs?: number;   // grams
+  fat?: number;     // grams
 }
 
 /** A single instruction step. May have an inline image (from JSON-LD HowToStep.image
@@ -59,7 +59,7 @@ export interface Recipe {
   ingredientGroups?: IngredientGroup[]; // WPRM grouped ingredients (if present)
   instructions: InstructionStep[];
   notes: string;
-  nutrition: Nutrition;
+  nutrition?: Nutrition;
   /** True if recipe's main protein typically needs defrosting (Gemini-detected at confirm time). */
   needsDefrost?: boolean;
   /** True if recipe requires ≥30 min refrigerated marinating (Gemini-detected at confirm time). */

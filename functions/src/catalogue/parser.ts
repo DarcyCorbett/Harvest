@@ -3,6 +3,7 @@ import {
   MEAL_TYPES,
   MODIFIERS,
   type CompleteCanonicalRecipeV2,
+  type CanonicalNutrition,
   type Cuisine,
   type MealType,
   type Modifier,
@@ -174,6 +175,12 @@ function markupRecipeNode(html: string): Record<string, unknown> | undefined {
     recipeCategory: itemPropValues(html, 'recipeCategory'),
     recipeCuisine: itemPropValues(html, 'recipeCuisine'),
     keywords: itemPropValues(html, 'keywords'),
+    nutrition: {
+      calories: first(itemPropValues(html, 'calories')),
+      proteinContent: first(itemPropValues(html, 'proteinContent')),
+      carbohydrateContent: first(itemPropValues(html, 'carbohydrateContent')),
+      fatContent: first(itemPropValues(html, 'fatContent')),
+    },
   };
 }
 
@@ -273,6 +280,66 @@ function modifiers(tags: readonly string[]): Modifier[] {
   return MODIFIERS.filter((modifier) => includesTag(tags, MODIFIER_ALIASES[modifier]));
 }
 
+function rounded(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function numericAmount(value: unknown): { amount: number; unit: string } | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? { amount: value, unit: '' } : undefined;
+  }
+  if (typeof value !== 'string') return undefined;
+  const normalized = text(value).toLowerCase().replace(/,/g, '');
+  const match = /(-?\d+(?:\.\d+)?)\s*([a-z]+)?/.exec(normalized);
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  return Number.isFinite(amount) && amount >= 0
+    ? { amount, unit: match[2] ?? '' }
+    : undefined;
+}
+
+function energy(value: unknown): number | undefined {
+  const parsed = numericAmount(value);
+  if (!parsed) return undefined;
+  if (!parsed.unit || ['kcal', 'cal', 'calorie', 'calories'].includes(parsed.unit)) {
+    return rounded(parsed.amount);
+  }
+  if (['kj', 'kilojoule', 'kilojoules'].includes(parsed.unit)) {
+    return rounded(parsed.amount / 4.184);
+  }
+  return undefined;
+}
+
+function grams(value: unknown): number | undefined {
+  const parsed = numericAmount(value);
+  if (!parsed) return undefined;
+  if (!parsed.unit || ['g', 'gram', 'grams'].includes(parsed.unit)) {
+    return rounded(parsed.amount);
+  }
+  if (['mg', 'milligram', 'milligrams'].includes(parsed.unit)) {
+    return rounded(parsed.amount / 1_000);
+  }
+  return undefined;
+}
+
+export function parseNutrition(value: unknown): CanonicalNutrition | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const data = value as Record<string, unknown>;
+  const calories = energy(data.calories);
+  const protein = grams(data.proteinContent ?? data.protein);
+  const carbs = grams(data.carbohydrateContent ?? data.carbs);
+  const fat = grams(data.fatContent ?? data.fat);
+  const nutrition: CanonicalNutrition = {
+    ...(calories === undefined ? {} : { calories }),
+    ...(protein === undefined ? {} : { protein }),
+    ...(carbs === undefined ? {} : { carbs }),
+    ...(fat === undefined ? {} : { fat }),
+  };
+  return Object.values(nutrition).some((entry) => entry !== undefined && entry > 0)
+    ? nutrition
+    : undefined;
+}
+
 export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCatalogueRecipe {
   const node = recipeNode(html);
   if (!node) {
@@ -307,6 +374,7 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
   const totalMinutes = parseIsoDurationMinutes(node.totalTime);
   const description = text(node.description);
   const parsedImageUrl = imageUrl(node.image);
+  const nutrition = parseNutrition(node.nutrition);
 
   return {
     content: {
@@ -316,6 +384,7 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
       originalServings,
       ingredients,
       instructions,
+      ...(nutrition ? { nutrition } : {}),
     },
     sourceMetadata: {
       ...(prepMinutes === undefined ? {} : { prepMinutes }),

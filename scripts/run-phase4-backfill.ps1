@@ -2,7 +2,10 @@
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-z][a-z0-9-]{4,29}$')][string]$ProjectId,
   [Parameter(Mandatory = $true)]
-  [ValidateSet('classify-backfill', 'refresh-canary', 'refresh-backfill', 'verify-backfill', 'retry-failed')]
+  [ValidateSet(
+    'classify-backfill', 'refresh-canary', 'refresh-backfill', 'verify-backfill', 'retry-failed',
+    'nutrition-canary', 'nutrition-backfill', 'verify-nutrition'
+  )]
   [string]$Mode,
   [string]$Region = 'europe-west1',
   [string]$JobName = 'mealwizard-catalogue-ingestion',
@@ -37,6 +40,12 @@ try {
       [string]$GeminiCallCap
     }
     $jobArgs += @('--gemini-call-cap', $geminiCapArgument)
+  }
+  if ($Mode -eq 'nutrition-backfill') {
+    $jobArgs += @(
+      '--write-cap', [string]$WriteCap,
+      '--max-per-source', [string]$MaxPerSource
+    )
   }
   if ($Mode -eq 'refresh-backfill') {
     $jobArgs += @('--max-per-source', [string]$MaxPerSource)

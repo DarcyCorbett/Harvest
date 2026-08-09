@@ -33,6 +33,7 @@ describe('final catalogue release tooling', () => {
   it('parses final-release PowerShell scripts and Node operator entrypoints', () => {
     for (const path of [
       'scripts/run-phase4-backfill.ps1',
+      'scripts/deploy-phase4-backfill.ps1',
       'scripts/set-catalogue-generation-mode.ps1',
     ]) {
       const escaped = resolve(root, path).replaceAll("'", "''");
@@ -56,5 +57,15 @@ describe('final catalogue release tooling', () => {
       const result = spawnSync('node.exe', ['--check', resolve(root, path)], { encoding: 'utf8' });
       expect(result.status, result.stderr).toBe(0);
     }
+  });
+
+  it('keeps nutrition repair bounded, deterministic, and mode preserving', () => {
+    const runner = readFileSync(resolve(root, 'scripts/run-phase4-backfill.ps1'), 'utf8');
+    const cli = readFileSync(resolve(root, 'functions/src/catalogue/ingestionCli.ts'), 'utf8');
+    expect(runner).toContain("'nutrition-canary', 'nutrition-backfill', 'verify-nutrition'");
+    expect(runner).toContain("if ($Mode -eq 'nutrition-backfill')");
+    expect(runner).toContain('$finalMode -ne $initialMode');
+    expect(cli).toMatch(/command\.mode === 'nutrition-backfill'[\s\S]*classifyCatalogueDeterministically/);
+    expect(cli).toContain('CATALOGUE_PARSER_VERSION');
   });
 });

@@ -13,7 +13,9 @@ import {
   type CompleteCanonicalRecipeV2,
 } from './domain.js';
 import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
-import type { RecipeSourceAdapter } from './sourceAdapters.js';
+import { SOURCE_CONFIGS, isFrozenCatalogueSource, type RecipeSourceAdapter } from './sourceAdapters.js';
+import { hasMeaningfulCanonicalNutrition, type NutritionRefreshWork } from './nutritionBackfill.js';
+import { CATALOGUE_PARSER_VERSION } from './version.js';
 
 const CHECKPOINT_COLLECTION = 'catalogueBackfillCheckpoints';
 const SOURCE_COLLECTION = 'catalogueSourceBackfills';
@@ -305,6 +307,99 @@ export async function loadEligibleRefreshWork(
   return targetedSourceKeys.length
     ? { sourceKeys: targetedSourceKeys, targetUrls: targets }
     : { sourceKeys: [...eligible].sort() };
+}
+
+export async function loadNutritionRefreshWork(
+  maxPerSource = 250,
+  requestedSourceKeys?: readonly string[],
+): Promise<NutritionRefreshWork> {
+  if (!Number.isInteger(maxPerSource) || maxPerSource < 1 || maxPerSource > 250) {
+    throw new Error('Invalid nutrition source fairness cap');
+  }
+  const active = new Set(SOURCE_CONFIGS.map(({ sourceKey }) => sourceKey));
+  const requested = requestedSourceKeys ? new Set(requestedSourceKeys) : undefined;
+  const targets: Record<string, string[]> = {};
+  await forEachV2Recipe((document) => {
+    const recipe = { ...document.data(), id: document.id } as CompleteCanonicalRecipeV2;
+    const sourceKey = recipe.source?.key;
+    const retryAt = Date.parse(String(recipe.ingestion?.nextRetryAt ?? ''));
+    if ((recipe.status !== 'ready' && recipe.status !== 'review')
+      || !active.has(sourceKey)
+      || (requested && !requested.has(sourceKey))
+      || (recipe.classification?.parserVersion ?? 0) >= CATALOGUE_PARSER_VERSION
+      || (Number.isFinite(retryAt) && retryAt > Date.now())
+      || hasMeaningfulCanonicalNutrition(recipe)) return;
+    const url = recipe.source?.canonicalUrl;
+    if (typeof url !== 'string') return;
+    const values = targets[sourceKey] ?? [];
+    if (values.length < maxPerSource) values.push(url);
+    targets[sourceKey] = values;
+  });
+  const sourceKeys = Object.keys(targets).sort();
+  return {
+    sourceKeys,
+    targetUrls: targets,
+    candidates: Object.values(targets).reduce((sum, urls) => sum + urls.length, 0),
+  };
+}
+
+export interface NutritionVerificationSummary {
+  mode: 'verify-nutrition';
+  activeTotal: number;
+  withNutrition: number;
+  unavailableChecked: number;
+  pending: number;
+  frozenWithoutNutrition: number;
+  bySource: Record<string, {
+    total: number;
+    withNutrition: number;
+    unavailableChecked: number;
+    pending: number;
+  }>;
+}
+
+export async function verifyNutritionBackfill(): Promise<NutritionVerificationSummary> {
+  const active = new Set(SOURCE_CONFIGS.map(({ sourceKey }) => sourceKey));
+  const summary: NutritionVerificationSummary = {
+    mode: 'verify-nutrition',
+    activeTotal: 0,
+    withNutrition: 0,
+    unavailableChecked: 0,
+    pending: 0,
+    frozenWithoutNutrition: 0,
+    bySource: {},
+  };
+  await forEachV2Recipe((document) => {
+    const recipe = { ...document.data(), id: document.id } as CompleteCanonicalRecipeV2;
+    if (recipe.status !== 'ready' && recipe.status !== 'review') return;
+    const sourceKey = recipe.source?.key;
+    const meaningful = hasMeaningfulCanonicalNutrition(recipe);
+    if (isFrozenCatalogueSource(sourceKey)) {
+      if (!meaningful) summary.frozenWithoutNutrition += 1;
+      return;
+    }
+    if (!active.has(sourceKey)) return;
+    summary.activeTotal += 1;
+    const source = summary.bySource[sourceKey] ?? {
+      total: 0,
+      withNutrition: 0,
+      unavailableChecked: 0,
+      pending: 0,
+    };
+    source.total += 1;
+    if (meaningful) {
+      summary.withNutrition += 1;
+      source.withNutrition += 1;
+    } else if ((recipe.classification?.parserVersion ?? 0) >= CATALOGUE_PARSER_VERSION) {
+      summary.unavailableChecked += 1;
+      source.unavailableChecked += 1;
+    } else {
+      summary.pending += 1;
+      source.pending += 1;
+    }
+    summary.bySource[sourceKey] = source;
+  });
+  return summary;
 }
 
 export interface Phase4Inventory {

@@ -27,6 +27,9 @@ export const INGESTION_MODES = [
   'snapshot-crawl',
   'snapshot-reconcile',
   'snapshot-verify',
+  'nutrition-canary',
+  'nutrition-backfill',
+  'verify-nutrition',
   'tag-batch-prepare',
   'tag-batch-submit',
   'tag-batch-collect',
@@ -221,6 +224,12 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
     if (result.forceRefresh || result.targetUrls || result.confirmPaidBatch
       || result.dryRun) invalid();
     if (result.writeCap !== undefined && result.writeCap > 17_500) invalid();
+  }
+  if (result.mode?.includes('nutrition')) {
+    if (result.forceRefresh || result.targetUrls || result.geminiCallCap !== undefined
+      || result.confirmPaidBatch || result.dryRun) invalid();
+    if (result.mode !== 'nutrition-backfill'
+      && (result.writeCap !== undefined || result.maxPerSource !== undefined)) invalid();
   }
 
   return result;

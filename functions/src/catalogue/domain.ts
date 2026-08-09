@@ -48,6 +48,13 @@ export interface CanonicalInstructionStep {
   isHeader?: boolean;
 }
 
+export interface CanonicalNutrition {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+}
+
 export interface RecipeMetadata {
   prepMinutes?: number;
   cookMinutes?: number;
@@ -122,7 +129,7 @@ export interface CompleteCanonicalRecipeV2 extends CanonicalRecipeBase {
     ingredientGroups?: CanonicalIngredientGroup[];
     instructions: CanonicalInstructionStep[];
     notes?: string;
-    nutrition?: Record<string, unknown>;
+    nutrition?: CanonicalNutrition;
   };
   sourceMetadata: RecipeMetadata;
   manualOverrides?: ManualRecipeOverrides;

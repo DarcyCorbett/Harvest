@@ -31,6 +31,7 @@ import {
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, Recipe } from '@/services/types';
+import { hasMeaningfulNutrition } from '@/services/recipePresentation';
 import {
   applyRecipeFetchResults,
   beginRecipeLoads,
@@ -539,7 +540,9 @@ function ListRow({
           </Text>
           {recipe && (
             <Text style={[s.cardMeta, { color: colors.textTertiary }]}>
-              {recipe.prepTime} prep · {recipe.cookTime} cook · {recipe.nutrition.calories} kcal
+              {recipe.prepTime} prep · {recipe.cookTime} cook · {hasMeaningfulNutrition(recipe.nutrition) && recipe.nutrition.calories !== undefined
+                ? `${recipe.nutrition.calories} kcal`
+                : 'Nutrition unavailable'}
             </Text>
           )}
         </View>

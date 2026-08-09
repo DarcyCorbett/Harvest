@@ -21,6 +21,7 @@ import {
 import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
 import { classifyCatalogueDeterministically } from './classifier.js';
 import { hasDisplayContent } from './snapshotFirestore.js';
+import { CATALOGUE_PARSER_VERSION } from './version.js';
 import type { DiscoveredUrl, RecipeSourceAdapter } from './sourceAdapters.js';
 
 export type CatalogueIngestionFailureStage =
@@ -317,6 +318,31 @@ export function mergeOperationalFailure(
   };
 }
 
+export function mergeStoredOperationalRecipe(
+  existing: CompleteCanonicalRecipeV2,
+  record: OperationalCanonicalRecipeV2,
+  terminalParserVersion?: number,
+): CompleteCanonicalRecipeV2 {
+  const merged = mergeOperationalFailure(existing, record.ingestion);
+  const terminal = record.status === 'disabled'
+    || (record.status === 'invalid' && [
+      'non-recipe-page',
+      'protected-access',
+      'unsupported-markup',
+      'missing-recipe-markup',
+      'missing-display-content',
+    ].includes(record.reasonCode));
+  return terminal && terminalParserVersion !== undefined
+    ? {
+      ...merged,
+      classification: {
+        ...merged.classification,
+        parserVersion: terminalParserVersion,
+      },
+    }
+    : merged;
+}
+
 function manifestEntry(
   prior: CatalogueManifestEntry | undefined,
   options: {
@@ -341,7 +367,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
     async run(options: CatalogueIngestionOptions): Promise<CatalogueRunSummary> {
       const startedAtDate = dependencies.now();
       const metrics = emptyMetrics();
-      const parserVersion = options.parserVersion ?? 1;
+      const parserVersion = options.parserVersion ?? CATALOGUE_PARSER_VERSION;
       const taxonomyVersion = options.taxonomyVersion ?? 1;
       const adapters = dependencies.adapters.filter((adapter) =>
         !options.sourceKeys || options.sourceKeys.includes(adapter.sourceKey));
@@ -854,7 +880,9 @@ export async function saveVerifiedManifestObject(
   }
 }
 
-export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
+export function firestoreCatalogueRecipeStore(options: {
+  terminalParserVersion?: number;
+} = {}): CatalogueRecipeStore {
   const db = getFirestore();
   return {
     writeComplete(incoming) {
@@ -878,10 +906,15 @@ export function firestoreCatalogueRecipeStore(): CatalogueRecipeStore {
           && hasDisplayContent(snapshot.data())
           ? snapshot.data() as CompleteCanonicalRecipeV2
           : undefined;
-        transaction.set(
-          reference,
-          existing ? mergeOperationalFailure(existing, record.ingestion) : record,
-        );
+        if (!existing) {
+          transaction.set(reference, record);
+          return;
+        }
+        transaction.set(reference, mergeStoredOperationalRecipe(
+          existing,
+          record,
+          options.terminalParserVersion,
+        ));
       });
     },
     async recoverManifestEntry(recipeId) {

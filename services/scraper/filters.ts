@@ -122,8 +122,9 @@ const UNHEALTHY_FAT_INGREDIENTS = ['lard', 'shortening', 'suet', 'duck fat', 'go
 function checkHealthy(recipe: Recipe): { ok: boolean; reason?: string } {
   if (DEEP_FRY_RE.test(recipe.instructions.map((s) => s.text).join(' ')))
     return { ok: false, reason: 'deep frying detected in instructions' };
-  if (recipe.nutrition.calories > 0 && recipe.nutrition.calories > 800)
-    return { ok: false, reason: `calories ${recipe.nutrition.calories} > 800` };
+  const calories = recipe.nutrition?.calories;
+  if (calories !== undefined && calories > 800)
+    return { ok: false, reason: `calories ${calories} > 800` };
 
   const ingNames = recipe.ingredients.map((i) => i.name.toLowerCase());
   let penalties = 0;
@@ -135,9 +136,10 @@ function checkHealthy(recipe: Recipe): { ok: boolean; reason?: string } {
   const unhealthyFat = UNHEALTHY_FAT_INGREDIENTS.find((t) => ingNames.some((n) => matchesWord(n, t)));
   if (unhealthyFat) { penalties++; lastReason = `unhealthy fat "${unhealthyFat}"`; }
 
-  if (recipe.nutrition.fat > 0 && recipe.nutrition.fat > 40) {
+  const fat = recipe.nutrition?.fat;
+  if (fat !== undefined && fat > 40) {
     penalties++;
-    lastReason = `fat ${recipe.nutrition.fat}g > 40g`;
+    lastReason = `fat ${fat}g > 40g`;
   }
 
   return penalties > 1 ? { ok: false, reason: lastReason } : { ok: true };

@@ -14,10 +14,12 @@ import {
   firestoreClassificationBackfillStore,
   loadEligibleSourceKeys,
   loadEligibleRefreshWork,
+  loadNutritionRefreshWork,
   recordPhase4Run,
   runSourceRefreshCanaries,
   sanitizedClassificationSummary,
   verifyPhase4Backfill,
+  verifyNutritionBackfill,
 } from './backfillFirestore.js';
 import {
   classifyCatalogueDeterministically,
@@ -48,6 +50,7 @@ import {
   createLeaseManager,
   firestoreCatalogueOpsDocuments,
 } from './operations.js';
+import { runNutritionCanaries } from './nutritionBackfill.js';
 import {
   WORDPRESS_SOURCE_KEYS,
   createTrustedSourceAdapters,
@@ -65,6 +68,7 @@ import {
   snapshotReconciliationTargets,
   verifySnapshotInventory,
 } from './snapshotFirestore.js';
+import { CATALOGUE_PARSER_VERSION, CATALOGUE_TAXONOMY_VERSION } from './version.js';
 
 initializeApp();
 
@@ -147,13 +151,14 @@ async function main(): Promise<void> {
     crawlAdapters: typeof adapters,
     manifestPrefix: string,
     writeCap: number,
+    terminalParserVersion?: number,
   ) => createCatalogueIngestionEngine({
     adapters: crawlAdapters,
     manifests: cloudStorageManifestStore(
       process.env.CATALOGUE_MANIFEST_BUCKET,
       manifestPrefix,
     ),
-    recipes: firestoreCatalogueRecipeStore(),
+    recipes: firestoreCatalogueRecipeStore({ terminalParserVersion }),
     runs: firestoreCatalogueRunStore(),
     lease: createLeaseManager(operational.lease, {
       ownerId: runId,
@@ -176,6 +181,74 @@ async function main(): Promise<void> {
       },
     }),
   });
+
+  if (command.mode === 'nutrition-canary') {
+    const work = await loadNutritionRefreshWork(5, command.sourceKeys);
+    const lease = createLeaseManager(operational.lease, {
+      ownerId: runId,
+      ttlMs: 5 * 60 * 1_000,
+    });
+    if (!(await lease.acquire())) throw new Error('Catalogue ingestion lease unavailable');
+    try {
+      const summary = await runNutritionCanaries({
+        adapters: selectedAdapters.filter((adapter) => work.sourceKeys.includes(adapter.sourceKey)),
+        targetUrls: work.targetUrls,
+      });
+      await recordPhase4Run(runId, summary);
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify({ runId, candidates: work.candidates, ...summary }));
+      return;
+    } finally {
+      await lease.release();
+    }
+  }
+
+  if (command.mode === 'verify-nutrition') {
+    const summary = await verifyNutritionBackfill();
+    await recordPhase4Run(runId, summary);
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({ runId, ...summary }));
+    return;
+  }
+
+  if (command.mode === 'nutrition-backfill') {
+    const work = await loadNutritionRefreshWork(
+      Math.min(command.maxPerSource ?? 250, 250),
+      command.sourceKeys,
+    );
+    if (work.sourceKeys.length === 0) {
+      const summary = { mode: 'nutrition-backfill', status: 'complete', candidates: 0 };
+      await recordPhase4Run(runId, summary);
+      await assertGenerationMode(initialGenerationMode);
+      console.log(JSON.stringify({ runId, ...summary }));
+      return;
+    }
+    const writeCap = command.writeCap ?? 8_000;
+    const summary = await deterministicCrawlEngine(
+      selectedAdapters.filter((adapter) => work.sourceKeys.includes(adapter.sourceKey)),
+      'nutrition-backfill-manifests',
+      writeCap,
+      CATALOGUE_PARSER_VERSION,
+    ).run({
+      runId,
+      sourceKeys: work.sourceKeys,
+      targetUrls: work.targetUrls,
+      writeCap,
+      maxPerSource: Math.min(command.maxPerSource ?? 250, 250),
+      maxConsecutiveFailures: 25,
+      manifestCheckpointInterval: 25,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId,
+      mode: 'nutrition-backfill',
+      candidates: work.candidates,
+      ...sanitizedIngestionSummary(summary),
+    }));
+    return;
+  }
 
   if (command.mode === 'snapshot-inventory') {
     const inventory = await buildSnapshotInventory({
@@ -252,8 +325,8 @@ async function main(): Promise<void> {
       maxPerSource: command.maxPerSource,
       maxConsecutiveFailures: 25,
       manifestCheckpointInterval: 25,
-      parserVersion: 2,
-      taxonomyVersion: 1,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
       snapshotMode: true,
     });
     await assertGenerationMode(initialGenerationMode);
@@ -299,8 +372,8 @@ async function main(): Promise<void> {
       maxPerSource: command.maxPerSource,
       maxConsecutiveFailures: 25,
       manifestCheckpointInterval: 25,
-      parserVersion: 2,
-      taxonomyVersion: 1,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
       snapshotMode: true,
     });
     await assertGenerationMode(initialGenerationMode);
@@ -457,8 +530,8 @@ async function main(): Promise<void> {
       maxPerSource: command.maxPerSource,
       maxConsecutiveFailures: 25,
       manifestCheckpointInterval: 25,
-      parserVersion: 2,
-      taxonomyVersion: 1,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
       snapshotMode: true,
     });
     const newRecipeIds = Object.entries(current.bySource).flatMap(([sourceKey, source]) => {
@@ -615,8 +688,8 @@ async function main(): Promise<void> {
       maxPerSource: command.maxPerSource,
       maxConsecutiveFailures: 25,
       manifestCheckpointInterval: 25,
-      parserVersion: 1,
-      taxonomyVersion: 1,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
     });
     await assertGenerationMode(initialGenerationMode);
     console.log(JSON.stringify({
@@ -674,8 +747,8 @@ async function main(): Promise<void> {
       writeCap: phase4WriteCap,
     } : {}),
     runId,
-    parserVersion: 1,
-    taxonomyVersion: 1,
+    parserVersion: CATALOGUE_PARSER_VERSION,
+    taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
   });
   await assertGenerationMode(initialGenerationMode);
   console.log(JSON.stringify(command.mode === 'refresh-backfill'

@@ -18,7 +18,7 @@ await Promise.all([
   db.collection('catalogueOps').doc('config').set({
     scheduledIngestionEnabled: false,
     defaultWriteLimit: 18_000,
-    parserVersion: 1,
+    parserVersion: 3,
     taxonomyVersion: 1,
   }, { merge: true }),
 ]);

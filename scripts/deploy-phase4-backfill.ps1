@@ -13,15 +13,15 @@ $ErrorActionPreference = 'Stop'
 $serviceAccount = "mealwizard-catalogue@$ProjectId.iam.gserviceaccount.com"
 $image = "$Region-docker.pkg.dev/$ProjectId/$Repository/catalogue-ingestion:phase4"
 
-function Assert-SafetyState {
+function Get-SafetyMode {
   $state = gcloud scheduler jobs describe $SchedulerName --location=$Region --project=$ProjectId --format='value(state)'
   if ($state -ne 'PAUSED') { throw "Scheduler must be PAUSED; observed $state" }
-  Invoke-CheckedNativeCommand -Command 'node' -Arguments @(
-    'scripts/assertCatalogueLegacyMode.mjs', '--project', $ProjectId
-  )
+  $mode = node scripts/readCatalogueGenerationMode.mjs --project $ProjectId
+  if ($LASTEXITCODE -ne 0) { throw 'Could not read catalogue generation mode' }
+  return ([string]$mode).Trim()
 }
 
-Assert-SafetyState
+$initialMode = Get-SafetyMode
 gcloud builds submit functions --tag=$image --project=$ProjectId
 
 $jobFlags = @(
@@ -47,5 +47,8 @@ if (Test-GcloudResource -Arguments @(
 Invoke-CheckedNativeCommand -Command 'npx.cmd' -Arguments @(
   'firebase-tools', 'deploy', '--only', 'firestore:rules', "--project=$ProjectId"
 )
-Assert-SafetyState
-Write-Output "Phase 4 ingestion image deployed dormant; Scheduler remains paused and generation mode remains legacy."
+$finalMode = Get-SafetyMode
+if ($finalMode -ne $initialMode) {
+  throw "Generation mode changed during deployment: $initialMode -> $finalMode"
+}
+Write-Output "Phase 4 ingestion image deployed dormant; Scheduler remains paused and generation mode remains $initialMode."

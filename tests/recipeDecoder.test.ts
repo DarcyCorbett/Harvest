@@ -84,7 +84,7 @@ describe('decodeRecipeDocument', () => {
       totalTime: '30 min',
       originalServings: 4,
       course: ['Dinner'],
-      tags: ['Dinner', 'Mediterranean', 'Healthy', 'Kid Friendly'],
+      tags: ['Mediterranean', 'Healthy', 'Kid Friendly'],
       cuisine: 'Mediterranean',
       notes: 'Serve warm.',
       needsDefrost: true,
@@ -101,6 +101,7 @@ describe('decodeRecipeDocument', () => {
       quantity: 1,
       unit: 'tbsp',
     });
+    expect(decoded?.nutrition).toEqual({ calories: 420, protein: 35, carbs: 8, fat: 20 });
   });
 
   it('allows review recipes to display but rejects operational v2 documents', () => {
@@ -134,5 +135,23 @@ describe('decodeRecipeDocument', () => {
       status: 'ready',
       content: { title: '' },
     })).toBeNull();
+  });
+
+  it('treats missing and all-zero nutrition as unavailable but preserves partial macros', () => {
+    const base = {
+      title: 'Nutrition test',
+      sourceUrl: 'https://example.test/nutrition',
+      ingredients: [],
+      instructions: [],
+    };
+    expect(decodeRecipeDocument('missing', base)?.nutrition).toBeUndefined();
+    expect(decodeRecipeDocument('zero', {
+      ...base,
+      nutrition: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    })?.nutrition).toBeUndefined();
+    expect(decodeRecipeDocument('partial', {
+      ...base,
+      nutrition: { calories: 250, protein: '12.5' },
+    })?.nutrition).toEqual({ calories: 250, protein: 12.5 });
   });
 });

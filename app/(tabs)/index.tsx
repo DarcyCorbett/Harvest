@@ -31,6 +31,7 @@ import {
 } from '@/services/firestoreService';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { CookbookEntry, MealPlanEntry, Recipe, MealType } from '@/services/types';
+import { sumKnownNutrition } from '@/services/recipePresentation';
 import {
   applyRecipeFetchResults,
   beginRecipeLoads,
@@ -386,20 +387,10 @@ export default function CalendarScreen() {
               const isToday = dateStr === today;
 
               // Sum macros for this day from loaded recipes
-              const dayMacros = dayEntries.reduce(
-                (acc, e) => {
-                  const r = recipes[e.recipeId];
-                  if (!r) return acc;
-                  return {
-                    calories: acc.calories + r.nutrition.calories,
-                    protein: acc.protein + r.nutrition.protein,
-                    carbs: acc.carbs + r.nutrition.carbs,
-                    fat: acc.fat + r.nutrition.fat,
-                  };
-                },
-                { calories: 0, protein: 0, carbs: 0, fat: 0 }
+              const dayMacros = sumKnownNutrition(
+                dayEntries.map((entry) => recipes[entry.recipeId]),
               );
-              const hasMacros = dayEntries.some((e) => recipes[e.recipeId]);
+              const hasMacros = dayMacros.contributingRecipes > 0;
 
               return (
                 <View
@@ -531,10 +522,10 @@ export default function CalendarScreen() {
                   {/* Macro strip */}
                   {hasMacros && (
                     <View style={[s.cardMacroStrip, { borderTopColor: colors.borderLight }]}>
-                      <CardMacro value={String(Math.round(dayMacros.calories))} label="kcal" fg={colors.caloriesText} bg={colors.caloriesBadge} />
-                      <CardMacro value={`${Math.round(dayMacros.protein)}g`} label="protein" fg={colors.proteinText} bg={colors.proteinBadge} />
-                      <CardMacro value={`${Math.round(dayMacros.carbs)}g`} label="carbs" fg={colors.carbsText} bg={colors.carbsBadge} />
-                      <CardMacro value={`${Math.round(dayMacros.fat)}g`} label="fat" fg={colors.fatText} bg={colors.fatBadge} />
+                      <CardMacro value={dayMacros.calories === undefined ? '—' : String(Math.round(dayMacros.calories))} label="kcal" fg={colors.caloriesText} bg={colors.caloriesBadge} />
+                      <CardMacro value={dayMacros.protein === undefined ? '—' : `${Math.round(dayMacros.protein)}g`} label="protein" fg={colors.proteinText} bg={colors.proteinBadge} />
+                      <CardMacro value={dayMacros.carbs === undefined ? '—' : `${Math.round(dayMacros.carbs)}g`} label="carbs" fg={colors.carbsText} bg={colors.carbsBadge} />
+                      <CardMacro value={dayMacros.fat === undefined ? '—' : `${Math.round(dayMacros.fat)}g`} label="fat" fg={colors.fatText} bg={colors.fatBadge} />
                     </View>
                   )}
                 </View>

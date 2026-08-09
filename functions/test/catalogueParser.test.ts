@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseCatalogueRecipe, parseIsoDurationMinutes } from '../src/catalogue/parser.js';
+import { parseCatalogueRecipe, parseIsoDurationMinutes, parseNutrition } from '../src/catalogue/parser.js';
 import { SOURCE_CONFIGS } from '../src/catalogue/sourceAdapters.js';
 
 const sourceUrl = 'https://www.recipetineats.com/chicken-soup';
@@ -23,6 +23,24 @@ describe('parseIsoDurationMinutes', () => {
     ['not-a-duration', undefined],
   ])('parses %s', (value, expected) => {
     expect(parseIsoDurationMinutes(value)).toBe(expected);
+  });
+});
+
+describe('parseNutrition', () => {
+  it('normalizes publisher energy and macro units independently', () => {
+    expect(parseNutrition({
+      calories: '1,046 kJ',
+      proteinContent: '12.25 g',
+      carbohydrateContent: '850 mg',
+      fatContent: 7.04,
+    })).toEqual({ calories: 250, protein: 12.3, carbs: 0.9, fat: 7 });
+  });
+
+  it('keeps valid partial nutrition and rejects invalid values', () => {
+    expect(parseNutrition({ calories: '320 calories', proteinContent: '-5 g' }))
+      .toEqual({ calories: 320 });
+    expect(parseNutrition({ calories: 'unknown', proteinContent: '2 oz' })).toBeUndefined();
+    expect(parseNutrition(undefined)).toBeUndefined();
   });
 });
 
@@ -61,6 +79,12 @@ describe('parseCatalogueRecipe', () => {
           { '@type': 'HowToStep', text: 'Add stock and simmer.' },
         ] },
       ],
+      nutrition: {
+        calories: '420 kcal',
+        proteinContent: '35 g',
+        carbohydrateContent: '8 g',
+        fatContent: '20 g',
+      },
     }), sourceUrl);
 
     expect(result.content).toMatchObject({
@@ -76,6 +100,7 @@ describe('parseCatalogueRecipe', () => {
         { text: 'Brown the chicken.' },
         { text: 'Add stock and simmer.' },
       ],
+      nutrition: { calories: 420, protein: 35, carbs: 8, fat: 20 },
     });
     expect(result.sourceMetadata).toEqual({
       prepMinutes: 10,

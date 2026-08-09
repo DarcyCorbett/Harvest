@@ -136,8 +136,24 @@ describe('ingestion command arguments', () => {
       '--write-cap', '17500',
       '--gemini-call-cap', '500',
     ])).toMatchObject({ mode: 'weekly-new', writeCap: 17500, geminiCallCap: 500 });
+    expect(parseIngestionArguments([
+      'nutrition-backfill',
+      '--source', 'recipetineats,budgetbytes',
+      '--write-cap', '8000',
+      '--max-per-source', '250',
+    ])).toMatchObject({
+      mode: 'nutrition-backfill',
+      sourceKeys: ['recipetineats', 'budgetbytes'],
+      writeCap: 8000,
+      maxPerSource: 250,
+    });
+    expect(parseIngestionArguments(['nutrition-canary'])).toEqual({ mode: 'nutrition-canary' });
+    expect(parseIngestionArguments(['verify-nutrition'])).toEqual({ mode: 'verify-nutrition' });
     expect(() => parseIngestionArguments(['tag-batch-submit'])).toThrow();
     expect(() => parseIngestionArguments(['weekly-new', '--write-cap', '18000'])).toThrow();
+    expect(() => parseIngestionArguments(['nutrition-canary', '--write-cap', '1'])).toThrow();
+    expect(() => parseIngestionArguments(['verify-nutrition', '--max-per-source', '1'])).toThrow();
+    expect(() => parseIngestionArguments(['nutrition-backfill', '--gemini-call-cap', '1'])).toThrow();
   });
 
   it.each([

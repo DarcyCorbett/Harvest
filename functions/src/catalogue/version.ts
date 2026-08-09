@@ -1,0 +1,2 @@
+export const CATALOGUE_PARSER_VERSION = 3;
+export const CATALOGUE_TAXONOMY_VERSION = 1;
