@@ -7,6 +7,7 @@
 import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { catalogueMetadataClient } from '@/services/catalogueClient';
 import { updateMealPlanServings } from '@/services/firestoreService';
 import { legacyRecipeClient } from '@/services/legacyRecipeClient';
 import { applyServingScale, calculateRequiredServings } from '@/services/recipeScraperService';
@@ -312,9 +313,9 @@ export default function RecipeDetailModal({
 
   // ── Unified label editing state (course + tags combined) ────
   const [editingLabels, setEditingLabels] = useState(false);
+  const [savingLabels, setSavingLabels] = useState(false);
   const [localCourse, setLocalCourse] = useState<string[]>([]);
   const [localTags, setLocalTags] = useState<string[]>([]);
-  const isCatalogueRecipe = recipe?.schemaVersion === 2;
   const nutrition = recipe?.nutrition;
   const nutritionAvailable = hasMeaningfulNutrition(nutrition);
 
@@ -325,17 +326,28 @@ export default function RecipeDetailModal({
   }, [recipe]);
 
   const handleSaveLabels = useCallback(async () => {
-    if (!householdId || !recipe?.id || recipe.schemaVersion === 2) return;
+    if (!recipe?.id || (recipe.schemaVersion !== 2 && !householdId)) return;
+    setSavingLabels(true);
     try {
-      await legacyRecipeClient.update(householdId, recipe.id, {
-        course: localCourse,
-        tags: localTags,
-      });
+      if (recipe.schemaVersion === 2) {
+        await catalogueMetadataClient.updateLabels(recipe.id, localCourse, localTags);
+      } else {
+        if (!householdId) return;
+        await legacyRecipeClient.update(householdId, recipe.id, {
+          course: localCourse,
+          tags: localTags,
+        });
+      }
       setEditingLabels(false);
       onCourseUpdate?.(recipe.id, localCourse);
       onTagsUpdate?.(recipe.id, localTags);
-    } catch {
-      Alert.alert('Error', 'Could not save changes.');
+    } catch (error) {
+      const message = error instanceof Error && error.message.startsWith('Choose ')
+        ? error.message
+        : 'Could not save changes.';
+      Alert.alert('Error', message);
+    } finally {
+      setSavingLabels(false);
     }
   }, [householdId, recipe?.id, recipe?.schemaVersion, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
 
@@ -345,9 +357,12 @@ export default function RecipeDetailModal({
     setEditingLabels(false);
   }, [recipe]);
 
-  const COURSE_TAGS = ['Breakfast', 'Lunch', 'Dinner', 'Side', 'Snack', 'Salad'];
-  const MODIFIER_TAGS = ['Healthy', 'Vegetarian', 'Kid Friendly'];
-  const CUISINE_TAGS = ['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian'];
+  const COURSE_TAGS = ['Breakfast', 'Lunch', 'Dinner', 'Side', 'Snack'];
+  const MODIFIER_TAGS = ['Healthy', 'Vegetarian', 'Kid Friendly', 'Salad'];
+  const CUISINE_TAGS = [
+    'Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian',
+    'Greek', 'American', 'French', 'Middle Eastern', 'Global',
+  ];
 
   if (!recipe) return null;
 
@@ -477,13 +492,19 @@ export default function RecipeDetailModal({
                 )}
               </View>
             )}
-            {recipe.id && !isCatalogueRecipe ? (
+            {recipe.id ? (
               editingLabels ? (
                 <View style={styles.courseEditActions}>
-                  <TouchableOpacity onPress={handleSaveLabels} style={styles.courseEditBtn}>
-                    <Text style={[styles.courseEditBtnText, { color: colors.primary }]}>Save</Text>
+                  <TouchableOpacity
+                    onPress={handleSaveLabels}
+                    style={styles.courseEditBtn}
+                    disabled={savingLabels}
+                  >
+                    <Text style={[styles.courseEditBtnText, { color: colors.primary }]}>
+                      {savingLabels ? 'Saving…' : 'Save'}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleCancelLabels} style={styles.courseEditBtn}>
+                  <TouchableOpacity onPress={handleCancelLabels} style={styles.courseEditBtn} disabled={savingLabels}>
                     <Text style={[styles.courseEditBtnText, { color: colors.textSecondary }]}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
@@ -497,7 +518,7 @@ export default function RecipeDetailModal({
               )
             ) : null}
           </View>
-          {editingLabels && !isCatalogueRecipe && (
+          {editingLabels && (
             <View style={styles.courseTagPicker}>
               {[...COURSE_TAGS, ...CUISINE_TAGS, ...MODIFIER_TAGS].map((tag) => {
                 // Check both course and tags arrays

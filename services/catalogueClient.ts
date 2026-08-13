@@ -70,6 +70,84 @@ export interface CatalogueSelectionResponse {
 type Invoke = (data: CatalogueSelectionRequest) => Promise<{ data: unknown }>;
 type LoadRecipe = (recipeId: string) => Promise<Recipe | null>;
 
+type CanonicalMealType = 'breakfast' | 'lunch' | 'dinner' | 'side' | 'snack';
+type CanonicalCuisine = CatalogueCuisine
+  | 'greek'
+  | 'american'
+  | 'french'
+  | 'middle-eastern'
+  | 'global';
+type CanonicalModifier = CatalogueModifier;
+
+export interface CatalogueMetadataOperations {
+  mealTypes: { operation: 'set'; value: CanonicalMealType[] };
+  cuisines: { operation: 'set'; value: CanonicalCuisine[] };
+  modifiers: { operation: 'set'; value: CanonicalModifier[] };
+}
+
+export interface CatalogueMetadataRequest {
+  recipeId: string;
+  operations: CatalogueMetadataOperations;
+}
+
+type MetadataInvoke = (data: CatalogueMetadataRequest) => Promise<{ data: unknown }>;
+
+const MEAL_TYPE_BY_LABEL: Record<string, CanonicalMealType> = {
+  breakfast: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+  side: 'side',
+  snack: 'snack',
+};
+const CUISINE_BY_LABEL: Record<string, CanonicalCuisine> = {
+  asian: 'asian',
+  mexican: 'mexican',
+  mediterranean: 'mediterranean',
+  italian: 'italian',
+  indian: 'indian',
+  greek: 'greek',
+  american: 'american',
+  french: 'french',
+  'middle eastern': 'middle-eastern',
+  global: 'global',
+};
+const MODIFIER_BY_LABEL: Record<string, CanonicalModifier> = {
+  vegetarian: 'vegetarian',
+  'kid friendly': 'kid-friendly',
+  healthy: 'healthy',
+  salad: 'salad',
+};
+
+function mappedValues<T extends string>(
+  labels: readonly string[],
+  mapping: Readonly<Record<string, T>>,
+): T[] {
+  return [...new Set(labels.flatMap((label) => {
+    const value = mapping[label.trim().toLowerCase()];
+    return value ? [value] : [];
+  }))];
+}
+
+export function buildCatalogueMetadataOperations(
+  course: readonly string[],
+  tags: readonly string[],
+): CatalogueMetadataOperations {
+  // Inspect both arrays because legacy tagging sometimes stored meal types in
+  // `tags`, while Salad is a canonical modifier even if older UIs treated it
+  // as a course.
+  const labels = [...course, ...tags];
+  const mealTypes = mappedValues(labels, MEAL_TYPE_BY_LABEL);
+  const cuisines = mappedValues(labels, CUISINE_BY_LABEL);
+  const modifiers = mappedValues(labels, MODIFIER_BY_LABEL);
+  if (mealTypes.length === 0) throw new Error('Choose at least one meal type.');
+  if (cuisines.length === 0) throw new Error('Choose at least one cuisine.');
+  return {
+    mealTypes: { operation: 'set', value: mealTypes },
+    cuisines: { operation: 'set', value: cuisines },
+    modifiers: { operation: 'set', value: modifiers },
+  };
+}
+
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
 const CUISINE_MAP: Partial<Record<CuisineStyle, CatalogueCuisine>> = {
   Asian: 'asian',
@@ -332,6 +410,36 @@ export function createCatalogueClient(invoke: Invoke = firebaseInvoke) {
     },
   };
 }
+
+const firebaseMetadataInvoke: MetadataInvoke = async (data) => {
+  const [{ httpsCallable }, { functions }] = await Promise.all([
+    import('firebase/functions'),
+    import('../config/firebase'),
+  ]);
+  const response = await httpsCallable<CatalogueMetadataRequest, unknown>(
+    functions,
+    'updateCanonicalRecipeMetadata',
+  )(data);
+  return { data: response.data };
+};
+
+export function createCatalogueMetadataClient(invoke: MetadataInvoke = firebaseMetadataInvoke) {
+  return {
+    async updateLabels(
+      recipeId: string,
+      course: readonly string[],
+      tags: readonly string[],
+    ): Promise<void> {
+      if (!recipeId.trim() || recipeId.length > 160) throw new Error('Invalid recipe.');
+      await invoke({
+        recipeId,
+        operations: buildCatalogueMetadataOperations(course, tags),
+      });
+    },
+  };
+}
+
+export const catalogueMetadataClient = createCatalogueMetadataClient();
 
 function relaxationMessage(relaxation: Relaxation): string {
   if (relaxation.filter === 'maxTotalMinutes') {

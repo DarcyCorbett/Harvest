@@ -144,6 +144,8 @@ describe('legacy recipe client', () => {
     expect(generatorService).toContain('updateRecipeTags(householdId, meal.recipeId, merged)');
     expect(generatorService).toContain('updateRecipeFlags(householdId, recipeId, flags)');
     expect(recipeModal).toContain('legacyRecipeClient.update(householdId, recipe.id, {');
+    expect(recipeModal).toContain('catalogueMetadataClient.updateLabels(recipe.id, localCourse, localTags)');
+    expect(recipeModal).not.toContain('recipe.id && !isCatalogueRecipe');
     expect(recipeModal).toContain('course: localCourse');
     expect(recipeModal).toContain('tags: localTags');
   });

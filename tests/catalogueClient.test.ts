@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   CatalogueNoMatchError,
+  buildCatalogueMetadataOperations,
   buildCatalogueSelectionRequest,
   createCatalogueClient,
+  createCatalogueMetadataClient,
   materializeCatalogueMeals,
   normalizeIngredientFilters,
 } from '../services/catalogueClient';
@@ -106,6 +108,39 @@ describe('catalogue generation request mapping', () => {
 });
 
 describe('catalogue callable adapter', () => {
+  it('maps editable labels to canonical metadata and calls the mutation', async () => {
+    expect(buildCatalogueMetadataOperations(
+      ['Dinner'],
+      ['Mediterranean', 'Kid Friendly', 'Salad'],
+    )).toEqual({
+      mealTypes: { operation: 'set', value: ['dinner'] },
+      cuisines: { operation: 'set', value: ['mediterranean'] },
+      modifiers: { operation: 'set', value: ['kid-friendly', 'salad'] },
+    });
+
+    const invoke = vi.fn(async () => ({ data: {} }));
+    await createCatalogueMetadataClient(invoke).updateLabels(
+      'recipe-1',
+      ['Dinner'],
+      ['Middle Eastern', 'Healthy'],
+    );
+    expect(invoke).toHaveBeenCalledWith({
+      recipeId: 'recipe-1',
+      operations: {
+        mealTypes: { operation: 'set', value: ['dinner'] },
+        cuisines: { operation: 'set', value: ['middle-eastern'] },
+        modifiers: { operation: 'set', value: ['healthy'] },
+      },
+    });
+  });
+
+  it('requires catalogue edits to retain a meal type and cuisine', () => {
+    expect(() => buildCatalogueMetadataOperations([], ['Global']))
+      .toThrow('at least one meal type');
+    expect(() => buildCatalogueMetadataOperations(['Dinner'], ['Healthy']))
+      .toThrow('at least one cuisine');
+  });
+
   it('strictly validates the callable response', async () => {
     const client = createCatalogueClient(vi.fn(async () => ({
       data: {
