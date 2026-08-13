@@ -1,7 +1,6 @@
 // ============================================================
 // Meal Wizard — Settings Modal
-// Per-household generation settings: source weights, ingredient
-// weights, seed selection, and kid friendly filters.
+// Per-household catalogue settings and meal reminders.
 // ============================================================
 
 import { FontSizes, Fonts, Radius, Spacing } from '@/constants/theme';
@@ -13,8 +12,9 @@ import {
 } from '@/services/firestoreService';
 import { DEFAULT_MEAL_REMINDERS } from '@/services/mealRemindersConstants';
 import { clearDevLog, formatDevLog, getDevLog, type DevLogEntry } from '@/services/devLog';
+import { mergeCatalogueSettings } from '@/services/catalogueSettings';
 import * as Clipboard from 'expo-clipboard';
-import { KID_FRIENDLY_DEFAULTS, SEED_INGREDIENT_OPTIONS, TRUSTED_SITES } from '@/services/recipeScraperService';
+import { TRUSTED_SITES } from '@/services/recipeScraperService';
 import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -44,13 +44,6 @@ function displayDomain(site: string): string {
   return site.replace(/^www\./, '');
 }
 
-/** All default blocked terms as a flat list */
-const ALL_DEFAULT_TERMS = [
-  ...KID_FRIENDLY_DEFAULTS.hotIngredients,
-  ...KID_FRIENDLY_DEFAULTS.adultFlavours,
-  ...KID_FRIENDLY_DEFAULTS.alcohol,
-];
-
 export default function SettingsModal({
   visible,
   onClose,
@@ -61,8 +54,11 @@ export default function SettingsModal({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadedSettings, setLoadedSettings] = useState<HouseholdSettings>({
+    sourceWeights: {},
+    ingredientWeights: {},
+  });
   const [sourceWeights, setSourceWeights] = useState<Record<string, number>>({});
-  const [ingredientWeights, setIngredientWeights] = useState<Record<string, number>>({});
   const [kidFriendly, setKidFriendly] = useState<KidFriendlySettings>({});
   const [newBlockTerm, setNewBlockTerm] = useState('');
 
@@ -73,10 +69,9 @@ export default function SettingsModal({
   const [eveningTime, setEveningTime] = useState(DEFAULT_MEAL_REMINDERS.eveningTime);
   const isValidHHMM = (s: string) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(s);
 
-  // Default servings and strict tag matching
+  // Default servings
   const [defaultAdults, setDefaultAdults] = useState(2);
   const [defaultChildren, setDefaultChildren] = useState(2);
-  const [strictMatching, setStrictMatching] = useState(true);
 
   // Time picker modal visibility
   const [morningPickerVisible, setMorningPickerVisible] = useState(false);
@@ -115,8 +110,8 @@ export default function SettingsModal({
     setLoading(true);
     getHouseholdSettings(householdId)
       .then((s: HouseholdSettings) => {
+        setLoadedSettings(s);
         setSourceWeights(s.sourceWeights);
-        setIngredientWeights(s.ingredientWeights);
         setKidFriendly(s.kidFriendly ?? {});
         const mr = s.mealReminders ?? DEFAULT_MEAL_REMINDERS;
         setDefrostEnabled(mr.defrostEnabled);
@@ -125,7 +120,6 @@ export default function SettingsModal({
         setEveningTime(mr.eveningTime);
         setDefaultAdults(s.defaultAdults ?? 2);
         setDefaultChildren(s.defaultChildren ?? 2);
-        setStrictMatching(s.strictMatching ?? true);
         // Pre-populate lastNonZero from existing weights
         const lnz: Record<string, number> = {};
         TRUSTED_SITES.forEach((site) => {
@@ -164,33 +158,7 @@ export default function SettingsModal({
     setLastNonZeroSource((lnz) => ({ ...lnz, [site]: w }));
   }, []);
 
-  // ── Ingredient weight helpers ──────────────────────────────
-
-  const getIngredientWeight = (name: string): number =>
-    ingredientWeights[name] ?? 1;
-
-  const cycleIngredientWeight = useCallback((name: string) => {
-    setIngredientWeights((prev) => {
-      const current = prev[name] ?? 1;
-      const next = current >= 3 ? 1 : current + 1;
-      return { ...prev, [name]: next };
-    });
-  }, []);
-
   // ── Kid Friendly helpers ───────────────────────────────────
-
-  const isDefaultTermAllowed = (term: string): boolean =>
-    (kidFriendly.allowedExceptions ?? []).includes(term);
-
-  const toggleDefaultTermException = useCallback((term: string) => {
-    setKidFriendly((prev) => {
-      const current = prev.allowedExceptions ?? [];
-      const updated = current.includes(term)
-        ? current.filter((t) => t !== term)
-        : [...current, term];
-      return { ...prev, allowedExceptions: updated };
-    });
-  }, []);
 
   const addCustomBlockTerm = useCallback(() => {
     const trimmed = newBlockTerm.trim().toLowerCase();
@@ -219,10 +187,9 @@ export default function SettingsModal({
     }
     setSaving(true);
     try {
-      await saveHouseholdSettings(householdId, {
+      await saveHouseholdSettings(householdId, mergeCatalogueSettings(loadedSettings, {
         sourceWeights,
-        ingredientWeights,
-        kidFriendly: (kidFriendly.allowedExceptions?.length || kidFriendly.excludedIngredients?.length)
+        kidFriendly: Object.keys(kidFriendly).length > 0
           ? kidFriendly
           : undefined,
         mealReminders: {
@@ -233,8 +200,7 @@ export default function SettingsModal({
         },
         defaultAdults,
         defaultChildren,
-        strictMatching,
-      });
+      }));
       onSaved();
       onClose();
     } catch (err) {
@@ -243,7 +209,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, sourceWeights, ingredientWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, strictMatching, onSaved, onClose]);
+  }, [householdId, loadedSettings, sourceWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, onSaved, onClose]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -352,29 +318,10 @@ export default function SettingsModal({
 
             <View style={styles.divider} />
 
-            {/* ── Meal Generation Matching ── */}
-            <Text style={styles.sectionTitle}>Legacy Generator Matching</Text>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextCol}>
-                <Text style={styles.toggleLabel}>Strict Tag Matching</Text>
-                <Text style={styles.toggleDesc}>
-                  Used only while the operator has legacy generation enabled. Catalogue generation always applies exact matching.
-                </Text>
-              </View>
-              <Switch
-                value={strictMatching}
-                onValueChange={setStrictMatching}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor="#ffffff"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
             {/* ── Sources ── */}
             <Text style={styles.sectionTitle}>Recipe Sources</Text>
             <Text style={styles.sectionHint}>
-              Toggle sites on/off and adjust how often each is used.
+              Turn a site off to give it 0× weight. The 1×–3× options change its relative chance among sites with matching recipes, during both generation and regeneration.
             </Text>
 
             {TRUSTED_SITES.map((site) => {
@@ -426,75 +373,12 @@ export default function SettingsModal({
 
             <View style={styles.divider} />
 
-            {/* ── Ingredient Weights ── */}
-            <Text style={styles.sectionTitle}>Legacy Ingredient Weights</Text>
+            {/* ── Kid-Friendly Custom Exclusions ── */}
+            <Text style={styles.sectionTitle}>Kid-Friendly Custom Exclusions</Text>
             <Text style={styles.sectionHint}>
-              Used only by legacy rollback. Catalogue generation uses the preference tiles on the Generate screen.
+              When &ldquo;Kid Friendly&rdquo; is selected on the Generate screen, recipes containing these ingredients are excluded during both generation and regeneration.
             </Text>
-
-            <View style={styles.ingredientGrid}>
-              {SEED_INGREDIENT_OPTIONS.map((name) => {
-                const w = getIngredientWeight(name);
-                const active = w > 1;
-                return (
-                  <TouchableOpacity
-                    key={name}
-                    onPress={() => cycleIngredientWeight(name)}
-                    style={[
-                      styles.ingredientChip,
-                      active && styles.ingredientChipActive,
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.ingredientChipText,
-                        active && styles.ingredientChipTextActive,
-                      ]}
-                    >
-                      {name} {w > 1 ? `×${w}` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* ── Kid Friendly Filters ── */}
-            <Text style={styles.sectionTitle}>Kid Friendly Filters</Text>
-            <Text style={styles.sectionHint}>
-              When &ldquo;Kid Friendly&rdquo; is selected during generation, recipes containing any blocked ingredient are skipped. Tap a default term to allow it through. Add custom terms below.
-            </Text>
-
-            <Text style={styles.subSectionLabel}>Default blocked ingredients</Text>
-            <View style={styles.ingredientGrid}>
-              {ALL_DEFAULT_TERMS.map((term) => {
-                const allowed = isDefaultTermAllowed(term);
-                return (
-                  <TouchableOpacity
-                    key={term}
-                    onPress={() => toggleDefaultTermException(term)}
-                    style={[
-                      styles.ingredientChip,
-                      allowed && styles.allowedChip,
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.ingredientChipText,
-                        allowed && styles.allowedChipText,
-                      ]}
-                    >
-                      {allowed ? '✓ ' : ''}{term}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.subSectionLabel, { marginTop: Spacing.md }]}>Custom blocked ingredients</Text>
+            <Text style={styles.subSectionLabel}>Blocked ingredients</Text>
             <View style={styles.addTermRow}>
               <TextInput
                 style={styles.addTermInput}
@@ -796,7 +680,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     color: colors.primary,
   },
 
-  // Ingredient / seed chips
+  // Custom exclusion chips
   ingredientGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -810,46 +694,12 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  ingredientChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
   ingredientChipText: {
     fontSize: FontSizes.sm,
     fontFamily: Fonts.medium,
     color: colors.textSecondary,
   },
-  ingredientChipTextActive: {
-    color: colors.primary,
-  },
-
-  // Seed chips (teal/green accent to distinguish from weight chips)
-  seedChipActive: {
-    borderColor: '#059669',
-    backgroundColor: '#D1FAE5',
-  },
-  seedChipTextActive: {
-    color: '#065F46',
-  },
-  seedCountHint: {
-    fontSize: FontSizes.xs,
-    fontFamily: Fonts.regular,
-    color: '#065F46',
-    marginTop: Spacing.sm,
-    lineHeight: 18,
-  },
-
-  // Kid Friendly — allowed (struck-through look via muted style)
-  allowedChip: {
-    borderColor: colors.border,
-    backgroundColor: colors.borderLight,
-    opacity: 0.5,
-  },
-  allowedChipText: {
-    color: colors.textTertiary,
-  },
-
-  // Kid Friendly — custom blocked terms
+  // Kid Friendly custom blocked terms
   customBlockChip: {
     borderColor: '#EF4444',
     backgroundColor: '#FEF2F2',
@@ -968,28 +818,6 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     height: 40,
     backgroundColor: colors.borderLight,
     marginHorizontal: Spacing.md,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  toggleTextCol: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: FontSizes.sm,
-    fontFamily: Fonts.semibold,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  toggleDesc: {
-    fontSize: FontSizes.xs,
-    fontFamily: Fonts.regular,
-    color: colors.textSecondary,
-    lineHeight: 16,
   },
   timePickerTrigger: {
     flexDirection: 'row',

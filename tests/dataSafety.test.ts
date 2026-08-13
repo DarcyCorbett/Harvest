@@ -31,6 +31,17 @@ describe('catalogue data safety', () => {
     expect(settings).not.toContain('clearAllCachedRecipes');
   });
 
+  it('shows catalogue controls without legacy-only generation controls', () => {
+    const settings = read('components/SettingsModal.tsx');
+
+    expect(settings).toContain('Recipe Sources');
+    expect(settings).toContain('Kid-Friendly Custom Exclusions');
+    expect(settings).not.toContain('Legacy Generator Matching');
+    expect(settings).not.toContain('Legacy Ingredient Weights');
+    expect(settings).not.toContain('Strict Tag Matching');
+    expect(settings).not.toContain('Default blocked ingredients');
+  });
+
   it('does not self-delete missing historical references', () => {
     const calendar = read('app/(tabs)/index.tsx');
     const cookbook = read('app/(tabs)/cookbook.tsx');
