@@ -109,18 +109,26 @@ function abbreviateTitle(title: string, maxLen = 10): string {
   return title.slice(0, maxLen - 1) + '…';
 }
 
-const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
+const MEAL_ORDER: MealType[] = [
+  'breakfast', 'lunch', 'dinner', 'side', 'snack', 'dessert', 'component',
+];
 const MEAL_LABELS: Record<MealType, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
   dinner: 'Dinner',
   side: 'Side',
+  snack: 'Snack',
+  dessert: 'Dessert',
+  component: 'Sauces, Condiments & More',
 };
 
 function mealBadge(type: MealType, colors: (typeof Colors)['light']) {
   if (type === 'breakfast') return { bg: colors.caloriesBadge, fg: colors.caloriesText };
   if (type === 'lunch')     return { bg: colors.carbsBadge,    fg: colors.carbsText };
   if (type === 'side')      return { bg: colors.fatBadge,      fg: colors.fatText };
+  if (type === 'snack')     return { bg: colors.carbsBadge,    fg: colors.carbsText };
+  if (type === 'dessert')   return { bg: colors.caloriesBadge, fg: colors.caloriesText };
+  if (type === 'component') return { bg: colors.fatBadge,      fg: colors.fatText };
   return                           { bg: colors.proteinBadge,  fg: colors.proteinText };
 }
 

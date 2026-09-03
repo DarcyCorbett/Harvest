@@ -80,7 +80,8 @@ export interface UserProfile {
 }
 
 /** Meal type options */
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'side';
+export type LegacyMealType = 'breakfast' | 'lunch' | 'dinner' | 'side';
+export type MealType = LegacyMealType | 'snack' | 'dessert' | 'component';
 
 /** A single meal plan entry */
 export interface MealPlanEntry {

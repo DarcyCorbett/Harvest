@@ -69,6 +69,28 @@ describe('requestGeminiJson', () => {
     });
   });
 
+  it('omits deprecated sampling parameters for Gemini 3.8 Flash', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(providerResponse('{"answer":"ok"}'));
+
+    await expect(requestGeminiJson<{ answer: string }>({
+      apiKey: API_KEY,
+      model: 'gemini-3.8-flash',
+      prompt: 'Return JSON.',
+      maxOutputTokens: 256,
+      fetchImpl,
+    })).resolves.toEqual({ answer: 'ok' });
+
+    const [, init] = fetchImpl.mock.calls[0];
+    const generationConfig = JSON.parse(String(init?.body)).generationConfig;
+    expect(generationConfig).not.toHaveProperty('temperature');
+    expect(generationConfig).toMatchObject({
+      maxOutputTokens: 256,
+      responseMimeType: 'application/json',
+    });
+  });
+
   it('reports only validated numeric usage to an optional observer', async () => {
     const onUsage = vi.fn();
     const fetchImpl = vi

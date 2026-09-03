@@ -70,9 +70,10 @@ function isCompleteRecipe(value: unknown): value is CompleteCanonicalRecipeV2 {
 }
 
 export function recipeRequiresAi(recipe: CompleteCanonicalRecipeV2): boolean {
-  return !isFrozenCatalogueSource(recipe.source.key)
-    && hasDisplayContent(recipe)
-    && (recipe.effective.mealTypes.length === 0 || recipe.effective.cuisines.length === 0);
+  return hasDisplayContent(recipe)
+    && recipe.status === 'ready'
+    && (recipe.classification.taxonomyVersion < 2
+      || (recipe.classification.classifierVersion ?? 0) < 2);
 }
 
 function classificationPrompt(recipe: AiBacklogRecipe): string {

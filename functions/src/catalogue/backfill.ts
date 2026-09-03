@@ -14,7 +14,7 @@ import {
 
 export { mergeOperationalFailure };
 
-export const CLASSIFIER_VERSION = 1;
+export const CLASSIFIER_VERSION = 2;
 export const DEFAULT_PHASE4_WRITE_CAP = 8_000;
 export const MAX_PHASE4_WRITE_CAP = 18_000;
 export const DEFAULT_GEMINI_CALL_CAP = 500;
@@ -74,7 +74,7 @@ export async function classifyStoredRecipe(
     classification: {
       ...recipe.classification,
       classifierVersion: CLASSIFIER_VERSION,
-      taxonomyVersion: 1,
+      taxonomyVersion: 2,
       sources: manualClassificationSources(recipe, classification.sources),
       complete,
     },

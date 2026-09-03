@@ -116,6 +116,8 @@ function taxonomy(data: Record<string, unknown>): {
     dinner: ['main course', 'dinner'],
     side: ['side'],
     snack: ['snack'],
+    dessert: ['dessert'],
+    component: ['sauce', 'condiment', 'dressing', 'marinade', 'rub'],
   };
   const cuisineAliases: Record<Cuisine, string[]> = {
     asian: ['asian', 'chinese', 'japanese', 'thai', 'vietnamese', 'korean'],

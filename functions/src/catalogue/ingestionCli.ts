@@ -69,6 +69,13 @@ import {
   verifySnapshotInventory,
 } from './snapshotFirestore.js';
 import { CATALOGUE_PARSER_VERSION, CATALOGUE_TAXONOMY_VERSION } from './version.js';
+import {
+  applyStagedTaxonomyRetag,
+  prepareTaxonomyRetagBatch,
+  stageNextTaxonomyRetagBatch,
+  submitNextTaxonomyRetagBatch,
+  verifyTaxonomyRetag,
+} from './taxonomyRetagBatch.js';
 
 initializeApp();
 
@@ -123,14 +130,16 @@ async function main(): Promise<void> {
     totalTokenCount: 0,
   };
   const classifier = createCatalogueClassifier({
-    requestJson(prompt) {
+    requestJson(prompt, responseJsonSchema, maxOutputTokens = 512) {
       if (gemini.calls >= geminiCallCap) throw new GeminiCallCapError();
       gemini.calls += 1;
       return requestGeminiJson({
         apiKey: secret,
         model: 'gemini-3.1-flash-lite',
         prompt,
-        maxOutputTokens: 512,
+        maxOutputTokens,
+        responseJsonSchema,
+        thinkingLevel: 'minimal',
         onUsage(usage) {
           gemini.promptTokenCount += usage.promptTokenCount;
           gemini.candidatesTokenCount += usage.candidatesTokenCount;
@@ -468,6 +477,64 @@ async function main(): Promise<void> {
       bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
       now: () => new Date(),
     });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode?.startsWith('taxonomy-retag-') && initialGenerationMode !== 'catalogue') {
+    throw new Error('Taxonomy-v2 retag requires catalogue generation mode');
+  }
+
+  if (command.mode === 'taxonomy-retag-prepare') {
+    const summary = await prepareTaxonomyRetagBatch({
+      runId,
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'taxonomy-retag-submit') {
+    const summary = await submitNextTaxonomyRetagBatch({
+      api: createGeminiBatchApi({ apiKey: secret }),
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'taxonomy-retag-stage') {
+    const summary = await stageNextTaxonomyRetagBatch({
+      api: createGeminiBatchApi({ apiKey: secret }),
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'taxonomy-retag-apply') {
+    const summary = await applyStagedTaxonomyRetag({
+      budget: createBudgetManager(operational.budget, {
+        limit: 18_000,
+        commandCap: command.writeCap ?? 18_000,
+      }),
+      bucketName: process.env.CATALOGUE_MANIFEST_BUCKET,
+      now: () => new Date(),
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify(summary));
+    return;
+  }
+
+  if (command.mode === 'taxonomy-retag-verify') {
+    const summary = await verifyTaxonomyRetag();
     await assertGenerationMode(initialGenerationMode);
     console.log(JSON.stringify(summary));
     return;

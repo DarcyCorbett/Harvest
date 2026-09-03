@@ -22,7 +22,7 @@ import {
 } from './prompts.js';
 
 const FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
-const FLASH_MODEL = 'gemini-3.5-flash';
+const SHOPPING_MODEL = 'gemini-3.8-flash';
 const INTERNAL_HOUSEHOLD_ID = 'internal-ai-service';
 const DUPLICATE_IDENTIFIER_MESSAGE = 'Duplicate request identifiers.';
 
@@ -164,7 +164,7 @@ export function createAiService(provider: JsonRequester) {
       });
       requireUniqueInputIds(input.ingredients, ({ id }) => id);
       const output = await provider.requestJson(
-        FLASH_MODEL,
+        SHOPPING_MODEL,
         buildShoppingGroupsPrompt(input.ingredients),
         Math.min(65_536, 4_096 + input.ingredients.length * 200),
       );

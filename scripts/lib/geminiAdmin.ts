@@ -3,7 +3,7 @@ import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 const SECRET_ID = 'mealwizard-gemini-api-key';
 const DEFAULT_PROJECT_ID = 'meal-wizard-ad202';
 const DEFAULT_TAGGING_MODEL = 'gemini-3.1-flash-lite';
-const DEFAULT_SHOPPING_MODEL = 'gemini-3.5-flash';
+const DEFAULT_SHOPPING_MODEL = 'gemini-3.8-flash';
 const MAX_TAG_BATCH_SIZE = 25;
 const GEMINI_API_BASE =
   'https://generativelanguage.googleapis.com/v1beta/models';
@@ -306,7 +306,7 @@ export async function requestOperatorGeminiJson({
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0,
+            ...(model === 'gemini-3.8-flash' ? {} : { temperature: 0 }),
             maxOutputTokens,
             responseMimeType: 'application/json',
           },

@@ -282,6 +282,7 @@ describe('Firestore household security boundary', () => {
     'catalogueBackfillCheckpoints/phase4',
     'catalogueSourceBackfills/recipetineats',
     'catalogueBackfillRuns/run-1',
+    'catalogueTaxonomyRetagState/taxonomy-v2',
     'catalogueRecipeMigrations/legacy-1',
     'catalogueEditors/member-1',
   ])('keeps %s entirely server-only', async (documentPath) => {

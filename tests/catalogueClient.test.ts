@@ -105,6 +105,17 @@ describe('catalogue generation request mapping', () => {
     );
     expect(request.slots[0].ingredients.exclude).toEqual(['nuts', 'anchovy']);
   });
+
+  it('orders and sends every expanded catalogue meal type', () => {
+    const request = buildCatalogueSelectionRequest(config({
+      numberOfDays: 1,
+      mealTypes: ['component', 'dessert', 'snack', 'side'],
+      cuisineStyles: [],
+    }), 'household-1', [], []);
+    expect(request.slots.map(({ mealType }) => mealType)).toEqual([
+      'side', 'snack', 'dessert', 'component',
+    ]);
+  });
 });
 
 describe('catalogue callable adapter', () => {
@@ -117,6 +128,10 @@ describe('catalogue callable adapter', () => {
       cuisines: { operation: 'set', value: ['mediterranean'] },
       modifiers: { operation: 'set', value: ['kid-friendly', 'salad'] },
     });
+    expect(buildCatalogueMetadataOperations(
+      ['Snack', 'Dessert', 'Sauces, Condiments & More'],
+      ['Global'],
+    ).mealTypes.value).toEqual(['snack', 'dessert', 'component']);
 
     const invoke = vi.fn(async () => ({ data: {} }));
     await createCatalogueMetadataClient(invoke).updateLabels(

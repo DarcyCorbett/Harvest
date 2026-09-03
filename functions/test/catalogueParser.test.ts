@@ -93,8 +93,8 @@ describe('parseCatalogueRecipe', () => {
       imageUrl: 'https://images.example/soup.jpg',
       originalServings: 4,
       ingredients: [
-        { name: '2 chicken breasts' },
-        { name: '1 litre stock' },
+        { name: 'chicken breasts', quantity: 2, unit: '' },
+        { name: 'stock', quantity: 1, unit: 'l' },
       ],
       instructions: [
         { text: 'Brown the chicken.' },
@@ -134,7 +134,7 @@ describe('parseCatalogueRecipe', () => {
     `, sourceUrl);
     expect(result.content).toMatchObject({
       title: 'WPRM Soup',
-      ingredients: [{ name: '1 onion' }],
+      ingredients: [{ name: 'onion', quantity: 1, unit: '' }],
       instructions: [{ text: 'Simmer the soup.' }],
     });
   });

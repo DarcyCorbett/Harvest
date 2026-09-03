@@ -57,8 +57,11 @@ const base = {
   modifiers: [],
   ingredients: { must: [], prefer: [], exclude: [] },
 };
+const selectableMealTypes = expectedMode === 'catalogue'
+  ? ['breakfast', 'lunch', 'dinner', 'side', 'snack', 'dessert', 'component']
+  : ['breakfast', 'lunch', 'dinner', 'side'];
 const selectedCases = [
-  ...['breakfast', 'lunch', 'dinner', 'side'].map((mealType) => ({
+  ...selectableMealTypes.map((mealType) => ({
     name: `broad-${mealType}`,
     slot: { ...base, mealType },
   })),

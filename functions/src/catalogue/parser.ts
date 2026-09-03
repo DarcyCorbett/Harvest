@@ -8,6 +8,7 @@ import {
   type MealType,
   type Modifier,
 } from './domain.js';
+import { normalizeCatalogueContent } from './unitNormalization.js';
 
 type ParsedCatalogueRecipe = Pick<CompleteCanonicalRecipeV2, 'content' | 'sourceMetadata'>;
 
@@ -376,8 +377,7 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
   const parsedImageUrl = imageUrl(node.image);
   const nutrition = parseNutrition(node.nutrition);
 
-  return {
-    content: {
+  const content = normalizeCatalogueContent({
       title,
       ...(parsedImageUrl ? { imageUrl: parsedImageUrl } : {}),
       ...(description ? { description } : {}),
@@ -385,7 +385,10 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
       ingredients,
       instructions,
       ...(nutrition ? { nutrition } : {}),
-    },
+    }).content;
+
+  return {
+    content,
     sourceMetadata: {
       ...(prepMinutes === undefined ? {} : { prepMinutes }),
       ...(cookMinutes === undefined ? {} : { cookMinutes }),

@@ -66,3 +66,5 @@ app-example
 /android
 # Local tagging-evaluation reports contain public recipe titles and ingredients.
 artifacts/catalogue-tagging-evaluation/
+artifacts/catalogue-meal-type-evaluation/
+artifacts/catalogue-taxonomy-v2-canary/

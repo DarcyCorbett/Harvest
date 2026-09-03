@@ -132,6 +132,16 @@ describe('ingestion command arguments', () => {
       confirmPaidBatch: true,
     });
     expect(parseIngestionArguments([
+      'taxonomy-retag-submit', '--confirm-paid-batch', '--run-id', 'taxonomy-v2',
+    ])).toEqual({
+      mode: 'taxonomy-retag-submit', confirmPaidBatch: true, runId: 'taxonomy-v2',
+    });
+    expect(parseIngestionArguments([
+      'taxonomy-retag-apply', '--write-cap', '25',
+    ])).toEqual({ mode: 'taxonomy-retag-apply', writeCap: 25 });
+    expect(parseIngestionArguments(['taxonomy-retag-verify']))
+      .toEqual({ mode: 'taxonomy-retag-verify' });
+    expect(parseIngestionArguments([
       'weekly-new',
       '--write-cap', '17500',
       '--gemini-call-cap', '500',
@@ -150,6 +160,10 @@ describe('ingestion command arguments', () => {
     expect(parseIngestionArguments(['nutrition-canary'])).toEqual({ mode: 'nutrition-canary' });
     expect(parseIngestionArguments(['verify-nutrition'])).toEqual({ mode: 'verify-nutrition' });
     expect(() => parseIngestionArguments(['tag-batch-submit'])).toThrow();
+    expect(() => parseIngestionArguments(['taxonomy-retag-submit'])).toThrow();
+    expect(() => parseIngestionArguments([
+      'taxonomy-retag-prepare', '--write-cap', '1',
+    ])).toThrow();
     expect(() => parseIngestionArguments(['weekly-new', '--write-cap', '18000'])).toThrow();
     expect(() => parseIngestionArguments(['nutrition-canary', '--write-cap', '1'])).toThrow();
     expect(() => parseIngestionArguments(['verify-nutrition', '--max-per-source', '1'])).toThrow();

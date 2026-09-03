@@ -228,7 +228,7 @@ const CONDIMENT_COURSES = new Set([
   'salsa', 'aioli', 'hummus', 'tapenade', 'garnish', 'glaze',
 ]);
 
-const COURSE_ALLOWED: Record<MealType, string[]> = {
+const COURSE_ALLOWED: Partial<Record<MealType, string[]>> = {
   breakfast: ['breakfast', 'brunch'],
   lunch: ['lunch', 'brunch', 'salad', 'soup', 'main', 'sandwich', 'sandwiches', 'burger'],
   dinner: ['dinner', 'main', 'mains', 'noodles', 'pasta', 'soup', 'soups', 'bbq', 'bake', 'burger'],
@@ -257,7 +257,7 @@ export function isCourseCompatible(
     return false;
   }
 
-  const allowed = [...COURSE_ALLOWED[mealType]];
+  const allowed = [...(COURSE_ALLOWED[mealType] ?? [])];
   if (mealType === 'dinner' && cuisineStyles.includes('Salad')) {
     allowed.push('salad');
   }

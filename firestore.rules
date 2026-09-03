@@ -82,6 +82,9 @@ service cloud.firestore {
     match /catalogueBackfillRuns/{runId} {
       allow read, write: if false;
     }
+    match /catalogueTaxonomyRetagState/{stateId} {
+      allow read, write: if false;
+    }
     match /catalogueRecipeMigrations/{legacyRecipeId} {
       allow read, write: if false;
     }

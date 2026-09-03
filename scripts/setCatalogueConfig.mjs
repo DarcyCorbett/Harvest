@@ -18,8 +18,8 @@ await Promise.all([
   db.collection('catalogueOps').doc('config').set({
     scheduledIngestionEnabled: false,
     defaultWriteLimit: 18_000,
-    parserVersion: 3,
-    taxonomyVersion: 1,
+    parserVersion: 4,
+    taxonomyVersion: 2,
   }, { merge: true }),
 ]);
 console.log('Catalogue configuration is pinned to legacy generation.');

@@ -14,7 +14,7 @@ function recipe(): CompleteCanonicalRecipeV2 {
   return {
     schemaVersion: 2,
     id: 'recipe-1',
-    status: 'review',
+    status: 'ready',
     source: {
       key: 'source',
       canonicalUrl: 'https://source.test/recipe',
@@ -51,35 +51,21 @@ function recipe(): CompleteCanonicalRecipeV2 {
 }
 
 describe('Gemini initial backfill batches', () => {
-  it('requires AI only for displayable recipes missing meal type or cuisine', () => {
+  it('requires taxonomy v2 for every displayable ready recipe until both versions are current', () => {
     const unresolved = recipe();
     expect(recipeRequiresAi(unresolved)).toBe(true);
     expect(recipeRequiresAi({
       ...unresolved,
       effective: { ...unresolved.effective, mealTypes: ['dinner'], cuisines: ['global'] },
+      classification: {
+        ...unresolved.classification, classifierVersion: 2, taxonomyVersion: 2,
+      },
     })).toBe(false);
     expect(recipeRequiresAi({
       ...unresolved,
       content: { ...unresolved.content, instructions: [] },
     })).toBe(false);
-    expect(recipeRequiresAi({
-      ...unresolved,
-      source: {
-        ...unresolved.source,
-        key: 'seriouseats',
-        canonicalUrl: 'https://www.seriouseats.com/frozen-recipe',
-        originalUrl: 'https://www.seriouseats.com/frozen-recipe',
-      },
-    })).toBe(false);
-    expect(recipeRequiresAi({
-      ...unresolved,
-      source: {
-        ...unresolved.source,
-        key: 'akispetretzikis',
-        canonicalUrl: 'https://akispetretzikis.com/en/recipe/1/frozen-recipe',
-        originalUrl: 'https://akispetretzikis.com/en/recipe/1/frozen-recipe',
-      },
-    })).toBe(false);
+    expect(recipeRequiresAi({ ...unresolved, status: 'review' })).toBe(false);
   });
 
   it('creates deterministic JSONL shards capped at 5,000 recipes', () => {

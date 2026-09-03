@@ -7,6 +7,7 @@
     "build": "tsc",
     "catalogue:ingest": "npm run build && node lib/catalogue/ingestionCli.js",
     "catalogue:migrate": "npm run build && node lib/catalogue/migrationCli.js",
+    "catalogue:backfill-units": "npm run build && node lib/catalogue/unitBackfillCli.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

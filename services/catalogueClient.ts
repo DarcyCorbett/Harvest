@@ -70,7 +70,7 @@ export interface CatalogueSelectionResponse {
 type Invoke = (data: CatalogueSelectionRequest) => Promise<{ data: unknown }>;
 type LoadRecipe = (recipeId: string) => Promise<Recipe | null>;
 
-type CanonicalMealType = 'breakfast' | 'lunch' | 'dinner' | 'side' | 'snack';
+type CanonicalMealType = MealType;
 type CanonicalCuisine = CatalogueCuisine
   | 'greek'
   | 'american'
@@ -98,6 +98,9 @@ const MEAL_TYPE_BY_LABEL: Record<string, CanonicalMealType> = {
   dinner: 'dinner',
   side: 'side',
   snack: 'snack',
+  dessert: 'dessert',
+  component: 'component',
+  'sauces, condiments & more': 'component',
 };
 const CUISINE_BY_LABEL: Record<string, CanonicalCuisine> = {
   asian: 'asian',
@@ -148,7 +151,9 @@ export function buildCatalogueMetadataOperations(
   };
 }
 
-const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
+const MEAL_ORDER: MealType[] = [
+  'breakfast', 'lunch', 'dinner', 'side', 'snack', 'dessert', 'component',
+];
 const CUISINE_MAP: Partial<Record<CuisineStyle, CatalogueCuisine>> = {
   Asian: 'asian',
   Mexican: 'mexican',

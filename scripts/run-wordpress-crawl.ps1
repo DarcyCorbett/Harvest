@@ -5,7 +5,9 @@ param(
   [ValidateSet(
     'crawl-canary', 'crawl-inventory', 'crawl-backfill',
     'snapshot-inventory', 'snapshot-canary', 'snapshot-crawl', 'snapshot-verify',
-    'tag-batch-prepare', 'tag-batch-submit', 'tag-batch-collect', 'weekly-new'
+    'tag-batch-prepare', 'tag-batch-submit', 'tag-batch-collect',
+    'taxonomy-retag-prepare', 'taxonomy-retag-submit', 'taxonomy-retag-stage',
+    'taxonomy-retag-apply', 'taxonomy-retag-verify', 'weekly-new'
   )]
   [string]$Mode,
   [string]$Region = 'europe-west1',
@@ -39,7 +41,7 @@ if ($SourceKeys) {
     throw "Unsupported catalogue source: $($invalidSources -join ', ')"
   }
 }
-if ($Mode -eq 'tag-batch-submit' -and -not $ConfirmPaidBatch) {
+if ($Mode -in @('tag-batch-submit', 'taxonomy-retag-submit') -and -not $ConfirmPaidBatch) {
   throw 'Tag batch submission requires -ConfirmPaidBatch after reviewing prepare-mode cost.'
 }
 
@@ -65,7 +67,10 @@ try {
       '--max-per-source', [string]$MaxPerSource
     )
   }
-  if ($Mode -eq 'tag-batch-submit') {
+  if ($Mode -eq 'taxonomy-retag-apply') {
+    $jobArgs += @('--write-cap', [string]$WriteCap)
+  }
+  if ($Mode -in @('tag-batch-submit', 'taxonomy-retag-submit')) {
     $jobArgs += '--confirm-paid-batch'
   }
   $encodedArgs = '^|^' + ($jobArgs -join '|')

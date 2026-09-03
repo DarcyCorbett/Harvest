@@ -617,7 +617,9 @@ describe('ingestion refresh merging', () => {
       cuisines: 'ai',
       modifiers: 'ai',
     });
-    expect(merged.classification.classifierVersion).toBe(1);
+    // Content changes retain the last usable tags but mark them stale so the
+    // taxonomy-v2 classifier runs before the refreshed recipe is considered current.
+    expect(merged.classification.classifierVersion).toBe(0);
   });
 
   it('does not change lastChangedAt when refreshed content is unchanged', () => {

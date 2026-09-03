@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
 
-export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'side', 'snack'] as const;
+export const MEAL_TYPES = [
+  'breakfast',
+  'lunch',
+  'dinner',
+  'side',
+  'snack',
+  'dessert',
+  'component',
+] as const;
 export const CUISINES = [
   'asian',
   'mexican',
@@ -281,6 +289,18 @@ export function buildSearchFields(
   };
 }
 
+export function validateMealTypeCombination(mealTypes: readonly MealType[]): string[] {
+  const values = new Set(mealTypes);
+  const errors: string[] = [];
+  if (values.size !== mealTypes.length) errors.push('duplicate');
+  if (values.has('component') && values.size !== 1) errors.push('component-exclusive');
+  if (values.has('dessert')
+    && [...values].some((value) => ['lunch', 'dinner', 'side', 'component'].includes(value))) {
+    errors.push('dessert-overlap');
+  }
+  return errors;
+}
+
 function equalSearchFields(left: RecipeSearchFields, right: RecipeSearchFields): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -304,6 +324,9 @@ export function validateReadyRecipe(recipe: CanonicalRecipeV2): string[] {
     errors.push('effective.totalMinutes');
   }
   if (recipe.effective.mealTypes.length === 0) errors.push('effective.mealTypes');
+  if (validateMealTypeCombination(recipe.effective.mealTypes).length > 0) {
+    errors.push('effective.mealTypes.combination');
+  }
   if (!recipe.classification.complete) errors.push('classification.complete');
 
   const expectedSearch = buildSearchFields(

@@ -16,6 +16,8 @@
     "test:rules:vitest": "vitest run tests/firestore.rules.test.ts --exclude .worktrees/**",
     "test:rules": "firebase emulators:exec --only firestore --project demo-meal-wizard-rules \"npm run test:rules:vitest\"",
     "test:tagging-eval": "vitest run tests/catalogueTaggingEvaluation.test.mjs",
+    "test:meal-type-eval": "vitest run tests/catalogueMealTypeEvaluation.test.mjs",
+    "canary:taxonomy-v2": "npm run build:functions && node scripts/runTaxonomyV2Canary.mjs",
     "scan:client-secrets": "node scripts/scanClientSecrets.mjs",
     "verify:phase0": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",
     "verify:phase2:local": "npm run test:functions && npm run build:functions && npm run test:client && npm run test:rules && npm run lint && tsc --noEmit && npm run scan:client-secrets",

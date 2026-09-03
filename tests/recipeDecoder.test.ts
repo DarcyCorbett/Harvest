@@ -127,6 +127,23 @@ describe('decodeRecipeDocument', () => {
     })).toBeNull();
   });
 
+  it('decodes the expanded meal-type display labels', () => {
+    const decoded = decodeRecipeDocument('expanded-1', {
+      schemaVersion: 2,
+      status: 'ready',
+      source: { canonicalUrl: 'https://example.test/sauce' },
+      ingestion: {},
+      content: {
+        title: 'Sauce', originalServings: 4,
+        ingredients: [{ name: 'tomato' }], instructions: [{ text: 'Blend.' }],
+      },
+      effective: {
+        mealTypes: ['snack', 'dessert', 'component'], cuisines: ['global'], modifiers: [],
+      },
+    });
+    expect(decoded?.course).toEqual(['Snack', 'Dessert', 'Sauces, Condiments & More']);
+  });
+
   it('rejects malformed recipe documents', () => {
     expect(decodeRecipeDocument('bad-1', null)).toBeNull();
     expect(decodeRecipeDocument('bad-2', { title: '' })).toBeNull();

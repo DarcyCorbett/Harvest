@@ -295,15 +295,41 @@ export async function addShoppingItem(householdId: string, item: Omit<ShoppingIt
 
 /** Add multiple shopping items (batch) */
 export async function addShoppingItems(householdId: string, items: Omit<ShoppingItem, 'id'>[]): Promise<void> {
+  const collectionRef = collection(db, 'households', householdId, 'shoppingList');
+  // Stay below Firestore's 500-operation batch limit. Typical lists fit in one
+  // commit; unusually large plans remain writeable instead of failing outright.
+  for (let start = 0; start < items.length; start += 450) {
+    const batch = writeBatch(db);
+    items.slice(start, start + 450).forEach((item) => {
+      const ref = doc(collectionRef);
+      batch.set(ref, shoppingItemData(item));
+    });
+    await batch.commit();
+  }
+}
+
+function shoppingItemData(item: Omit<ShoppingItem, 'id'>): Record<string, unknown> {
+  // Firestore rejects `undefined` field values — strip them before writing.
+  return Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined));
+}
+
+/**
+ * Atomically replace the shopping list after the new aggregation is complete.
+ * Refuse oversized replacements before deleting anything; this preserves the
+ * existing list if Firestore cannot perform the replacement as one commit.
+ */
+export async function replaceShoppingItems(
+  householdId: string,
+  items: Omit<ShoppingItem, 'id'>[],
+): Promise<void> {
+  const collectionRef = collection(db, 'households', householdId, 'shoppingList');
+  const snapshot = await getDocs(collectionRef);
+  if (snapshot.size + items.length > 500) {
+    throw new Error('Shopping list is too large to replace safely. Clear purchased items and try again.');
+  }
   const batch = writeBatch(db);
-  items.forEach((item) => {
-    const ref = doc(collection(db, 'households', householdId, 'shoppingList'));
-    // Firestore rejects `undefined` field values — strip them before writing.
-    const data = Object.fromEntries(
-      Object.entries(item).filter(([, v]) => v !== undefined)
-    );
-    batch.set(ref, data);
-  });
+  snapshot.docs.forEach((document) => batch.delete(document.ref));
+  items.forEach((item) => batch.set(doc(collectionRef), shoppingItemData(item)));
   await batch.commit();
 }
 

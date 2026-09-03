@@ -8,6 +8,7 @@ import {
   MODIFIERS,
   buildEffectiveMetadata,
   buildSearchFields,
+  validateMealTypeCombination,
   validateReadyRecipe,
   type CatalogueTimestamp,
   type CompleteCanonicalRecipeV2,
@@ -42,7 +43,16 @@ export const updateCanonicalRecipeMetadataRequestSchema = z.object({
     (operations) => Object.values(operations).some((operation) => operation !== undefined),
     'At least one operation is required',
   ),
-}).strict();
+}).strict().superRefine((request, context) => {
+  const operation = request.operations.mealTypes;
+  if (operation?.operation === 'set' && validateMealTypeCombination(operation.value).length > 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['operations', 'mealTypes'],
+      message: 'Invalid meal-type combination',
+    });
+  }
+});
 
 export type CanonicalMetadataOperations = z.infer<
   typeof updateCanonicalRecipeMetadataRequestSchema

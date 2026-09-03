@@ -13,7 +13,7 @@ import { useBackgroundJobs } from '@/contexts/BackgroundJobsContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { DevLogTerminal } from '@/components/DevLogTerminal';
-import { addToCookbook, clearGenerationResult, countUnpurchasedShoppingItems, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
+import { addToCookbook, clearGenerationResult, countUnpurchasedShoppingItems, getCatalogueGenerationMode, getHouseholdSettings, getRecipe, subscribeCookbook, toggleStarred } from '@/services/firestoreService';
 import { normalizeIngredientFilters, type CatalogueIngredientFilters } from '@/services/catalogueClient';
 import {
   addDays,
@@ -99,6 +99,9 @@ const MEAL_TYPE_OPTIONS: { type: MealType; label: string; icon: string }[] = [
   { type: 'lunch', label: 'Lunch', icon: 'partly-sunny-outline' },
   { type: 'dinner', label: 'Dinner', icon: 'moon-outline' },
   { type: 'side', label: 'Side', icon: 'restaurant-outline' },
+  { type: 'snack', label: 'Snack', icon: 'nutrition-outline' },
+  { type: 'dessert', label: 'Dessert', icon: 'ice-cream-outline' },
+  { type: 'component', label: 'Sauces, Condiments & More', icon: 'flask-outline' },
 ];
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -106,6 +109,9 @@ const MEAL_LABELS: Record<MealType, string> = {
   lunch: 'Lunch',
   dinner: 'Dinner',
   side: 'Side',
+  snack: 'Snack',
+  dessert: 'Dessert',
+  component: 'Sauces, Condiments & More',
 };
 
 // ─── Main Screen ──────────────────────────────────────────────
@@ -157,6 +163,7 @@ export default function GenerateScreen() {
     }
   }, [settings]);
   const [mealTypes, setMealTypes] = useState<MealType[]>(['dinner']);
+  const [catalogueMode, setCatalogueMode] = useState(false);
   const [effort, setEffort] = useState<EffortValue>('Moderate');
   const [modifiers, setModifiers] = useState<Set<CuisineStyle>>(new Set());
   const [selectedCuisines, setSelectedCuisines] = useState<Set<CuisineStyle>>(new Set());
@@ -184,6 +191,22 @@ export default function GenerateScreen() {
   const [previewRecipe, setPreviewRecipe] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
   const [cookbook, setCookbook] = useState<CookbookEntry[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    getCatalogueGenerationMode()
+      .then((mode) => {
+        if (!active) return;
+        const enabled = mode === 'catalogue';
+        setCatalogueMode(enabled);
+        if (!enabled) setMealTypes((current) => current.filter((type) =>
+          ['breakfast', 'lunch', 'dinner', 'side'].includes(type)));
+      })
+      .catch(() => {
+        if (active) setCatalogueMode(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!householdId) return;
@@ -811,7 +834,8 @@ export default function GenerateScreen() {
 
         {/* ── Section: Meal types ── */}
         <Section title="Meal Types" colors={colors}>
-          {MEAL_TYPE_OPTIONS.map(({ type, label, icon }) => {
+          {MEAL_TYPE_OPTIONS.filter(({ type }) => catalogueMode
+            || ['breakfast', 'lunch', 'dinner', 'side'].includes(type)).map(({ type, label, icon }) => {
             const active = mealTypes.includes(type);
             return (
               <TouchableOpacity

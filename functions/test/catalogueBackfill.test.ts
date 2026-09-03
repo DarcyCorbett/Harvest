@@ -141,7 +141,11 @@ describe('classification backfill engine', () => {
   it('skips current documents and reruns without recipe writes', async () => {
     const current = recipe({
       id: 'recipe-1',
-      classification: { ...recipe().classification, classifierVersion: 1 },
+      classification: {
+        ...recipe().classification,
+        classifierVersion: 2,
+        taxonomyVersion: 2,
+      },
     });
     const stale = recipe({ id: 'recipe-2' });
     const store = memoryStore([current, stale]);

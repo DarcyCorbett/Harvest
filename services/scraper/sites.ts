@@ -87,7 +87,7 @@ const FOOD_RESTRICTING_STYLES = new Set<CuisineStyle>(['Vegetarian']);
 
 // ─── Dish Vocabulary ─────────────────────────────────────────
 
-const DISH_VOCAB: Record<string, Record<MealType, readonly string[]>> = {
+const DISH_VOCAB: Record<string, Partial<Record<MealType, readonly string[]>>> = {
   Asian: {
     breakfast: ['rice', 'eggs', 'tofu', 'noodles', 'pork', 'congee'],
     lunch: ['noodles', 'rice', 'tofu', 'chicken', 'pork', 'beef', 'soup', 'dumplings', 'prawn'],
@@ -221,10 +221,10 @@ export function buildQueryTags(ctx: SearchQueryContext): string[] {
 }
 
 export function getDishPool(cuisineStyles: CuisineStyle[], mealType: MealType): readonly string[] {
-  if (cuisineStyles.includes('Asian')) return DISH_VOCAB.Asian[mealType] ?? DISH_VOCAB.general[mealType];
-  if (cuisineStyles.includes('Mexican')) return DISH_VOCAB.Mexican[mealType] ?? DISH_VOCAB.general[mealType];
-  if (cuisineStyles.includes('Mediterranean')) return DISH_VOCAB.Mediterranean[mealType] ?? DISH_VOCAB.general[mealType];
-  return DISH_VOCAB.general[mealType];
+  if (cuisineStyles.includes('Asian')) return DISH_VOCAB.Asian[mealType] ?? DISH_VOCAB.general[mealType] ?? [];
+  if (cuisineStyles.includes('Mexican')) return DISH_VOCAB.Mexican[mealType] ?? DISH_VOCAB.general[mealType] ?? [];
+  if (cuisineStyles.includes('Mediterranean')) return DISH_VOCAB.Mediterranean[mealType] ?? DISH_VOCAB.general[mealType] ?? [];
+  return DISH_VOCAB.general[mealType] ?? [];
 }
 
 /** Return a weighted-random item from a pool. Items absent from weights default to weight 1. */

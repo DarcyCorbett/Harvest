@@ -95,6 +95,12 @@ describe('canonical metadata callable', () => {
     } } as CallableRequest<unknown>)).rejects.toMatchObject({ code: 'invalid-argument' });
     expect(authorize).not.toHaveBeenCalled();
 
+    await expect(handler.update({ auth: {} as never, data: {
+      recipeId: 'recipe-1',
+      operations: { mealTypes: { operation: 'set', value: ['component', 'side'] } },
+    } } as CallableRequest<unknown>)).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(authorize).not.toHaveBeenCalled();
+
     const request = {
       auth: { uid: 'editor-1', token: {} },
       data: {

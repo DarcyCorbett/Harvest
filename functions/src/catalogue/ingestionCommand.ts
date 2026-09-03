@@ -33,6 +33,11 @@ export const INGESTION_MODES = [
   'tag-batch-prepare',
   'tag-batch-submit',
   'tag-batch-collect',
+  'taxonomy-retag-prepare',
+  'taxonomy-retag-submit',
+  'taxonomy-retag-stage',
+  'taxonomy-retag-apply',
+  'taxonomy-retag-verify',
   'weekly-new',
 ] as const;
 
@@ -224,6 +229,14 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
     if (result.forceRefresh || result.targetUrls || result.confirmPaidBatch
       || result.dryRun) invalid();
     if (result.writeCap !== undefined && result.writeCap > 17_500) invalid();
+  }
+  if (result.mode?.startsWith('taxonomy-retag-')) {
+    if (result.sourceKeys || result.dryRun || result.forceRefresh
+      || result.maxPerSource !== undefined || result.targetUrls
+      || result.geminiCallCap !== undefined) invalid();
+    if (result.mode === 'taxonomy-retag-submit' && !result.confirmPaidBatch) invalid();
+    if (result.mode !== 'taxonomy-retag-submit' && result.confirmPaidBatch) invalid();
+    if (result.mode !== 'taxonomy-retag-apply' && result.writeCap !== undefined) invalid();
   }
   if (result.mode?.includes('nutrition')) {
     if (result.forceRefresh || result.targetUrls || result.geminiCallCap !== undefined

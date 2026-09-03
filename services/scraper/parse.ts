@@ -1596,13 +1596,13 @@ export function parseRecipe(rawHtml: string, sourceUrl: string): Recipe {
  *   °F / degrees F / degrees Fahrenheit → °C  (rounded integer)
  *   X inch / X inches                   → Xcm (× 2.54, 1 decimal)
  */
-function convertInstructionUnits(text: string): string {
+export function convertInstructionUnits(text: string): string {
   text = text.replace(
     /(\d+(?:\.\d+)?)\s*(?:°\s*F|degrees?\s+(?:Fahrenheit|F))\b/gi,
     (_, f) => `${Math.round((parseFloat(f) - 32) * 5 / 9)}°C`
   );
   text = text.replace(
-    /(\d+(?:\.\d+)?)\s*inches?\b/gi,
+    /(\d+(?:\.\d+)?)\s*inch(?:es)?\b/gi,
     (_, i) => `${Math.round(parseFloat(i) * 2.54 * 10) / 10}cm`
   );
   return text;

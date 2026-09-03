@@ -20,6 +20,8 @@ interface GeminiRequest {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   onUsage?: (usage: GeminiUsage) => void;
+  responseJsonSchema?: object;
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
 const tokenCount = z.number().finite().nonnegative().optional();
@@ -74,6 +76,8 @@ export async function requestGeminiJson<T>({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl = fetch,
   onUsage,
+  responseJsonSchema,
+  thinkingLevel,
 }: GeminiRequest): Promise<T> {
   if (apiKey.trim().length === 0) {
     throw new GeminiProviderError('provider-secret-missing');
@@ -98,9 +102,11 @@ export async function requestGeminiJson<T>({
           },
         ],
         generationConfig: {
-          temperature: 0,
+          ...(model === 'gemini-3.8-flash' ? {} : { temperature: 0 }),
           maxOutputTokens,
           responseMimeType: 'application/json',
+          ...(responseJsonSchema ? { responseJsonSchema } : {}),
+          ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
         },
       }),
     });

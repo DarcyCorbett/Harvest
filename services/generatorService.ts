@@ -16,10 +16,10 @@ import {
   addShoppingItems,
   addToCookbook,
   bumpMealReminderState,
-  clearAllShoppingItems,
   getCatalogueGenerationMode,
   getRecipe,
   getStarredRecipes,
+  replaceShoppingItems,
   updateRecipeFlags,
   updateRecipeTags,
 } from './firestoreService';
@@ -48,6 +48,7 @@ import {
   aggregateByGeminiGroups,
   aggregateIngredients,
   getGeminiGroupings,
+  prepareMealsForShopping,
   type RawIngredient,
 } from './shoppingList';
 import type {
@@ -55,6 +56,7 @@ import type {
   GenerateConfig,
   GeneratedMeal,
   MealType,
+  LegacyMealType,
   ShoppingItem
 } from './types';
 
@@ -123,6 +125,13 @@ export function addDays(date: Date, n: number): Date {
 // ─── Meal Plan Generation ─────────────────────────────────────
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'side'];
+const LEGACY_MEAL_TYPES = new Set<MealType>(MEAL_ORDER);
+
+function assertLegacyMealTypes(mealTypes: readonly MealType[]): asserts mealTypes is readonly LegacyMealType[] {
+  if (mealTypes.some((mealType) => !LEGACY_MEAL_TYPES.has(mealType))) {
+    throw new Error('Snack, Dessert, and Sauces, Condiments & More require catalogue generation.');
+  }
+}
 
 // Cuisine styles that have dedicated dish vocabularies — selected one-per-slot via round-robin.
 const CUISINE_STYLES = new Set<CuisineStyle>(['Asian', 'Mexican', 'Mediterranean', 'Italian', 'Indian', 'Salad']);
@@ -598,9 +607,15 @@ async function regenerateLegacyMeals(
 
 const generationDispatcher = createGenerationDispatcher({
   getMode: getCatalogueGenerationMode,
-  legacyGenerate: generateLegacyMealPlan,
+  legacyGenerate: async (config: GenerateConfig, ...args: Parameters<typeof generateLegacyMealPlan> extends [any, ...infer Rest] ? Rest : never) => {
+    assertLegacyMealTypes(config.mealTypes);
+    return generateLegacyMealPlan(config, ...args);
+  },
   catalogueGenerate: generateCatalogueMealPlan,
-  legacyRegenerate: regenerateLegacyMeals,
+  legacyRegenerate: async (...args: Parameters<typeof regenerateLegacyMeals>) => {
+    assertLegacyMealTypes(args[0].map(({ mealType }) => mealType));
+    return regenerateLegacyMeals(...args);
+  },
   catalogueRegenerate: regenerateCatalogueMeals,
 });
 
@@ -655,32 +670,37 @@ export async function confirmMealPlan(
     await addToCookbook(householdId, meal.recipeId);
   }
 
-  if (shoppingListMode === 'replace') {
-    await clearAllShoppingItems(householdId);
-  }
-
+  const shoppingMeals = prepareMealsForShopping(
+    meals.map((meal) => ({
+      recipeId: meal.recipeId,
+      recipe: meal.recipe,
+      servings: meal.servings,
+    })),
+  );
   const rawIngredients: RawIngredient[] = [];
-  for (const meal of meals) {
+  for (const meal of shoppingMeals) {
     const source = { id: meal.recipeId, title: meal.recipe.title, servings: meal.servings };
     for (const ing of meal.recipe.ingredients) {
       rawIngredients.push({ id: rawIngredients.length, name: ing.name, quantity: ing.quantity, unit: ing.unit, source });
     }
   }
 
-  if (rawIngredients.length === 0) return;
-
-  let items: Omit<ShoppingItem, 'id'>[];
-  try {
-    const groups = await getGeminiGroupings(householdId, rawIngredients);
-    items = aggregateByGeminiGroups(rawIngredients, groups);
-  } catch {
-    logEvent('warn', 'Generator', 'AI grouping unavailable; using local shopping aggregation.');
-    items = aggregateIngredients(
-      meals.map((m) => ({ recipeId: m.recipeId, recipe: m.recipe, servings: m.servings }))
-    );
+  let items: Omit<ShoppingItem, 'id'>[] = [];
+  if (rawIngredients.length > 0) {
+    try {
+      const groups = await getGeminiGroupings(householdId, rawIngredients);
+      items = aggregateByGeminiGroups(rawIngredients, groups);
+    } catch {
+      logEvent('warn', 'Generator', 'AI grouping unavailable; using local shopping aggregation.');
+      items = aggregateIngredients(shoppingMeals);
+    }
   }
 
-  await addShoppingItems(householdId, items);
+  if (shoppingListMode === 'replace') {
+    await replaceShoppingItems(householdId, items);
+  } else if (items.length > 0) {
+    await addShoppingItems(householdId, items);
+  }
 
   // ── Meal-reminder detection ──
   // Run Gemini only on recipes that don't already have both flags cached.

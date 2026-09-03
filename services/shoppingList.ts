@@ -4,7 +4,7 @@
 // ============================================================
 
 import { aiClient, canonicalizeHouseholdId, type ShoppingIngredientAiInput } from './aiClient';
-import type { Recipe, ShoppingCategory, ShoppingItem } from './types';
+import type { Ingredient, Recipe, ShoppingCategory, ShoppingItem } from './types';
 
 // ─── Public Types ─────────────────────────────────────────────
 
@@ -203,6 +203,76 @@ export interface GeminiGroup {
   unit?: string;
 }
 
+function ingredientSignature(ingredient: Ingredient): string {
+  return JSON.stringify([
+    ingredient.name.trim().toLowerCase(),
+    Number.isFinite(ingredient.quantity) ? ingredient.quantity : 0,
+    ingredient.unit.trim().toLowerCase(),
+    ingredient.notes?.trim().toLowerCase() ?? '',
+  ]);
+}
+
+/**
+ * Return the complete flat ingredient list for shopping. Root ingredients are
+ * authoritative, but some historical documents stored extra rows only inside
+ * ingredientGroups. Treat the grouped rows as a multiset and append only the
+ * occurrences not already represented at the root.
+ */
+export function completeRecipeIngredients(recipe: Recipe): Ingredient[] {
+  const root = [...recipe.ingredients];
+  const grouped = recipe.ingredientGroups?.flatMap((group) => group.ingredients) ?? [];
+  if (grouped.length === 0) return root;
+
+  const unmatchedRoot = new Map<string, number>();
+  for (const ingredient of root) {
+    const key = ingredientSignature(ingredient);
+    unmatchedRoot.set(key, (unmatchedRoot.get(key) ?? 0) + 1);
+  }
+
+  const groupedOnly: Ingredient[] = [];
+  for (const ingredient of grouped) {
+    const key = ingredientSignature(ingredient);
+    const remaining = unmatchedRoot.get(key) ?? 0;
+    if (remaining > 0) {
+      unmatchedRoot.set(key, remaining - 1);
+    } else {
+      groupedOnly.push(ingredient);
+    }
+  }
+  return [...root, ...groupedOnly];
+}
+
+/**
+ * Build an owned shopping snapshot. Schema-v2 recipes are stored at their
+ * original serving size, while the legacy generator already returns scaled
+ * recipes. Scaling here therefore restores catalogue parity without changing
+ * units or mutating the recipe used by the UI/meal plan.
+ */
+export function prepareMealsForShopping(meals: MealForShopping[]): MealForShopping[] {
+  return meals.map((meal) => {
+    const originalServings = meal.recipe.originalServings;
+    const factor = meal.recipe.schemaVersion === 2
+      && Number.isFinite(originalServings)
+      && originalServings > 0
+      && Number.isFinite(meal.servings)
+      && meal.servings > 0
+      ? meal.servings / originalServings
+      : 1;
+    const ingredients = completeRecipeIngredients(meal.recipe).map((ingredient) => ({
+      ...ingredient,
+      quantity: Math.round(
+        Math.max(0, Number.isFinite(ingredient.quantity) ? ingredient.quantity : 0)
+          * factor
+          * 100,
+      ) / 100,
+    }));
+    return {
+      ...meal,
+      recipe: { ...meal.recipe, ingredients },
+    };
+  });
+}
+
 // ─── Programmatic Aggregator (fallback) ───────────────────────
 
 /**
@@ -223,7 +293,7 @@ export function aggregateIngredients(
   const grouped = new Map<string, FallbackGroup>();
 
   for (const meal of meals) {
-    const source = { id: meal.recipeId, title: meal.recipe.title };
+    const source = { id: meal.recipeId, title: meal.recipe.title, servings: meal.servings };
     for (const ing of meal.recipe.ingredients) {
       const normName = normalizeIngredientName(ing.name) || ing.name.trim();
       const existing = grouped.get(normName);
@@ -245,8 +315,13 @@ export function aggregateIngredients(
 
   const result: Omit<ShoppingItem, 'id'>[] = [];
   for (const g of grouped.values()) {
-    const item = collapseGroupToItem(g.canonicalName, g.category, undefined, g.members, g.sources);
-    if (item) result.push(item);
+    result.push(...collapseGroupToItems(
+      g.canonicalName,
+      g.category,
+      undefined,
+      g.members,
+      g.sources,
+    ));
   }
   return result;
 }
@@ -286,19 +361,20 @@ interface CollapseMember {
 }
 
 /**
- * Collapse all of a group's members into exactly one ShoppingItem.
+ * Collapse a group's members into a primary ShoppingItem plus lossless
+ * residual rows when unit families cannot be converted safely.
  * Members may span weight / volume / count families; this picks one target
  * family then folds the others in via density / standard-weight / count-volume
- * bridges. Members that can't be converted are warned and dropped (preferring
- * one slightly-undercounted row over multiple duplicate rows).
+ * bridges. Qualitative ingredients are retained as unsized rows instead of
+ * disappearing, and unconvertible positive amounts keep their original unit.
  */
-function collapseGroupToItem(
+function collapseGroupToItems(
   canonicalName: string,
   category: ShoppingCategory,
   groupUnit: string | undefined,
   members: CollapseMember[],
   sources: { id: string; title: string; servings?: number }[]
-): Omit<ShoppingItem, 'id'> | null {
+): Omit<ShoppingItem, 'id'>[] {
   // Ignore zero-quantity members for family voting — they contribute nothing
   // to the total and can mislead the target selector (e.g. "more coconut milk"
   // parsed as qty 0 count should not override a real 1.25 cup volume member).
@@ -348,6 +424,15 @@ function collapseGroupToItem(
   let baseG = 0;
   let baseMl = 0;
   let baseCount = 0;
+  const residuals = new Map<string, { quantity: number; unit: string }>();
+  const retainResidual = (member: CollapseMember) => {
+    if (!(member.quantity > 0)) return;
+    const unit = normalizeUnit(member.unit);
+    const key = unit || '__count__';
+    const existing = residuals.get(key);
+    if (existing) existing.quantity += member.quantity;
+    else residuals.set(key, { quantity: member.quantity, unit });
+  };
 
   for (const m of members) {
     const normUnit = normalizeUnit(m.unit);
@@ -363,9 +448,7 @@ function collapseGroupToItem(
       } else if (stdWeight !== null) {
         baseG += m.quantity * stdWeight;
       } else {
-        console.warn(
-          `[ShoppingList] dropping unconvertible count "${m.quantity} ${m.unit}" — no stdWeight for "${canonicalName}"`
-        );
+        retainResidual(m);
       }
     } else if (target === 'volume') {
       if (family === 'volume') {
@@ -379,9 +462,7 @@ function collapseGroupToItem(
         } else if (stdWeight !== null) {
           baseMl += m.quantity * stdWeight; // 1 g ≈ 1 ml fallback
         } else {
-          console.warn(
-            `[ShoppingList] dropping unconvertible count "${m.quantity} ${m.unit}" — no count→volume mapping for "${canonicalName}"`
-          );
+          retainResidual(m);
         }
       }
     } else {
@@ -396,54 +477,49 @@ function collapseGroupToItem(
         if (family === 'volume' && countUnitMl !== undefined) {
           baseCount += baseInOwnFamily / countUnitMl;
         } else {
-          console.warn(
-            `[ShoppingList] dropping unconvertible "${m.quantity} ${m.unit}" — no path to count "${countUnit}" for "${canonicalName}"`
-          );
+          retainResidual(m);
         }
       }
     }
   }
 
+  const result: Omit<ShoppingItem, 'id'>[] = [];
+  const item = (quantity: number, unit: string): Omit<ShoppingItem, 'id'> => ({
+    name: canonicalName,
+    quantity: Math.round(quantity * 100) / 100,
+    unit,
+    category,
+    checked: false,
+    manual: false,
+    sources,
+  });
+
   if (target === 'weight' && baseG > 0) {
     const r = fromBaseWeight(baseG);
-    return {
-      name: canonicalName,
-      quantity: Math.round(r.quantity * 100) / 100,
-      unit: r.unit,
-      category,
-      checked: false,
-      manual: false,
-      sources,
-    };
+    result.push(item(r.quantity, r.unit));
   }
   if (target === 'volume' && baseMl > 0) {
     const liquidPreferred = category === 'Oils, Sauces & Condiments' || hasMetricVolume;
     const { quantity, unit } = formatVolumeOutput(baseMl, category, liquidPreferred);
-    return {
-      name: canonicalName,
-      quantity: Math.round(quantity * 100) / 100,
-      unit,
-      category,
-      checked: false,
-      manual: false,
-      sources,
-    };
+    result.push(item(quantity, unit));
   }
   if (target === 'count' && baseCount > 0) {
     const qty = Math.round(baseCount * 100) / 100;
     const finalCountUnit = countUnit || pluralizeUnit(canonicalName, qty);
-    return {
-      name: canonicalName,
-      quantity: qty,
-      unit: finalCountUnit,
-      category,
-      checked: false,
-      manual: false,
-      sources,
-    };
+    result.push(item(qty, finalCountUnit));
   }
 
-  return null;
+  for (const residual of residuals.values()) {
+    result.push(item(residual.quantity, residual.unit));
+  }
+
+  // A qualitative ingredient such as "salt to taste" has no numeric amount,
+  // but it is still a required shopping-list row.
+  if (result.length === 0 && members.length > 0) {
+    result.push(item(0, ''));
+  }
+
+  return result;
 }
 
 // ─── Gemini-Guided Aggregator ─────────────────────────────────
@@ -477,8 +553,13 @@ export function aggregateByGeminiGroups(
 
     const category = group.category;
 
-    const item = collapseGroupToItem(group.canonicalName, category, group.unit, members, sources);
-    if (item) result.push(item);
+    result.push(...collapseGroupToItems(
+      group.canonicalName,
+      category,
+      group.unit,
+      members,
+      sources,
+    ));
   }
 
   return result;

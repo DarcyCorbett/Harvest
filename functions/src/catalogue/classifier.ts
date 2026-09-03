@@ -11,6 +11,11 @@ import {
   type RecipeMetadata,
 } from './domain.js';
 import type { CatalogueClassification } from './ingestion.js';
+import {
+  TAXONOMY_V2_RESPONSE_JSON_SCHEMA,
+  buildTaxonomyV2Prompt,
+  parseAndDeriveTaxonomyV2,
+} from './taxonomyV2.js';
 
 const responseSchema = z.object({
   mealTypes: z.array(z.enum(MEAL_TYPES)).min(1).max(MEAL_TYPES.length),
@@ -76,12 +81,12 @@ export function classifyCatalogueDeterministically(
       modifiers: sourceMetadata.modifiers?.length ? 'source' : 'rule',
     },
     complete,
-    classifierVersion: complete ? 1 : 0,
+    classifierVersion: 0,
   };
 }
 
 export function createCatalogueClassifier(dependencies: {
-  requestJson(prompt: string): Promise<unknown>;
+  requestJson(prompt: string, responseJsonSchema?: object, maxOutputTokens?: number): Promise<unknown>;
 }) {
   return async (
     content: CompleteCanonicalRecipeV2['content'],
@@ -93,33 +98,43 @@ export function createCatalogueClassifier(dependencies: {
     let modifiers = deterministic.metadata.modifiers ?? [];
     const sources = deterministic.sources;
 
-    if (mealTypes.length === 0 || cuisines.length === 0) {
+    if (cuisines.length === 0) {
       const prompt = [
-        'Classify this recipe using only the allowed JSON values.',
-        `mealTypes: ${MEAL_TYPES.join(', ')}`,
+        'Classify only the cuisine of this recipe using the allowed JSON values.',
         `cuisines: ${CUISINES.join(', ')}`,
-        `modifiers: ${MODIFIERS.join(', ')}`,
         `Title: ${content.title.slice(0, 200)}`,
         `Ingredients: ${content.ingredients.map((ingredient) => ingredient.name).join(', ').slice(0, 2_000)}`,
-        'Return JSON with mealTypes, cuisines, and modifiers arrays and no other fields.',
+        'Return JSON with a cuisines array containing at least one value and no other fields.',
       ].join('\n');
-      const parsed = responseSchema.safeParse(await dependencies.requestJson(prompt));
-      if (!parsed.success) throw new Error('Invalid catalogue classification');
-      if (mealTypes.length === 0) {
-        mealTypes = parsed.data.mealTypes;
-        sources.mealTypes = 'ai';
-      }
-      if (cuisines.length === 0) {
-        cuisines = parsed.data.cuisines;
-        sources.cuisines = 'ai';
-      }
-      // Modifiers are optional. Only use AI modifier output when the same call
-      // was already required for a missing meal type or cuisine.
-      if (modifiers.length === 0) {
-        modifiers = parsed.data.modifiers;
-        sources.modifiers = 'ai';
-      }
+      const cuisineSchema = z.object({
+        cuisines: z.array(z.enum(CUISINES)).min(1).max(CUISINES.length),
+      }).strict();
+      const parsed = cuisineSchema.safeParse(await dependencies.requestJson(prompt, {
+        type: 'object',
+        additionalProperties: false,
+        required: ['cuisines'],
+        properties: {
+          cuisines: { type: 'array', minItems: 1, items: { type: 'string', enum: CUISINES } },
+        },
+      }, 256));
+      if (!parsed.success) throw new Error('Invalid catalogue cuisine classification');
+      cuisines = parsed.data.cuisines;
+      sources.cuisines = 'ai';
     }
+
+    const { derived } = parseAndDeriveTaxonomyV2(await dependencies.requestJson(
+      buildTaxonomyV2Prompt(content),
+      TAXONOMY_V2_RESPONSE_JSON_SCHEMA as object,
+      2_048,
+    ));
+    mealTypes = derived.mealTypes;
+    modifiers = [
+      ...modifiers.filter((modifier) => modifier !== 'kid-friendly' && modifier !== 'healthy'),
+      ...(derived.kidFriendly ? ['kid-friendly' as const] : []),
+      ...(derived.healthy ? ['healthy' as const] : []),
+    ];
+    sources.mealTypes = 'ai';
+    sources.modifiers = 'ai';
 
     return {
       metadata: {
@@ -130,7 +145,7 @@ export function createCatalogueClassifier(dependencies: {
       },
       sources,
       complete: mealTypes.length > 0 && cuisines.length > 0,
-      classifierVersion: 1,
+      classifierVersion: 2,
     };
   };
 }

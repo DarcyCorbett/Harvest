@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
@@ -13,6 +11,7 @@ import {
   type OperationalCanonicalRecipeV2,
   type RecipeMetadata,
 } from './domain.js';
+import { catalogueContentHash } from './contentFingerprint.js';
 import {
   shouldRefreshManifestEntry,
   type CatalogueManifest,
@@ -218,16 +217,17 @@ function emptySourceMetrics(): CatalogueSourceRunMetrics {
   };
 }
 
-function contentHash(content: CompleteCanonicalRecipeV2['content']): string {
-  return createHash('sha256').update(JSON.stringify(content), 'utf8').digest('hex');
-}
-
 export function mergeIngestedRecipe(
   existing: CompleteCanonicalRecipeV2 | undefined,
   incoming: CompleteCanonicalRecipeV2,
 ): CompleteCanonicalRecipeV2 {
   if (!existing) return incoming;
+  const contentChanged = JSON.stringify(existing.content) !== JSON.stringify(incoming.content);
   const preserveClassification = existing.classification.complete;
+  const preserveClassificationVersion = preserveClassification
+    && !contentChanged
+    && existing.classification.taxonomyVersion >= 2
+    && (existing.classification.classifierVersion ?? 0) >= 2;
   const sourceMetadata: RecipeMetadata = preserveClassification ? {
     ...incoming.sourceMetadata,
     ...(existing.sourceMetadata.mealTypes
@@ -242,7 +242,6 @@ export function mergeIngestedRecipe(
   } : incoming.sourceMetadata;
   const effective = buildEffectiveMetadata(sourceMetadata, existing.manualOverrides);
   const randomKey = existing.search.randomKey;
-  const contentChanged = JSON.stringify(existing.content) !== JSON.stringify(incoming.content);
   const merged: CompleteCanonicalRecipeV2 = {
     ...incoming,
     source: {
@@ -287,7 +286,7 @@ export function mergeIngestedRecipe(
           ? {}
           : { modifiers: 'manual' }),
       },
-      ...(preserveClassification && existing.classification.classifierVersion !== undefined
+      ...(preserveClassificationVersion && existing.classification.classifierVersion !== undefined
         ? { classifierVersion: existing.classification.classifierVersion }
         : {}),
       complete: effective.mealTypes.length > 0 && effective.cuisines.length > 0,
@@ -643,7 +642,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                     complete: classification.complete,
                   },
                   ingestion: {
-                    contentHash: contentHash(parsed.content),
+                    contentHash: catalogueContentHash(parsed.content),
                     firstIngestedAt: now,
                     lastChangedAt: now,
                   },

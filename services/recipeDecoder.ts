@@ -14,6 +14,8 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   dinner: 'Dinner',
   side: 'Side',
   snack: 'Snack',
+  dessert: 'Dessert',
+  component: 'Sauces, Condiments & More',
 };
 
 const CUISINE_LABELS: Record<string, string> = {
