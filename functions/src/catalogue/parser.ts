@@ -3,7 +3,13 @@ import {
   MEAL_TYPES,
   MODIFIERS,
   type CompleteCanonicalRecipeV2,
+  type CanonicalAdditionalTime,
+  type CanonicalAttribution,
+  type CanonicalEquipmentItem,
+  type CanonicalIngredientGroup,
+  type CanonicalInstructionStep,
   type CanonicalNutrition,
+  type CanonicalSourceRating,
   type Cuisine,
   type MealType,
   type Modifier,
@@ -326,7 +332,44 @@ function servings(value: unknown): number {
   return match ? Number(match[0]) : 0;
 }
 
-function instructionSteps(value: unknown): { text: string }[] {
+/** Only HTTPS media and links are kept: Android blocks cleartext loads. */
+function httpsUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const candidate = decodeEntities(value.trim());
+  return /^https:\/\/[^\s"'<>]+$/i.test(candidate) ? candidate : undefined;
+}
+
+function allImageUrls(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(allImageUrls);
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (value && typeof value === 'object') {
+    const image = value as Record<string, unknown>;
+    return [...allImageUrls(image.url), ...allImageUrls(image.contentUrl)];
+  }
+  return [];
+}
+
+function httpsImageUrls(value: unknown): string[] {
+  return [...new Set(allImageUrls(value).flatMap((url) => httpsUrl(url) ?? []))];
+}
+
+function videoEmbedUrl(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = videoEmbedUrl(entry);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  const video = value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
+  const url = httpsUrl(video ? video.embedUrl ?? video.contentUrl : value);
+  if (!url) return undefined;
+  const youtube = /^https:\/\/(?:www\.|m\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([\w-]+)/i.exec(url)
+    ?? /^https:\/\/youtu\.be\/([\w-]+)/i.exec(url);
+  return youtube ? `https://www.youtube.com/embed/${youtube[1]}` : url;
+}
+
+function instructionSteps(value: unknown): CanonicalInstructionStep[] {
   if (Array.isArray(value)) return value.flatMap(instructionSteps);
   if (typeof value === 'string') {
     const normalized = text(value);
@@ -334,9 +377,244 @@ function instructionSteps(value: unknown): { text: string }[] {
   }
   if (!value || typeof value !== 'object') return [];
   const node = value as Record<string, unknown>;
-  if (node.itemListElement) return instructionSteps(node.itemListElement);
-  const normalized = text(node.text ?? node.name);
-  return normalized ? [{ text: normalized }] : [];
+  if (node.itemListElement) {
+    const steps = instructionSteps(node.itemListElement);
+    const heading = hasType(node, 'HowToSection') ? text(node.name) : '';
+    return heading && steps.length > 0 ? [{ text: heading, isHeader: true }, ...steps] : steps;
+  }
+  const body = text(node.text);
+  const name = text(node.name);
+  const normalized = body || name;
+  if (!normalized) return [];
+  // Publishers often repeat a truncated copy of the step as its name.
+  const isTitle = body && name && name !== body
+    && !body.startsWith(name.replace(/(?:\.{3}|…)$/, '').trim());
+  const stepImage = httpsImageUrls(node.image)[0];
+  const stepVideo = videoEmbedUrl(node.video);
+  const stepUrl = httpsUrl(node.url);
+  return [{
+    text: normalized,
+    ...(isTitle ? { title: name } : {}),
+    ...(stepUrl ? { sourceUrl: stepUrl } : {}),
+    ...(stepImage ? { imageUrl: stepImage } : {}),
+    ...(stepVideo ? { videoEmbedUrl: stepVideo } : {}),
+  }];
+}
+
+function names(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(names);
+  if (value && typeof value === 'object') return names((value as Record<string, unknown>).name);
+  const normalized = text(value);
+  return normalized ? [normalized] : [];
+}
+
+function unique(entries: string[], limit = 40): string[] {
+  return [...new Set(entries.map((entry) => entry.trim()).filter(Boolean))].slice(0, limit);
+}
+
+function attribution(node: Record<string, unknown>): CanonicalAttribution | undefined {
+  const author = names(node.author)[0];
+  const publisher = names(node.publisher)[0];
+  const publishedAt = text(node.datePublished);
+  const modifiedAt = text(node.dateModified);
+  const result: CanonicalAttribution = {
+    ...(author ? { author } : {}),
+    ...(publisher ? { publisher } : {}),
+    ...(publishedAt ? { publishedAt } : {}),
+    ...(modifiedAt ? { modifiedAt } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function sourceRating(value: unknown): CanonicalSourceRating | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const rating = value as Record<string, unknown>;
+  const score = Number(text(String(rating.ratingValue ?? '')));
+  // Ratings on other scales are skipped rather than guessed at.
+  if (!Number.isFinite(score) || score <= 0 || score > 5) return undefined;
+  const count = Number(text(String(rating.ratingCount ?? rating.reviewCount ?? '')).replace(/,/g, ''));
+  return {
+    value: score,
+    ...(Number.isInteger(count) && count > 0 ? { count } : {}),
+  };
+}
+
+/** "https://schema.org/GlutenFreeDiet" -> "Gluten Free". */
+function dietLabel(value: string): string {
+  return value
+    .replace(/^.*\//, '')
+    .replace(/Diet$/, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim();
+}
+
+interface MarkupElement {
+  attributes: string;
+  inner: string;
+}
+
+function classTokens(attributes: string): string[] {
+  const match = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attributes);
+  return (match?.[1] ?? match?.[2] ?? '').split(/\s+/).filter(Boolean);
+}
+
+/** Elements carrying an exact class token, with balanced inner markup. */
+function elementsWithClass(html: string, className: string): MarkupElement[] {
+  if (!html.includes(className)) return [];
+  const found: MarkupElement[] = [];
+  for (const match of html.matchAll(/<([a-z][a-z0-9]*)\b([^<>]*)>/gi)) {
+    if (!match[2].includes(className) || !classTokens(match[2]).includes(className)) continue;
+    const start = (match.index ?? 0) + match[0].length;
+    const boundary = new RegExp(`<(/?)${match[1]}\\b[^<>]*>`, 'gi');
+    boundary.lastIndex = start;
+    let depth = 1;
+    for (let tag = boundary.exec(html); tag; tag = boundary.exec(html)) {
+      if (tag[1]) depth -= 1;
+      else if (!tag[0].endsWith('/>')) depth += 1;
+      if (depth === 0) {
+        found.push({ attributes: match[2], inner: html.slice(start, tag.index) });
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+function firstText(html: string, ...classNames: string[]): string {
+  for (const className of classNames) {
+    const value = text(elementsWithClass(html, className)[0]?.inner);
+    if (value) return value;
+  }
+  return '';
+}
+
+/** Recipe-card plugins: the card container and the element holding its notes. */
+const NOTE_PROFILES: readonly (readonly [container: string, notes: string])[] = [
+  ['wprm-recipe-container', 'wprm-recipe-notes-container'],
+  ['tasty-recipes', 'tasty-recipes-notes-body'],
+  ['mv-create-card', 'mv-create-notes'],
+  ['delicious-recipe', 'delicious-recipe-notes'],
+  ['cooked-recipe-card', 'cooked-recipe-notes'],
+  ['wpzoom-recipe-card', 'wpzoom-recipe-card-notes'],
+  ['recipe-card', 'recipe-card__notes'],
+];
+
+function noteItems(html: string): string[] {
+  for (const [container, notes] of NOTE_PROFILES) {
+    if (!html.includes(container)) continue;
+    for (const element of elementsWithClass(html, notes)) {
+      const items = element.inner
+        .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, '')
+        .replace(/<br\s*\/?>|<\/(?:p|li|div|h[1-6]|ul|ol|tr|blockquote)>/gi, '\n')
+        .split('\n')
+        .map((line) => text(line))
+        .filter((line) => line && !/^(?:recipe\s+)?notes?:?$/i.test(line))
+        .slice(0, 60);
+      if (items.length > 0) return items;
+    }
+  }
+  return [];
+}
+
+function lazyImageUrl(html: string): string | undefined {
+  for (const tag of html.matchAll(/<img\b[^<>]*>/gi)) {
+    for (const name of ['data-lazy-src', 'data-src', 'src']) {
+      const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*["']([^"']+)["']`, 'i').exec(tag[0].slice(4));
+      const url = httpsUrl(match?.[1]);
+      if (url) return url;
+    }
+  }
+  return undefined;
+}
+
+function durationMinutes(value: string): number | undefined {
+  let total = 0;
+  for (const match of value.matchAll(/(\d+(?:\.\d+)?)\s*(days?|d|hours?|hrs?|h|minutes?|mins?|m)\b/gi)) {
+    const unit = match[2].toLowerCase();
+    total += Number(match[1]) * (unit.startsWith('d') ? 1_440 : unit.startsWith('h') ? 60 : 1);
+  }
+  const minutes = Math.round(total);
+  return minutes > 0 && minutes <= 43_200 ? minutes : undefined;
+}
+
+interface PluginMarkup {
+  ingredientGroups: CanonicalIngredientGroup[];
+  instructions: CanonicalInstructionStep[];
+  equipment: CanonicalEquipmentItem[];
+  additionalTimes: CanonicalAdditionalTime[];
+}
+
+/** WP Recipe Maker renders structure that its JSON-LD omits. */
+function wprmMarkup(html: string): PluginMarkup {
+  const empty: PluginMarkup = { ingredientGroups: [], instructions: [], equipment: [], additionalTimes: [] };
+  if (!html.includes('wprm-recipe')) return empty;
+
+  const ingredientGroups = elementsWithClass(html, 'wprm-recipe-ingredient-group')
+    .map((group) => ({
+      name: firstText(group.inner, 'wprm-recipe-ingredient-group-name'),
+      ingredients: elementsWithClass(group.inner, 'wprm-recipe-ingredient')
+        .map((ingredient) => ({ name: text(ingredient.inner) }))
+        .filter((ingredient) => ingredient.name),
+    }))
+    .filter((group) => group.ingredients.length > 0);
+
+  const instructions = elementsWithClass(html, 'wprm-recipe-instruction-group').flatMap((group) => {
+    const heading = firstText(group.inner, 'wprm-recipe-instruction-group-name');
+    const steps = elementsWithClass(group.inner, 'wprm-recipe-instruction').flatMap((step) => {
+      const body = firstText(step.inner, 'wprm-recipe-instruction-text') || text(step.inner);
+      const stepImage = lazyImageUrl(step.inner);
+      return body ? [{ text: body, ...(stepImage ? { imageUrl: stepImage } : {}) }] : [];
+    });
+    return heading && steps.length > 0 ? [{ text: heading, isHeader: true }, ...steps] : steps;
+  });
+
+  const equipmentNames = ['wprm-recipe-equipment-name', 'wprm-recipe-equipment-item', 'wprm-recipe-equipment']
+    .map((className) => elementsWithClass(html, className).map((item) => text(item.inner)))
+    .find((entries) => entries.some(Boolean)) ?? [];
+
+  const additionalTimes = elementsWithClass(html, 'wprm-recipe-custom-time-container').flatMap((time) => {
+    const label = firstText(time.inner, 'wprm-recipe-custom-time-name', 'wprm-recipe-custom-time-label');
+    const minutes = durationMinutes(text(time.inner).slice(label.length));
+    const cleaned = label.replace(/:\s*$/, '').trim();
+    return cleaned && minutes ? [{ label: cleaned, minutes }] : [];
+  });
+
+  return {
+    ingredientGroups,
+    instructions,
+    equipment: unique(equipmentNames).map((name) => ({ name })),
+    additionalTimes,
+  };
+}
+
+function comparableStep(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Card markup only adds headings and step photos. It is used when its steps
+ * match the structured data one-for-one, so step wording never changes.
+ */
+function withMarkupStructure(
+  steps: CanonicalInstructionStep[],
+  markup: CanonicalInstructionStep[],
+): CanonicalInstructionStep[] {
+  const structured = steps.filter((step) => !step.isHeader);
+  const rendered = markup.filter((step) => !step.isHeader);
+  if (rendered.length === 0 || structured.length !== rendered.length
+    || rendered.some((step, index) => (
+      comparableStep(step.text) !== comparableStep(structured[index].text)))) {
+    return steps;
+  }
+  let index = 0;
+  const layout = steps.some((step) => step.isHeader) ? steps : markup;
+  return layout.map((entry) => {
+    if (entry.isHeader) return entry;
+    const step = structured[index];
+    const image = step.imageUrl ?? rendered[index].imageUrl;
+    index += 1;
+    return { ...step, ...(image ? { imageUrl: image } : {}) };
+  });
 }
 
 function normalizedTags(node: Record<string, unknown>): string[] {
@@ -425,6 +703,18 @@ function grams(value: unknown): number | undefined {
   return undefined;
 }
 
+function milligrams(value: unknown): number | undefined {
+  const parsed = numericAmount(value);
+  if (!parsed) return undefined;
+  if (!parsed.unit || ['mg', 'milligram', 'milligrams'].includes(parsed.unit)) {
+    return rounded(parsed.amount);
+  }
+  if (['g', 'gram', 'grams'].includes(parsed.unit)) {
+    return rounded(parsed.amount * 1_000);
+  }
+  return undefined;
+}
+
 export function parseNutrition(value: unknown): CanonicalNutrition | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const data = value as Record<string, unknown>;
@@ -432,11 +722,25 @@ export function parseNutrition(value: unknown): CanonicalNutrition | undefined {
   const protein = grams(data.proteinContent ?? data.protein);
   const carbs = grams(data.carbohydrateContent ?? data.carbs);
   const fat = grams(data.fatContent ?? data.fat);
+  const fiber = grams(data.fiberContent);
+  const sugar = grams(data.sugarContent);
+  const saturatedFat = grams(data.saturatedFatContent);
+  const unsaturatedFat = grams(data.unsaturatedFatContent);
+  const transFat = grams(data.transFatContent);
+  const sodium = milligrams(data.sodiumContent);
+  const cholesterol = milligrams(data.cholesterolContent);
   const nutrition: CanonicalNutrition = {
     ...(calories === undefined ? {} : { calories }),
     ...(protein === undefined ? {} : { protein }),
     ...(carbs === undefined ? {} : { carbs }),
     ...(fat === undefined ? {} : { fat }),
+    ...(fiber === undefined ? {} : { fiber }),
+    ...(sugar === undefined ? {} : { sugar }),
+    ...(saturatedFat === undefined ? {} : { saturatedFat }),
+    ...(unsaturatedFat === undefined ? {} : { unsaturatedFat }),
+    ...(transFat === undefined ? {} : { transFat }),
+    ...(sodium === undefined ? {} : { sodium }),
+    ...(cholesterol === undefined ? {} : { cholesterol }),
   };
   return Object.values(nutrition).some((entry) => entry !== undefined && entry > 0)
     ? nutrition
@@ -462,8 +766,12 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
     throw new CatalogueParseError('missing-display-content', 'Recipe is missing ingredients');
   }
 
-  const instructions = instructionSteps(node.recipeInstructions);
-  if (instructions.length === 0) {
+  const markup = wprmMarkup(html);
+  const instructions = withMarkupStructure(
+    instructionSteps(node.recipeInstructions),
+    markup.instructions,
+  );
+  if (!instructions.some((step) => !step.isHeader)) {
     throw new CatalogueParseError('missing-display-content', 'Recipe is missing instructions');
   }
   const originalServings = servings(node.recipeYield);
@@ -476,16 +784,42 @@ export function parseCatalogueRecipe(html: string, _sourceUrl: string): ParsedCa
   const cookMinutes = parseIsoDurationMinutes(node.cookTime);
   const totalMinutes = parseIsoDurationMinutes(node.totalTime);
   const description = text(node.description);
-  const parsedImageUrl = imageUrl(node.image);
+  const images = httpsImageUrls(node.image);
+  const parsedImageUrl = images[0] ?? imageUrl(node.image);
   const nutrition = parseNutrition(node.nutrition);
+  const recipeAttribution = attribution(node);
+  const rating = sourceRating(node.aggregateRating);
+  const tools = unique(names(node.tool)).map((name) => ({ name }));
+  const equipment = tools.length > 0 ? tools : markup.equipment;
+  const dietaryClaims = unique(values(node.suitableForDiet).map(dietLabel));
+  const cookingMethods = unique(values(node.cookingMethod).flatMap((entry) => entry.split(/[,;]/)));
+  const sourceKeywords = unique(values(node.keywords).flatMap((entry) => entry.split(/[,;]/)));
+  const notes = noteItems(html);
+  // Groups drive shopping quantities, so only accept a complete, named breakdown.
+  const ingredientGroups = markup.ingredientGroups.some((group) => group.name)
+    && markup.ingredientGroups.reduce((sum, group) => sum + group.ingredients.length, 0)
+      === ingredients.length
+    ? markup.ingredientGroups
+    : [];
 
   const content = normalizeCatalogueContent({
       title,
       ...(parsedImageUrl ? { imageUrl: parsedImageUrl } : {}),
+      ...(images.length > 1 ? { imageUrls: images } : {}),
       ...(description ? { description } : {}),
+      ...(recipeAttribution ? { attribution: recipeAttribution } : {}),
+      ...(rating ? { sourceRating: rating } : {}),
+      ...(equipment.length > 0 ? { equipment } : {}),
+      ...(markup.additionalTimes.length > 0 ? { additionalTimes: markup.additionalTimes } : {}),
+      ...(notes.length > 0 ? { noteSections: [{ items: notes }] } : {}),
+      ...(dietaryClaims.length > 0 ? { dietaryClaims } : {}),
+      ...(cookingMethods.length > 0 ? { cookingMethods } : {}),
+      ...(sourceKeywords.length > 0 ? { sourceKeywords } : {}),
       originalServings,
       ingredients,
+      ...(ingredientGroups.length > 0 ? { ingredientGroups } : {}),
       instructions,
+      ...(notes.length > 0 ? { notes: notes.join('\n') } : {}),
       ...(nutrition ? { nutrition } : {}),
     }).content;
 
