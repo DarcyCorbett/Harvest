@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normaliseMeal, type Meal, type Period, type RecipeInput } from '../src/connected/model.js';
-import { migrateShopping, prepareShopping, outstandingRequirements, reconcileOngoingItems, applyOngoingAction } from '../src/connected/ongoingShopping.js';
+import { pruneShopping, migrateShopping, prepareShopping, outstandingRequirements, reconcileOngoingItems, applyOngoingAction } from '../src/connected/ongoingShopping.js';
 
 const recipe: RecipeInput = { id: 'soup', title: 'Soup', originalServings: 2, ingredients: [{ name: 'onion', quantity: 100, unit: 'g' }] };
 const meal = (id: string, patch: Partial<Meal> = {}) => normaliseMeal(id, { recipeId: 'soup', date: '2026-09-07', servings: 2, ...patch });
@@ -105,4 +105,30 @@ describe('ongoing shopping list', () => {
     expect(list.items.find(i => i.checked)).toEqual(bought);
     expect(list.items.filter(i => !i.checked).map(i => i.name)).toEqual(['carrot']);
   });
+  it('forgets finished old meals but keeps anything still to buy, recent meals and manual rows', () => {
+    const meals = [meal('old', { date: '2026-08-01' }), meal('oldOpen', { date: '2026-08-02' }), meal('recent', { date: '2026-09-07' })];
+    let list = update(empty(), meals, ['old'], ['old']);
+    applyOngoingAction(list, list.items[0], 'check');
+    list = update(list, meals, ['oldOpen'], ['oldOpen']);
+    list = update(list, meals, ['recent'], ['recent']);
+    list.items.push({ id: 'manual-1', name: 'Soap', quantity: 1, unit: '', category: 'Other', manual: true, checked: true, revision: 1, contributions: [] });
+    const before = JSON.stringify(list).length;
+    const pruned = pruneShopping(list, meals, '2026-08-24');
+    const mealsLeft = (rows: { contributions: { mealId: string }[] }[]) => new Set(rows.flatMap(r => r.contributions.map(c => c.mealId)));
+    expect(mealsLeft(pruned.items).has('old')).toBe(false);
+    expect(mealsLeft(pruned.shopping!.sources).has('old')).toBe(false);
+    expect(pruned.shopping!.mealIds).not.toContain('old');
+    expect(pruned.items.some(i => i.id === 'manual-1')).toBe(true);
+    expect(JSON.stringify(pruned).length).toBeLessThan(before);
+    // Everything not finished is untouched and still reconciles to the same outstanding rows.
+    for (const id of mealsLeft(list.items)) if (id !== 'old') expect(mealsLeft(pruned.items).has(id)).toBe(true);
+    expect(outstandingRequirements(pruned)).toEqual(outstandingRequirements(list));
+    expect(pruneShopping(pruned, meals, '2026-08-24')).toBe(pruned);
+    expect(pruneShopping(list, meals, '2026-08-24', ['old'])).toBe(list);
+  });
+  it('does not prune a list with nothing old', () => {
+    const list = update(empty(), [meal('a')], ['a'], ['a']);
+    expect(pruneShopping(list, [meal('a')], '2026-08-24')).toBe(list);
+  });
+
 });

@@ -115,3 +115,46 @@ export function applyShoppingBatch(period: Period, entries: { itemId: string; ex
     if (item && period.items.includes(item)) applyOngoingAction(period, item, action);
   }
 }
+
+export const SHOPPING_RETENTION_DAYS = 14;
+
+/**
+ * Drop finished history so the list document cannot grow without bound.
+ * A meal is finished once it is older than the retention window (or no longer
+ * planned) and nothing from it is still waiting to be bought. Its purchased
+ * rows, removed rows and saved sources are then forgotten together; a later
+ * edit to that old meal no longer touches the list. Meals in the update
+ * being applied are never pruned.
+ */
+export function pruneShopping(period: Period, meals: Meal[], cutoffDate: string, inProgress: string[] = []): Period {
+  const shopping = period.shopping;
+  if (!shopping) return period;
+  const dates = new Map(meals.filter(m => m.status !== 'removed').map(m => [m.id, m.date]));
+  const outstanding = new Set([...inProgress, ...period.items.filter(i => !i.checked).flatMap(i => i.contributions.map(c => c.mealId))]);
+  const referenced = new Set([
+    ...shopping.mealIds,
+    ...shopping.sources.flatMap(r => r.contributions.map(c => c.mealId)),
+    ...shopping.removed.flatMap(r => r.contributions.map(c => c.mealId)),
+    ...period.items.flatMap(i => i.contributions.map(c => c.mealId)),
+  ]);
+  const finished = new Set([...referenced].filter(id => !outstanding.has(id) && (dates.get(id) ?? '') < cutoffDate));
+  if (!finished.size) return period;
+  const trim = <T extends Requirement>(rows: T[]): T[] => rows.flatMap(row => {
+    if (!row.contributions.some(c => finished.has(c.mealId))) return [row];
+    const contributions = row.contributions.filter(c => !finished.has(c.mealId));
+    return contributions.length
+      ? [{ ...row, contributions, quantity: contributions.reduce((n, c) => n + c.quantity, 0) }]
+      : [];
+  });
+  return {
+    ...period,
+    // Manual and legacy rows have no meal; they stay until the household removes them.
+    items: [...trim(period.items.filter(i => i.contributions.length)), ...period.items.filter(i => !i.contributions.length)],
+    shopping: {
+      ...shopping,
+      mealIds: shopping.mealIds.filter(id => !finished.has(id)),
+      sources: trim(shopping.sources),
+      removed: trim(shopping.removed),
+    },
+  };
+}

@@ -23,7 +23,7 @@ import {
 import { recipeInput } from './recipeInput.js';
 import { groupShoppingRequirements, type ShoppingGrouper } from './shoppingGrouping.js';
 import { logger } from 'firebase-functions';
-import { migrateShopping, prepareShopping, outstandingRequirements, reconcileOngoingItems, applyOngoingAction, applyShoppingBatch } from './ongoingShopping.js';
+import { pruneShopping, SHOPPING_RETENTION_DAYS, migrateShopping, prepareShopping, outstandingRequirements, reconcileOngoingItems, applyOngoingAction, applyShoppingBatch } from './ongoingShopping.js';
 
 const identifier = z
   .string()
@@ -197,7 +197,7 @@ function bounded(value: unknown) {
   if (Buffer.byteLength(JSON.stringify(value)) > 800000)
     throw new HttpsError(
       "resource-exhausted",
-      "This shopping list is too large. Remove old items or replace the list before adding more meals.",
+      "This shopping list is too large. Replace the list when you next add meals to start fresh.",
     );
 }
 
@@ -245,7 +245,10 @@ export async function reconcileHousehold(
       const recipes: Record<string, RecipeInput> = {};
       for (const d of documents)
         if (d.exists) recipes[d.id] = recipeInput(d.id, d.data()!);
-      const prepared = period.shopping ? prepareShopping(period, meals, recipes, state.shoppingUpdate) : period;
+      const cutoff = new Date(Date.now() - SHOPPING_RETENTION_DAYS * 86_400_000).toISOString().slice(0, 10);
+      const prepared = period.shopping
+        ? prepareShopping(pruneShopping(period, meals, cutoff, [...(state.shoppingUpdate?.mealIds ?? []), ...(state.shoppingUpdate?.changedMealIds ?? [])]), meals, recipes, state.shoppingUpdate)
+        : period;
       let requirements = period.shopping ? outstandingRequirements(prepared) : buildRequirements(meals, recipes, period);
       let shoppingGrouping = period.shoppingGrouping;
       let groupingStatus = period.groupingStatus;

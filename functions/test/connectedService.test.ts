@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 const fixture = vi.hoisted(() => ({ db: null as any, authorise: vi.fn() }));
 vi.mock("firebase-admin/firestore", () => ({
   getFirestore: () => fixture.db,
@@ -426,6 +426,9 @@ describe("server workflow command", () => {
 });
 
 describe('single-list version 4 commands', () => {
+  // Fixture meals are dated September 2026; keep them inside the shopping retention window.
+  beforeAll(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-07T12:00:00Z')); });
+  afterAll(() => { vi.useRealTimers(); });
   const newMeal = (n: number, patch: Partial<typeof meal> = {}) => ({ ...meal, id: `12345678-1234-4234-8234-${String(n).padStart(12, '0')}`, ...patch });
   const current = () => {
     const state = fixture.db.records.get(`${path}/connected/state`);
