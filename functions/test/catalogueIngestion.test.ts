@@ -4,9 +4,12 @@ import { buildEffectiveMetadata, buildSearchFields, canonicalRecipeId, type Comp
 import {
   CatalogueIngestionStageError,
   createCatalogueIngestionEngine,
+  markEnrichmentParserChecked,
   mergeIngestedRecipe,
+  mergeRecipeContent,
   mergeStoredOperationalRecipe,
   saveVerifiedManifestObject,
+  shouldPersistEnrichmentRecipe,
   type CatalogueIngestionDependencies,
   type CatalogueRecipeStore,
 } from '../src/catalogue/ingestion.js';
@@ -177,6 +180,29 @@ describe('catalogue ingestion engine', () => {
       search: { salad: true, quick30: true, moderate45: true },
     });
     expect(result.metrics).toMatchObject({ fetched: 1, parsed: 1, classified: 1, written: 1 });
+  });
+
+  it('starts rebuilt target inventories at the beginning despite an older target cursor', async () => {
+    const first = 'https://www.recipetineats.com/new-first';
+    const second = 'https://www.recipetineats.com/new-second';
+    const source = adapter('recipetineats', []);
+    const { injected, recipeStore } = dependencies([source], {
+      recipetineats: {
+        sourceKey: 'recipetineats',
+        cursor: 'target-249',
+        updatedAt: '2026-07-01T00:00:00.000Z',
+        entries: {},
+      },
+    });
+
+    const result = await createCatalogueIngestionEngine(injected).run({
+      runId: 'rebuilt-target-inventory',
+      targetUrls: { recipetineats: [first, second] },
+      forceRefresh: true,
+    });
+
+    expect(result.metrics).toMatchObject({ discovered: 2, fetched: 2, written: 2 });
+    expect(recipeStore.writeComplete).toHaveBeenCalledTimes(2);
   });
 
   it('stores unresolved deterministic crawl content as review at classifier version zero', async () => {
@@ -440,6 +466,33 @@ describe('catalogue ingestion engine', () => {
 });
 
 describe('ingestion refresh merging', () => {
+  it('persists a successful enrichment check when only the parser version advances', () => {
+    const sourceMetadata = { mealTypes: ['dinner'] as const, cuisines: ['global'] as const, modifiers: [] };
+    const effective = buildEffectiveMetadata(sourceMetadata);
+    const existing = {
+      schemaVersion: 2,
+      id: 'id',
+      status: 'ready',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: { title: 'Soup', originalServings: 4, ingredients: [{ name: 'Onion' }], instructions: [{ text: 'Cook.' }] },
+      sourceMetadata,
+      effective,
+      search: buildSearchFields(effective, ['Onion'], 0.25),
+      classification: { parserVersion: 4, taxonomyVersion: 2, sources: {}, complete: true },
+      ingestion: { contentHash: 'old' },
+    } satisfies CompleteCanonicalRecipeV2;
+
+    expect(shouldPersistEnrichmentRecipe(existing, existing)).toBe(false);
+    expect(shouldPersistEnrichmentRecipe(existing, {
+      ...existing,
+      classification: { ...existing.classification, parserVersion: 5 },
+    })).toBe(true);
+    expect(markEnrichmentParserChecked(existing, 5)).toEqual({
+      ...existing,
+      classification: { ...existing.classification, parserVersion: 5 },
+    });
+  });
+
   it('marks terminal nutrition checks current while leaving transient failures pending', () => {
     const sourceMetadata = { totalMinutes: 30, mealTypes: ['dinner'] as const, cuisines: ['global'] as const, modifiers: [] };
     const effective = buildEffectiveMetadata(sourceMetadata);
@@ -662,6 +715,69 @@ describe('ingestion refresh merging', () => {
 
     expect(merged.ingestion.firstIngestedAt).toBe('2026-07-01T00:00:00.000Z');
     expect(merged.ingestion.lastChangedAt).toBe('2026-07-02T00:00:00.000Z');
+  });
+
+  it('preserves optional enrichment when a refresh cannot extract it', () => {
+    const metadata = { mealTypes: ['dinner'] as const, cuisines: ['global'] as const, modifiers: [] };
+    const effective = buildEffectiveMetadata(metadata);
+    const existing = {
+      schemaVersion: 2, id: 'enriched', status: 'ready',
+      source: { key: 'source', canonicalUrl: 'https://source.test/r', originalUrl: 'https://source.test/r' },
+      content: {
+        title: 'Soup', imageUrl: 'https://images.test/hero.jpg', imageUrls: ['https://images.test/hero.jpg'],
+        description: 'Rich description', originalServings: 4,
+        ingredients: [{ name: 'Onion' }],
+        ingredientGroups: [{ name: 'Soup', ingredients: [{ name: 'Onion' }] }],
+        instructions: [
+          { text: 'Soup', isHeader: true },
+          { text: 'Cook.', title: 'Simmer', imageUrl: 'https://images.test/step.jpg', videoEmbedUrl: 'https://video.test/embed' },
+        ],
+        notes: 'Keep warm.', noteSections: [{ title: 'Serving', items: ['Keep warm.'] }],
+        sourceRating: { value: 4.9, count: 20 }, equipment: [{ name: 'Pot' }],
+        nutrition: { calories: 100, fiber: 4, sodium: 250 },
+      }, sourceMetadata: metadata, effective,
+      search: buildSearchFields(effective, ['Onion'], 0.2),
+      classification: { parserVersion: 4, taxonomyVersion: 2, sources: {}, complete: true },
+      ingestion: { contentHash: 'old', lastChangedAt: '2026-07-01T00:00:00.000Z' },
+    } satisfies CompleteCanonicalRecipeV2;
+    const incoming = {
+      ...existing,
+      content: {
+        title: 'Soup', originalServings: 4, ingredients: [{ name: 'Onion' }],
+        instructions: [{ text: 'Cook.' }], nutrition: { calories: 100 },
+      },
+      classification: { ...existing.classification, parserVersion: 5 },
+      ingestion: { contentHash: 'sparse', lastChangedAt: '2026-08-01T00:00:00.000Z' },
+    } satisfies CompleteCanonicalRecipeV2;
+
+    const merged = mergeIngestedRecipe(existing, incoming);
+    expect(merged.content).toMatchObject({
+      description: 'Rich description', ingredientGroups: existing.content.ingredientGroups,
+      notes: 'Keep warm.', noteSections: existing.content.noteSections,
+      sourceRating: existing.content.sourceRating, equipment: existing.content.equipment,
+      nutrition: { calories: 100, fiber: 4, sodium: 250 },
+      instructions: existing.content.instructions,
+    });
+    expect(merged.ingestion.lastChangedAt).toBe('2026-07-01T00:00:00.000Z');
+  });
+
+  it('distinguishes confirmed absence from unavailable enrichment', () => {
+    const current = {
+      title: 'Soup', originalServings: 2, ingredients: [{ name: 'onion' }],
+      ingredientGroups: [{ name: 'Base', ingredients: [{ name: 'onion' }] }],
+      instructions: [{ text: 'Base', isHeader: true }, { text: 'Cook.' }],
+      notes: 'Old note.',
+    } satisfies CompleteCanonicalRecipeV2['content'];
+    const sparse = {
+      title: 'Soup', originalServings: 2, ingredients: [{ name: 'onion' }],
+      instructions: [{ text: 'Cook.' }],
+    } satisfies CompleteCanonicalRecipeV2['content'];
+    expect(mergeRecipeContent(current, sparse, {
+      ingredientGroups: 'unavailable', notes: 'unavailable', instructionEnrichment: 'unavailable',
+    })).toMatchObject({ ingredientGroups: current.ingredientGroups, notes: 'Old note.', instructions: current.instructions });
+    expect(mergeRecipeContent(current, sparse, {
+      ingredientGroups: 'confirmed-absent', notes: 'confirmed-absent', instructionEnrichment: 'confirmed-absent',
+    })).toEqual(sparse);
   });
 });
 

@@ -14,6 +14,7 @@ import {
   firestoreClassificationBackfillStore,
   loadEligibleSourceKeys,
   loadEligibleRefreshWork,
+  loadContentEnrichmentWork,
   loadNutritionRefreshWork,
   recordPhase4Run,
   runSourceRefreshCanaries,
@@ -763,6 +764,60 @@ async function main(): Promise<void> {
       runId,
       mode: 'crawl-backfill',
       ...sanitizedIngestionSummary(summary),
+    }));
+    return;
+  }
+
+  if (command.mode === 'content-enrichment-canary'
+    || command.mode === 'content-enrichment-backfill') {
+    const perSource = command.mode === 'content-enrichment-canary'
+      ? Math.min(command.maxPerSource ?? 10, 10)
+      : Math.min(command.maxPerSource ?? 250, 5_000);
+    const work = await loadContentEnrichmentWork(perSource, command.sourceKeys);
+    if (work.candidates === 0) {
+      console.log(JSON.stringify({ runId, mode: command.mode, status: 'complete', candidates: 0 }));
+      return;
+    }
+    const requestedWriteCap = command.writeCap ?? (command.mode === 'content-enrichment-canary' ? 100 : 18_000);
+    const recipeAttemptCap = Math.floor(requestedWriteCap / 2);
+    const enrichmentEngine = createCatalogueIngestionEngine({
+      adapters: selectedAdapters,
+      manifests: cloudStorageManifestStore(
+        process.env.CATALOGUE_MANIFEST_BUCKET,
+        'content-enrichment-manifests',
+      ),
+      recipes: firestoreCatalogueRecipeStore({
+        enrichmentOnly: true,
+        enrichmentRunId: runId,
+        terminalParserVersion: CATALOGUE_PARSER_VERSION,
+      }),
+      runs: firestoreCatalogueRunStore(),
+      lease: createLeaseManager(operational.lease, { ownerId: runId, ttlMs: 5 * 60 * 1_000 }),
+      budget: createBudgetManager(operational.budget, {
+        limit: 18_000,
+        commandCap: recipeAttemptCap,
+      }),
+      classify: async (content, sourceMetadata) =>
+        classifyCatalogueDeterministically(content, sourceMetadata),
+      now: () => new Date(),
+      random: Math.random,
+      getTelemetry: () => ({ gemini: { calls: 0, promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 } }),
+    });
+    const summary = await enrichmentEngine.run({
+      runId,
+      sourceKeys: work.sourceKeys,
+      targetUrls: work.targetUrls,
+      forceRefresh: true,
+      refreshOutdatedParser: true,
+      maxPerSource: perSource,
+      writeCap: recipeAttemptCap,
+      parserVersion: CATALOGUE_PARSER_VERSION,
+      taxonomyVersion: CATALOGUE_TAXONOMY_VERSION,
+    });
+    await assertGenerationMode(initialGenerationMode);
+    console.log(JSON.stringify({
+      runId, mode: command.mode, candidates: work.candidates,
+      writeCap: requestedWriteCap, ...sanitizedIngestionSummary(summary),
     }));
     return;
   }

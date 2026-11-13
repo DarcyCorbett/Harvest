@@ -12,9 +12,9 @@ describe('legacy-compatible catalogue ingredient normalization', () => {
     ['1/2 cup olive oil – rosemary infused', { name: 'olive oil', quantity: 0.5, unit: 'cup', notes: 'rosemary infused' }],
     ['1 1/2 tablespoons sugar', { name: 'sugar', quantity: 1.5, unit: 'tbsp' }],
     ['½ teaspoon salt', { name: 'salt', quantity: 0.5, unit: 'tsp' }],
-    ['2-3 lb chicken', { name: 'chicken', quantity: 0.9, unit: 'kg' }],
-    ['8 ounces cheese', { name: 'cheese', quantity: 227, unit: 'g' }],
-    ['2 lbs. beef', { name: 'beef', quantity: 0.9, unit: 'kg' }],
+    ['2-3 lb chicken', { name: 'chicken', quantity: 0.907184, unit: 'kg' }],
+    ['8 ounces cheese', { name: 'cheese', quantity: 226.796, unit: 'g' }],
+    ['2 lbs. beef', { name: 'beef', quantity: 0.907184, unit: 'kg' }],
     ['250g/8oz flour', { name: 'flour', quantity: 250, unit: 'g' }],
     ['1 kg / 2 lb potatoes', { name: 'potatoes', quantity: 1, unit: 'kg' }],
     ['¼ cup/½ ounce dried flowers', { name: 'dried flowers', quantity: 0.25, unit: 'cup' }],
@@ -43,7 +43,7 @@ describe('legacy-compatible catalogue ingredient normalization', () => {
     expect(second.changed).toBe(false);
     expect(second.content).toEqual(first.content);
     expect(first.content.ingredients).toEqual([
-      { name: 'beef', quantity: 0.9, unit: 'kg' },
+      { name: 'beef', quantity: 0.907184, unit: 'kg' },
       { name: 'stock', quantity: 1, unit: 'cup' },
     ]);
   });
@@ -61,8 +61,8 @@ describe('legacy-compatible catalogue ingredient normalization', () => {
     });
     expect(result.issues).toEqual([]);
     expect(result.content.ingredients).toEqual([
-      { name: 'tomatoes', quantity: 1, unit: 'can', notes: '397 g' },
-      { name: '340 g bag frozen raspberries', quantity: 1, unit: '' },
+      { name: 'tomatoes', quantity: 1, unit: 'can', notes: '396.89 g' },
+      { name: '340.19 g bag frozen raspberries', quantity: 1, unit: '' },
       { name: 'eggplant', quantity: 1, unit: '', notes: '~450 g' },
     ]);
   });

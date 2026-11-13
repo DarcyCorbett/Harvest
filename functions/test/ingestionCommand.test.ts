@@ -80,6 +80,18 @@ describe('ingestion command arguments', () => {
     });
   });
 
+  it('supports explicit parser-version content enrichment modes', () => {
+    expect(parseIngestionArguments([
+      'content-enrichment-canary', '--source', 'recipetineats,nytcooking',
+      '--max-per-source', '10', '--write-cap', '100', '--refresh-outdated-parser',
+    ])).toMatchObject({
+      mode: 'content-enrichment-canary', sourceKeys: ['recipetineats', 'nytcooking'],
+      maxPerSource: 10, writeCap: 100, refreshOutdatedParser: true,
+    });
+    expect(parseIngestionArguments(['content-enrichment-backfill']))
+      .toEqual({ mode: 'content-enrichment-backfill' });
+  });
+
   it('supports WordPress crawl modes and restricts crawl-backfill sources', () => {
     expect(parseIngestionArguments([
       'crawl-backfill',

@@ -1,0 +1,3771 @@
+{
+  "period": {
+    "id": "list",
+    "start": "2026-09-28",
+    "end": "2026-10-04",
+    "revision": 171,
+    "items": [
+      {
+        "id": "row-0",
+        "name": "apple cider vinegar",
+        "quantity": 78.863,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"apple%20cider%20vinegar%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 78.86266666666666
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "apple%20cider%20vinegar%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 1
+      },
+      {
+        "id": "row-1",
+        "name": "arborio risotto rice",
+        "quantity": 283.906,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"arborio%20risotto%20rice%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 283.9056
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "arborio%20risotto%20rice%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 13
+      },
+      {
+        "id": "row-2",
+        "name": "baby spinach",
+        "quantity": 473.176,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"baby%20spinach%7Cml\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 473.176
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "baby%20spinach%7Cml"
+        ],
+        "revision": 3,
+        "checked": false,
+        "manual": false,
+        "review": false
+      },
+      {
+        "id": "row-3",
+        "name": "bacon",
+        "quantity": 236.588,
+        "unit": "ml",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"bacon%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 236.588
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "bacon%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 39
+      },
+      {
+        "id": "row-4",
+        "name": "black pepper",
+        "quantity": 0,
+        "unit": "",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"black%20pepper%7C\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 0
+          }
+        ],
+        "sourceKeys": [
+          "black%20pepper%7C"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 15
+      },
+      {
+        "id": "row-5",
+        "name": "black pepper",
+        "quantity": 1.972,
+        "unit": "ml",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"black%20pepper%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 1.971568
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "black%20pepper%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 16
+      },
+      {
+        "id": "row-6",
+        "name": "black pepper",
+        "quantity": 2,
+        "unit": "pinch",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"pepper%20to%20season%7Cpinch\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 1
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"pepper%20to%20taste%7Cpinch\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "pepper%20to%20season%7Cpinch",
+          "pepper%20to%20taste%7Cpinch"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 17
+      },
+      {
+        "id": "row-7",
+        "name": "bread",
+        "quantity": 1,
+        "unit": "slice",
+        "category": "Bread & Bakery",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"bread%7Cslice\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "bread%7Cslice"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 11
+      },
+      {
+        "id": "row-8",
+        "name": "broccoli florets",
+        "quantity": 473.176,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"broccoli%20florets%20add%20more%20if%20desired%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 473.176
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "broccoli%20florets%20add%20more%20if%20desired%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 46
+      },
+      {
+        "id": "row-9",
+        "name": "butter",
+        "quantity": 48,
+        "unit": "g",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"butter%7Cg\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 24
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"extra%20butter%7Cg\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 24
+          }
+        ],
+        "sourceKeys": [
+          "butter%7Cg",
+          "extra%20butter%7Cg"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 32
+      },
+      {
+        "id": "row-10",
+        "name": "butter",
+        "quantity": 44.36,
+        "unit": "ml",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"butter%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 44.3604
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "butter%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 33
+      },
+      {
+        "id": "row-11",
+        "name": "canned pineapple pieces",
+        "quantity": 1,
+        "unit": "can",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"canned%20pineapple%20pieces%20in%20natural%20juice%2E%20separate%20pineapple%20from%20juice%2E%7Ccan\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "canned%20pineapple%20pieces%20in%20natural%20juice%2E%20separate%20pineapple%20from%20juice%2E%7Ccan"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 27
+      },
+      {
+        "id": "row-12",
+        "name": "cauliflower florets",
+        "quantity": 473.176,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"cauliflower%20florets%20add%20more%20if%20desired%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 473.176
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "cauliflower%20florets%20add%20more%20if%20desired%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-13",
+        "name": "chicken breast",
+        "quantity": 4,
+        "unit": "",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"chicken%20breasts%20small%7C\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 4
+          }
+        ],
+        "sourceKeys": [
+          "chicken%20breasts%20small%7C"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 40
+      },
+      {
+        "id": "row-14",
+        "name": "chicken stock",
+        "quantity": 762.011,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"chicken%20stock%20or%20vegetable%20stock%20powder%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 4.92892
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"chicken%20stock%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 757.0816
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "chicken%20stock%20or%20vegetable%20stock%20powder%7Cml",
+          "chicken%20stock%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 12
+      },
+      {
+        "id": "row-15",
+        "name": "chicken thighs",
+        "quantity": 400,
+        "unit": "g",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"chicken%20thigh%20fillets%7Cg\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 400
+          }
+        ],
+        "sourceKeys": [
+          "chicken%20thigh%20fillets%7Cg"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 41
+      },
+      {
+        "id": "row-16",
+        "name": "chinese cooking wine",
+        "quantity": 19.716,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"chinese%20cooking%20wine%20or%20dry%20sherry%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 19.715733333333333
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "chinese%20cooking%20wine%20or%20dry%20sherry%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-17",
+        "name": "chives",
+        "quantity": 23.659,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"chives%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 23.65888
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "chives%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-18",
+        "name": "cooked long grain white rice",
+        "quantity": 946.352,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"cooked%20long%20grain%20white%20rice%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 946.352
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "cooked%20long%20grain%20white%20rice%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 14
+      },
+      {
+        "id": "row-19",
+        "name": "cornflour",
+        "quantity": 14.787,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"cornflour%20%2F%20corn%20starch%20%2B%202%20tbsp%20water%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 14.7868
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "cornflour%20%2F%20corn%20starch%20%2B%202%20tbsp%20water%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 24
+      },
+      {
+        "id": "row-20",
+        "name": "dijon mustard",
+        "quantity": 34.502,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"dijon%20mustard%20divided%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 19.71568
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"dijon%20mustard%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 14.7868
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "dijon%20mustard%20divided%7Cml",
+          "dijon%20mustard%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 23
+      },
+      {
+        "id": "row-21",
+        "name": "dill",
+        "quantity": 35.488,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"dill%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 35.488319999999995
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "dill%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 45
+      },
+      {
+        "id": "row-22",
+        "name": "dried mint",
+        "quantity": 14.787,
+        "unit": "ml",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"dried%20mint%7Cml\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 14.7868
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "dried%20mint%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 18
+      },
+      {
+        "id": "row-23",
+        "name": "eggs",
+        "quantity": 5.667,
+        "unit": "",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"egg%7C\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 1
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"eggs%7C\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 2
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"eggs%7C\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 2.6666666666666665
+          }
+        ],
+        "sourceKeys": [
+          "egg%7C",
+          "eggs%7C"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 34
+      },
+      {
+        "id": "row-24",
+        "name": "extra virgin olive oil",
+        "quantity": 14.787,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"extra%20virgin%20olive%20oil%7Cml\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 14.7868
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "extra%20virgin%20olive%20oil%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 2
+      },
+      {
+        "id": "row-25",
+        "name": "feta cheese",
+        "quantity": 113,
+        "unit": "g",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"feta%20cheese%7Cg\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 113
+          }
+        ],
+        "sourceKeys": [
+          "feta%20cheese%7Cg"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 35
+      },
+      {
+        "id": "row-26",
+        "name": "flour",
+        "quantity": 29.574,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"flour%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 29.5736
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "flour%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 25
+      },
+      {
+        "id": "row-27",
+        "name": "fresh parsley",
+        "quantity": 159.697,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"chopped%20fresh%20parsley%7Cml\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 118.294
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"fresh%20parsley%20optional%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 29.5736
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"parsley%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 11.82944
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "chopped%20fresh%20parsley%7Cml",
+          "fresh%20parsley%20optional%7Cml",
+          "parsley%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-28",
+        "name": "garlic",
+        "quantity": 7.467,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"garlic%20clove%7C\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"garlic%20clove%7C\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 0.8
+          },
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"garlic%20cloves%7C\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 3
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"garlic%20cloves%7C\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 2.6666666666666665
+          }
+        ],
+        "sourceKeys": [
+          "garlic%20clove%7C",
+          "garlic%20cloves%7C"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 30
+      },
+      {
+        "id": "row-29",
+        "name": "garlic",
+        "quantity": 2,
+        "unit": "clove",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"garlic%20crushed%20or%20minced%7Cclove\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 2
+          }
+        ],
+        "sourceKeys": [
+          "garlic%20crushed%20or%20minced%7Cclove"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 31
+      },
+      {
+        "id": "row-30",
+        "name": "garlic powder",
+        "quantity": 7.393,
+        "unit": "ml",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"garlic%20powder%20divided%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 7.39338
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "garlic%20powder%20divided%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 19
+      },
+      {
+        "id": "row-31",
+        "name": "ginger",
+        "quantity": 19.716,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"ginger%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 19.71568
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "ginger%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-32",
+        "name": "green bell pepper",
+        "quantity": 1,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"green%20or%20yellow%20capsicum%20%2F%20bell%20pepper%7C\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "green%20or%20yellow%20capsicum%20%2F%20bell%20pepper%7C"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-33",
+        "name": "ground turkey",
+        "quantity": 454,
+        "unit": "g",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"ground%20turkey%7Cg\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 454
+          }
+        ],
+        "sourceKeys": [
+          "ground%20turkey%7Cg"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 42
+      },
+      {
+        "id": "row-34",
+        "name": "ham",
+        "quantity": 4,
+        "unit": "slice",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"ham%7Cslice\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 4
+          }
+        ],
+        "sourceKeys": [
+          "ham%7Cslice"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 37
+      },
+      {
+        "id": "row-35",
+        "name": "ketchup",
+        "quantity": 44.36,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"ketchup%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 44.3604
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "ketchup%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 3
+      },
+      {
+        "id": "row-36",
+        "name": "lemon juice",
+        "quantity": 1.6,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"%26ndash%3B%203%20tbsp%20lemon%20juice%7C\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 1.6
+          }
+        ],
+        "sourceKeys": [
+          "%26ndash%3B%203%20tbsp%20lemon%20juice%7C"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-37",
+        "name": "lemon rind",
+        "quantity": 7.886,
+        "unit": "ml",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"lemon%20rind%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 7.886272
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "lemon%20rind%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-38",
+        "name": "milk",
+        "quantity": 354.882,
+        "unit": "ml",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"milk%202%25%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 354.882
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "milk%202%25%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 38
+      },
+      {
+        "id": "row-39",
+        "name": "olive oil",
+        "quantity": 14.787,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"olive%20oil%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 14.7868
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "olive%20oil%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 4
+      },
+      {
+        "id": "row-40",
+        "name": "onion",
+        "quantity": 3.067,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"onion%7C\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"onion%7C\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 0.4
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"onion%7C\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 0.6666666666666666
+          },
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"yellow%20onion%7C\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "onion%7C",
+          "yellow%20onion%7C"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-41",
+        "name": "oyster sauce",
+        "quantity": 24.645,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"oyster%20sauce%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 4.92892
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"oyster%20sauce%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 19.715733333333333
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "oyster%20sauce%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 10
+      },
+      {
+        "id": "row-42",
+        "name": "panko breadcrumbs",
+        "quantity": 118.294,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"panko%20breadcrumbs%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 118.294
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "panko%20breadcrumbs%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 28
+      },
+      {
+        "id": "row-43",
+        "name": "parmesan cheese",
+        "quantity": 151.811,
+        "unit": "ml",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"parmesan%20cheese%20fresh%20grated%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 29.5736
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"parmesan%20cheese%20fresh%20grated%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 59.147
+          },
+          {
+            "sourceId": "[\"meal-2\",\"recipe-2\",\"parmesan%20cheese%7Cml\"]",
+            "mealId": "meal-2",
+            "recipeId": "recipe-2",
+            "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+            "quantity": 63.090133333333334
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "parmesan%20cheese%20fresh%20grated%7Cml",
+          "parmesan%20cheese%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 44
+      },
+      {
+        "id": "row-44",
+        "name": "peanut oil",
+        "quantity": 81.327,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"peanut%20oil%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 22.1802
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"peanut%20oil%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 59.1472
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "peanut%20oil%7Cml"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-45",
+        "name": "pineapple juice",
+        "quantity": 44.36,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"pineapple%20juice%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 44.3604
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "pineapple%20juice%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 26
+      },
+      {
+        "id": "row-46",
+        "name": "red bell pepper",
+        "quantity": 1,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"red%20capsicum%20%2F%20bell%20pepper%7C\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "red%20capsicum%20%2F%20bell%20pepper%7C"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-47",
+        "name": "salt",
+        "quantity": 0,
+        "unit": "",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-3\",\"recipe-3\",\"kosher%20salt%7C\"]",
+            "mealId": "meal-3",
+            "recipeId": "recipe-3",
+            "title": "Turkey Meatballs",
+            "quantity": 0
+          }
+        ],
+        "sourceKeys": [
+          "kosher%20salt%7C"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 20
+      },
+      {
+        "id": "row-48",
+        "name": "salt",
+        "quantity": 2,
+        "unit": "pinch",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"salt%20to%20season%7Cpinch\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 1
+          },
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"salt%20to%20taste%7Cpinch\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 1
+          }
+        ],
+        "sourceKeys": [
+          "salt%20to%20season%7Cpinch",
+          "salt%20to%20taste%7Cpinch"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 21
+      },
+      {
+        "id": "row-49",
+        "name": "salt",
+        "quantity": 1.232,
+        "unit": "ml",
+        "category": "Herbs & Spices",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"salt%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 1.23223
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "salt%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 22
+      },
+      {
+        "id": "row-50",
+        "name": "scallions",
+        "quantity": 4,
+        "unit": "",
+        "category": "Produce",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"scallions%7C\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 4
+          },
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"sliced%20shallots%20%2F%20scallions%7C\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 0
+          }
+        ],
+        "sourceKeys": [
+          "scallions%7C",
+          "sliced%20shallots%20%2F%20scallions%7C"
+        ],
+        "revision": 1,
+        "checked": false,
+        "manual": false
+      },
+      {
+        "id": "row-51",
+        "name": "seasoned breadcrumbs",
+        "quantity": 59.147,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"seasoned%20breadcrumbs%7Cml\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 59.147
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "seasoned%20breadcrumbs%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 29
+      },
+      {
+        "id": "row-52",
+        "name": "sesame oil",
+        "quantity": 3.286,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"sesame%20oil%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 3.2859466666666663
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "sesame%20oil%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 8
+      },
+      {
+        "id": "row-53",
+        "name": "shrimp",
+        "quantity": 200,
+        "unit": "g",
+        "category": "Meat & Seafood",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"small%20shrimp%2Fprawns%7Cg\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 200
+          }
+        ],
+        "sourceKeys": [
+          "small%20shrimp%2Fprawns%7Cg"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 43
+      },
+      {
+        "id": "row-54",
+        "name": "soy sauce",
+        "quantity": 34.503,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"soy%20sauce%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 4.92892
+          },
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"soy%20sauce%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 29.5736
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "soy%20sauce%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 9
+      },
+      {
+        "id": "row-55",
+        "name": "sugar",
+        "quantity": 121.58,
+        "unit": "ml",
+        "category": "Pantry & Dry Goods",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-4\",\"recipe-4\",\"sugar%7Cml\"]",
+            "mealId": "meal-4",
+            "recipeId": "recipe-4",
+            "title": "Chinese Fried Rice with Shrimp / Prawns",
+            "quantity": 3.2859466666666663
+          },
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"white%20sugar%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 118.294
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "sugar%7Cml",
+          "white%20sugar%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 5
+      },
+      {
+        "id": "row-56",
+        "name": "swiss cheese",
+        "quantity": 6,
+        "unit": "slice",
+        "category": "Dairy & Eggs",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-5\",\"recipe-5\",\"swiss%20cheese%20halved%7Cslice\"]",
+            "mealId": "meal-5",
+            "recipeId": "recipe-5",
+            "title": "Easy Sheet Pan Chicken Cordon Bleu",
+            "quantity": 6
+          }
+        ],
+        "sourceKeys": [
+          "swiss%20cheese%20halved%7Cslice"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 36
+      },
+      {
+        "id": "row-57",
+        "name": "worcestershire sauce",
+        "quantity": 4.929,
+        "unit": "ml",
+        "category": "Oils, Sauces & Condiments",
+        "contributions": [
+          {
+            "sourceId": "[\"meal-1\",\"recipe-1\",\"worcestershire%20sauce%7Cml\"]",
+            "mealId": "meal-1",
+            "recipeId": "recipe-1",
+            "title": "Sweet and Sour Chicken Stir Fry",
+            "quantity": 4.92892
+          }
+        ],
+        "approximate": true,
+        "sourceKeys": [
+          "worcestershire%20sauce%7Cml"
+        ],
+        "revision": 2,
+        "checked": true,
+        "manual": false,
+        "review": false,
+        "purchasedOrder": 7
+      }
+    ],
+    "groupingStatus": "ai",
+    "shopping": {
+      "generation": "generation",
+      "mealIds": [
+        "meal-1",
+        "meal-2",
+        "meal-3",
+        "meal-4",
+        "meal-5"
+      ],
+      "sources": [
+        {
+          "id": "row-0",
+          "name": "&ndash; 3 tbsp lemon juice",
+          "quantity": 1.6,
+          "unit": "",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"%26ndash%3B%203%20tbsp%20lemon%20juice%7C\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 1.6
+            }
+          ]
+        },
+        {
+          "id": "row-1",
+          "name": "apple cider vinegar",
+          "quantity": 78.86266666666666,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"apple%20cider%20vinegar%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 78.86266666666666
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-2",
+          "name": "arborio risotto rice",
+          "quantity": 283.9056,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"arborio%20risotto%20rice%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 283.9056
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-3",
+          "name": "baby spinach",
+          "quantity": 473.176,
+          "unit": "ml",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"baby%20spinach%7Cml\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 473.176
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-4",
+          "name": "bacon",
+          "quantity": 236.588,
+          "unit": "ml",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"bacon%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 236.588
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-5",
+          "name": "black pepper",
+          "quantity": 0,
+          "unit": "",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"black%20pepper%7C\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 0
+            }
+          ]
+        },
+        {
+          "id": "row-6",
+          "name": "black pepper",
+          "quantity": 1.971568,
+          "unit": "ml",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"black%20pepper%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 1.971568
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-7",
+          "name": "bread",
+          "quantity": 1,
+          "unit": "slice",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"bread%7Cslice\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-8",
+          "name": "broccoli florets add more if desired",
+          "quantity": 473.176,
+          "unit": "ml",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"broccoli%20florets%20add%20more%20if%20desired%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 473.176
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-9",
+          "name": "butter",
+          "quantity": 44.3604,
+          "unit": "ml",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"butter%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 44.3604
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-10",
+          "name": "butter",
+          "quantity": 24,
+          "unit": "g",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"butter%7Cg\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 24
+            }
+          ]
+        },
+        {
+          "id": "row-11",
+          "name": "canned pineapple pieces in natural juice. separate pineapple from juice.",
+          "quantity": 1,
+          "unit": "can",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"canned%20pineapple%20pieces%20in%20natural%20juice%2E%20separate%20pineapple%20from%20juice%2E%7Ccan\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-12",
+          "name": "cauliflower florets add more if desired",
+          "quantity": 473.176,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"cauliflower%20florets%20add%20more%20if%20desired%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 473.176
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-13",
+          "name": "chicken breasts small",
+          "quantity": 4,
+          "unit": "",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"chicken%20breasts%20small%7C\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 4
+            }
+          ]
+        },
+        {
+          "id": "row-14",
+          "name": "chicken stock",
+          "quantity": 757.0816,
+          "unit": "ml",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"chicken%20stock%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 757.0816
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-15",
+          "name": "chicken stock or vegetable stock powder",
+          "quantity": 4.92892,
+          "unit": "ml",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"chicken%20stock%20or%20vegetable%20stock%20powder%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 4.92892
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-16",
+          "name": "chicken thigh fillets",
+          "quantity": 400,
+          "unit": "g",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"chicken%20thigh%20fillets%7Cg\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 400
+            }
+          ]
+        },
+        {
+          "id": "row-17",
+          "name": "chinese cooking wine or dry sherry",
+          "quantity": 19.715733333333333,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"chinese%20cooking%20wine%20or%20dry%20sherry%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 19.715733333333333
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-18",
+          "name": "chives",
+          "quantity": 23.65888,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"chives%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 23.65888
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-19",
+          "name": "chopped fresh parsley",
+          "quantity": 118.294,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"chopped%20fresh%20parsley%7Cml\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 118.294
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-20",
+          "name": "cooked long grain white rice",
+          "quantity": 946.352,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"cooked%20long%20grain%20white%20rice%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 946.352
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-21",
+          "name": "cornflour / corn starch + 2 tbsp water",
+          "quantity": 14.7868,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"cornflour%20%2F%20corn%20starch%20%2B%202%20tbsp%20water%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 14.7868
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-22",
+          "name": "dijon mustard",
+          "quantity": 14.7868,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"dijon%20mustard%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 14.7868
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-23",
+          "name": "dijon mustard divided",
+          "quantity": 19.71568,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"dijon%20mustard%20divided%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 19.71568
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-24",
+          "name": "dill",
+          "quantity": 35.488319999999995,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"dill%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 35.488319999999995
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-25",
+          "name": "dried mint",
+          "quantity": 14.7868,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"dried%20mint%7Cml\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 14.7868
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-26",
+          "name": "egg",
+          "quantity": 1,
+          "unit": "",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"egg%7C\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-27",
+          "name": "eggs",
+          "quantity": 4.666666666666666,
+          "unit": "",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"eggs%7C\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 2
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"eggs%7C\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 2.6666666666666665
+            }
+          ]
+        },
+        {
+          "id": "row-28",
+          "name": "extra butter",
+          "quantity": 24,
+          "unit": "g",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"extra%20butter%7Cg\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 24
+            }
+          ]
+        },
+        {
+          "id": "row-29",
+          "name": "extra virgin olive oil",
+          "quantity": 14.7868,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"extra%20virgin%20olive%20oil%7Cml\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 14.7868
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-30",
+          "name": "feta cheese",
+          "quantity": 113,
+          "unit": "g",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"feta%20cheese%7Cg\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 113
+            }
+          ]
+        },
+        {
+          "id": "row-31",
+          "name": "flour",
+          "quantity": 29.5736,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"flour%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 29.5736
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-32",
+          "name": "fresh parsley optional",
+          "quantity": 29.5736,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"fresh%20parsley%20optional%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 29.5736
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-33",
+          "name": "garlic clove",
+          "quantity": 1.8,
+          "unit": "",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"garlic%20clove%7C\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1
+            },
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"garlic%20clove%7C\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 0.8
+            }
+          ]
+        },
+        {
+          "id": "row-34",
+          "name": "garlic cloves",
+          "quantity": 5.666666666666666,
+          "unit": "",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"garlic%20cloves%7C\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 3
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"garlic%20cloves%7C\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 2.6666666666666665
+            }
+          ]
+        },
+        {
+          "id": "row-35",
+          "name": "garlic crushed or minced",
+          "quantity": 2,
+          "unit": "clove",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"garlic%20crushed%20or%20minced%7Cclove\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 2
+            }
+          ]
+        },
+        {
+          "id": "row-36",
+          "name": "garlic powder divided",
+          "quantity": 7.39338,
+          "unit": "ml",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"garlic%20powder%20divided%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 7.39338
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-37",
+          "name": "ginger",
+          "quantity": 19.71568,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"ginger%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 19.71568
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-38",
+          "name": "green or yellow capsicum / bell pepper",
+          "quantity": 1,
+          "unit": "",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"green%20or%20yellow%20capsicum%20%2F%20bell%20pepper%7C\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-39",
+          "name": "ground turkey",
+          "quantity": 454,
+          "unit": "g",
+          "category": "Meat & Seafood",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"ground%20turkey%7Cg\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 454
+            }
+          ]
+        },
+        {
+          "id": "row-40",
+          "name": "ham",
+          "quantity": 4,
+          "unit": "slice",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"ham%7Cslice\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 4
+            }
+          ]
+        },
+        {
+          "id": "row-41",
+          "name": "ketchup",
+          "quantity": 44.3604,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"ketchup%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 44.3604
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-42",
+          "name": "kosher salt",
+          "quantity": 0,
+          "unit": "",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"kosher%20salt%7C\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 0
+            }
+          ]
+        },
+        {
+          "id": "row-43",
+          "name": "lemon rind",
+          "quantity": 7.886272,
+          "unit": "ml",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"lemon%20rind%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 7.886272
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-44",
+          "name": "milk 2%",
+          "quantity": 354.882,
+          "unit": "ml",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"milk%202%25%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 354.882
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-45",
+          "name": "olive oil",
+          "quantity": 14.7868,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"olive%20oil%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 14.7868
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-46",
+          "name": "onion",
+          "quantity": 2.0666666666666664,
+          "unit": "",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"onion%7C\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1
+            },
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"onion%7C\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 0.4
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"onion%7C\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 0.6666666666666666
+            }
+          ]
+        },
+        {
+          "id": "row-47",
+          "name": "oyster sauce",
+          "quantity": 24.64465333333333,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"oyster%20sauce%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 4.92892
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"oyster%20sauce%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 19.715733333333333
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-48",
+          "name": "panko breadcrumbs",
+          "quantity": 118.294,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"panko%20breadcrumbs%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 118.294
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-49",
+          "name": "parmesan cheese",
+          "quantity": 63.090133333333334,
+          "unit": "ml",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"parmesan%20cheese%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 63.090133333333334
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-50",
+          "name": "parmesan cheese fresh grated",
+          "quantity": 88.72059999999999,
+          "unit": "ml",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"parmesan%20cheese%20fresh%20grated%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 29.5736
+            },
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"parmesan%20cheese%20fresh%20grated%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 59.147
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-51",
+          "name": "parsley",
+          "quantity": 11.82944,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-2\",\"recipe-2\",\"parsley%7Cml\"]",
+              "mealId": "meal-2",
+              "recipeId": "recipe-2",
+              "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+              "quantity": 11.82944
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-52",
+          "name": "peanut oil",
+          "quantity": 81.3274,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"peanut%20oil%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 22.1802
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"peanut%20oil%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 59.1472
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-53",
+          "name": "pepper to season",
+          "quantity": 1,
+          "unit": "pinch",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"pepper%20to%20season%7Cpinch\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-54",
+          "name": "pepper to taste",
+          "quantity": 1,
+          "unit": "pinch",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"pepper%20to%20taste%7Cpinch\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-55",
+          "name": "pineapple juice",
+          "quantity": 44.3604,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"pineapple%20juice%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 44.3604
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-56",
+          "name": "red capsicum / bell pepper",
+          "quantity": 1,
+          "unit": "",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"red%20capsicum%20%2F%20bell%20pepper%7C\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-57",
+          "name": "salt",
+          "quantity": 1.23223,
+          "unit": "ml",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"salt%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 1.23223
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-58",
+          "name": "salt to season",
+          "quantity": 1,
+          "unit": "pinch",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"salt%20to%20season%7Cpinch\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-59",
+          "name": "salt to taste",
+          "quantity": 1,
+          "unit": "pinch",
+          "category": "Herbs & Spices",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"salt%20to%20taste%7Cpinch\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 1
+            }
+          ]
+        },
+        {
+          "id": "row-60",
+          "name": "scallions",
+          "quantity": 4,
+          "unit": "",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"scallions%7C\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 4
+            }
+          ]
+        },
+        {
+          "id": "row-61",
+          "name": "seasoned breadcrumbs",
+          "quantity": 59.147,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"seasoned%20breadcrumbs%7Cml\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 59.147
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-62",
+          "name": "sesame oil",
+          "quantity": 3.2859466666666663,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"sesame%20oil%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 3.2859466666666663
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-63",
+          "name": "sliced shallots / scallions",
+          "quantity": 0,
+          "unit": "",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"sliced%20shallots%20%2F%20scallions%7C\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 0
+            }
+          ]
+        },
+        {
+          "id": "row-64",
+          "name": "small shrimp/prawns",
+          "quantity": 200,
+          "unit": "g",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"small%20shrimp%2Fprawns%7Cg\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 200
+            }
+          ]
+        },
+        {
+          "id": "row-65",
+          "name": "soy sauce",
+          "quantity": 34.50252,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"soy%20sauce%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 4.92892
+            },
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"soy%20sauce%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 29.5736
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-66",
+          "name": "sugar",
+          "quantity": 3.2859466666666663,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-4\",\"recipe-4\",\"sugar%7Cml\"]",
+              "mealId": "meal-4",
+              "recipeId": "recipe-4",
+              "title": "Chinese Fried Rice with Shrimp / Prawns",
+              "quantity": 3.2859466666666663
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-67",
+          "name": "swiss cheese halved",
+          "quantity": 6,
+          "unit": "slice",
+          "category": "Dairy & Eggs",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-5\",\"recipe-5\",\"swiss%20cheese%20halved%7Cslice\"]",
+              "mealId": "meal-5",
+              "recipeId": "recipe-5",
+              "title": "Easy Sheet Pan Chicken Cordon Bleu",
+              "quantity": 6
+            }
+          ]
+        },
+        {
+          "id": "row-68",
+          "name": "white sugar",
+          "quantity": 118.294,
+          "unit": "ml",
+          "category": "Other",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"white%20sugar%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 118.294
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-69",
+          "name": "worcestershire sauce",
+          "quantity": 4.92892,
+          "unit": "ml",
+          "category": "Oils, Sauces & Condiments",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-1\",\"recipe-1\",\"worcestershire%20sauce%7Cml\"]",
+              "mealId": "meal-1",
+              "recipeId": "recipe-1",
+              "title": "Sweet and Sour Chicken Stir Fry",
+              "quantity": 4.92892
+            }
+          ],
+          "approximate": true
+        },
+        {
+          "id": "row-70",
+          "name": "yellow onion",
+          "quantity": 1,
+          "unit": "",
+          "category": "Produce",
+          "contributions": [
+            {
+              "sourceId": "[\"meal-3\",\"recipe-3\",\"yellow%20onion%7C\"]",
+              "mealId": "meal-3",
+              "recipeId": "recipe-3",
+              "title": "Turkey Meatballs",
+              "quantity": 1
+            }
+          ]
+        }
+      ],
+      "removed": [],
+      "purchaseSequence": 46
+    },
+    "completedWorkflowRevision": 18
+  },
+  "recipes": {
+    "recipe-1": {
+      "title": "Sweet and Sour Chicken Stir Fry",
+      "originalServings": 4,
+      "ingredients": [
+        {
+          "name": "white sugar",
+          "quantity": 0.5,
+          "unit": "cup",
+          "notes": "(Note 1)"
+        },
+        {
+          "name": "apple cider vinegar",
+          "quantity": 0.3333333333333333,
+          "unit": "cup"
+        },
+        {
+          "name": "pineapple juice",
+          "quantity": 3,
+          "unit": "tbsp",
+          "notes": "(from the canned pineapple pieces)"
+        },
+        {
+          "name": "ketchup",
+          "quantity": 3,
+          "unit": "tbsp",
+          "notes": "(Australia: tomato sauce)"
+        },
+        {
+          "name": "Worcestershire sauce",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "(Note 2)"
+        },
+        {
+          "name": "soy sauce",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": ", light or all purpose (Note 2)"
+        },
+        {
+          "name": "Oyster Sauce",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "(Note 2)"
+        },
+        {
+          "name": "salt",
+          "quantity": 0.25,
+          "unit": "tsp"
+        },
+        {
+          "name": "cornflour / corn starch + 2 tbsp water",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": ", mixed together"
+        },
+        {
+          "name": "peanut oil",
+          "quantity": 1.5,
+          "unit": "tbsp",
+          "notes": "(or vegetable)"
+        },
+        {
+          "name": "garlic clove",
+          "quantity": 1,
+          "unit": "",
+          "notes": ", minced or finely chopped"
+        },
+        {
+          "name": "onion",
+          "quantity": 1,
+          "unit": "",
+          "notes": ", halved and sliced (brown, yellow or white) (see photo in post)"
+        },
+        {
+          "name": "chicken thigh fillets",
+          "quantity": 400,
+          "unit": "g",
+          "notes": ", cut into bite size pieces (Note 3)"
+        },
+        {
+          "name": "red capsicum / bell pepper",
+          "quantity": 1,
+          "unit": "",
+          "notes": ", cut into bite size pieces"
+        },
+        {
+          "name": "green or yellow capsicum / bell pepper",
+          "quantity": 1,
+          "unit": "",
+          "notes": ", cut into bite size pieces"
+        },
+        {
+          "name": "unknown",
+          "quantity": 1,
+          "unit": "can",
+          "notes": "(250 g) canned pineapple pieces in natural juice. Separate pineapple from juice."
+        },
+        {
+          "name": "Sliced shallots / scallions",
+          "quantity": 0,
+          "unit": "",
+          "notes": ", for garnish"
+        }
+      ],
+      "ingredientGroups": [
+        {
+          "name": "Sauce",
+          "ingredients": [
+            {
+              "name": "white sugar",
+              "quantity": 0.5,
+              "unit": "cup",
+              "notes": "Note 1"
+            },
+            {
+              "name": "apple cider vinegar",
+              "quantity": 0.3333333333333333,
+              "unit": "cup"
+            },
+            {
+              "name": "pineapple juice",
+              "quantity": 3,
+              "unit": "tbsp",
+              "notes": "from the canned pineapple pieces"
+            },
+            {
+              "name": "ketchup",
+              "quantity": 3,
+              "unit": "tbsp",
+              "notes": "Australia: tomato sauce"
+            },
+            {
+              "name": "Worcestershire sauce",
+              "quantity": 1,
+              "unit": "tsp",
+              "notes": "Note 2"
+            },
+            {
+              "name": "soy sauce",
+              "quantity": 1,
+              "unit": "tsp",
+              "notes": "Note 2; light or all purpose"
+            },
+            {
+              "name": "Oyster Sauce",
+              "quantity": 1,
+              "unit": "tsp",
+              "notes": "Note 2"
+            },
+            {
+              "name": "salt",
+              "quantity": 0.25,
+              "unit": "tsp"
+            }
+          ]
+        },
+        {
+          "name": "Thickener",
+          "ingredients": [
+            {
+              "name": "cornflour / corn starch + 2 tbsp water",
+              "quantity": 1,
+              "unit": "tbsp",
+              "notes": "mixed together"
+            }
+          ]
+        },
+        {
+          "name": "Stir Fry",
+          "ingredients": [
+            {
+              "name": "peanut oil",
+              "quantity": 1.5,
+              "unit": "tbsp",
+              "notes": "or vegetable"
+            },
+            {
+              "name": "garlic clove",
+              "quantity": 1,
+              "unit": "",
+              "notes": "minced or finely chopped"
+            },
+            {
+              "name": "onion",
+              "quantity": 1,
+              "unit": "",
+              "notes": "brown, yellow or white; see photo in post; halved and sliced"
+            },
+            {
+              "name": "chicken thigh fillets",
+              "quantity": 400,
+              "unit": "g",
+              "notes": "Note 3; cut into bite size pieces"
+            },
+            {
+              "name": "red capsicum / bell pepper",
+              "quantity": 1,
+              "unit": "",
+              "notes": "cut into bite size pieces"
+            },
+            {
+              "name": "green or yellow capsicum / bell pepper",
+              "quantity": 1,
+              "unit": "",
+              "notes": "cut into bite size pieces"
+            },
+            {
+              "name": "canned pineapple pieces in natural juice. Separate pineapple from juice.",
+              "quantity": 1,
+              "unit": "can",
+              "notes": "250 g"
+            },
+            {
+              "name": "Sliced shallots / scallions",
+              "quantity": 0,
+              "unit": "",
+              "notes": "for garnish"
+            }
+          ]
+        }
+      ]
+    },
+    "recipe-2": {
+      "title": "No-Stir Creamy Lemon & Herb Baked Risotto (it's magic!)",
+      "originalServings": 5,
+      "ingredients": [
+        {
+          "name": "Arborio risotto rice",
+          "quantity": 1.5,
+          "unit": "cup",
+          "notes": "(Note 1)"
+        },
+        {
+          "name": "chicken stock",
+          "quantity": 4,
+          "unit": "cup",
+          "notes": ", low sodium (or vegetable)"
+        },
+        {
+          "name": "onion",
+          "quantity": 0.5,
+          "unit": "",
+          "notes": ", finely diced (brown, white, yellow)"
+        },
+        {
+          "name": "garlic clove",
+          "quantity": 1,
+          "unit": "",
+          "notes": ", finely minced (large!)"
+        },
+        {
+          "name": "butter",
+          "quantity": 30,
+          "unit": "g",
+          "notes": ", unsalted, cut into 1.5cm / 1/2\" pieces"
+        },
+        {
+          "name": "black pepper",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "parmesan cheese",
+          "quantity": 0.3333333333333333,
+          "unit": "cup",
+          "notes": ", finely grated (store bought pre grated is fine)"
+        },
+        {
+          "name": "extra butter",
+          "quantity": 30,
+          "unit": "g",
+          "notes": ", unsalted, cut into 1.5cm / 1/2\" pieces (Note 3)"
+        },
+        {
+          "name": "lemon rind",
+          "quantity": 2,
+          "unit": "tsp",
+          "notes": "(1 lemon)"
+        },
+        {
+          "name": "lemon juice",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "parsley",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": ", finely chopped"
+        },
+        {
+          "name": "chives",
+          "quantity": 2,
+          "unit": "tbsp",
+          "notes": ", finely chopped"
+        },
+        {
+          "name": "dill",
+          "quantity": 3,
+          "unit": "tbsp",
+          "notes": ", finely chopped"
+        }
+      ],
+      "ingredientGroups": [
+        {
+          "name": "Risotto:",
+          "ingredients": [
+            {
+              "name": "Arborio risotto rice",
+              "quantity": 1.5,
+              "unit": "cup",
+              "notes": "Note 1"
+            },
+            {
+              "name": "chicken stock",
+              "quantity": 4,
+              "unit": "cup",
+              "notes": "or vegetable; low sodium"
+            },
+            {
+              "name": "onion",
+              "quantity": 0.5,
+              "unit": "",
+              "notes": "brown, white, yellow; finely diced"
+            },
+            {
+              "name": "garlic clove",
+              "quantity": 1,
+              "unit": "",
+              "notes": "large!; finely minced"
+            },
+            {
+              "name": "butter",
+              "quantity": 30,
+              "unit": "g",
+              "notes": "unsalted, cut into 1.5cm / 1/2&Prime; pieces"
+            },
+            {
+              "name": "black pepper",
+              "quantity": 0.5,
+              "unit": "tsp"
+            }
+          ]
+        },
+        {
+          "name": "Finishes:",
+          "ingredients": [
+            {
+              "name": "parmesan cheese",
+              "quantity": 0.3333333333333333,
+              "unit": "cup",
+              "notes": "store bought pre grated is fine; finely grated"
+            },
+            {
+              "name": "extra butter",
+              "quantity": 30,
+              "unit": "g",
+              "notes": "Note 3; unsalted, cut into 1.5cm / 1/2&Prime; pieces"
+            }
+          ]
+        },
+        {
+          "name": "Lemon Herb Flavour (excellent with fish & prawns, Note 4):",
+          "ingredients": [
+            {
+              "name": "lemon rind",
+              "quantity": 2,
+              "unit": "tsp",
+              "notes": "1 lemon"
+            },
+            {
+              "name": "&ndash; 3 tbsp lemon juice",
+              "quantity": 2,
+              "unit": ""
+            },
+            {
+              "name": "parsley",
+              "quantity": 1,
+              "unit": "tbsp",
+              "notes": "finely chopped"
+            },
+            {
+              "name": "chives",
+              "quantity": 2,
+              "unit": "tbsp",
+              "notes": "finely chopped"
+            },
+            {
+              "name": "dill",
+              "quantity": 3,
+              "unit": "tbsp",
+              "notes": "finely chopped"
+            }
+          ]
+        }
+      ]
+    },
+    "recipe-3": {
+      "title": "Turkey Meatballs",
+      "originalServings": 4,
+      "ingredients": [
+        {
+          "name": "bread",
+          "quantity": 1,
+          "unit": "slice",
+          "notes": "(whole wheat, white, or gluten free), crust removed"
+        },
+        {
+          "name": "baby spinach",
+          "quantity": 2,
+          "unit": "cup"
+        },
+        {
+          "name": "extra virgin olive oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "ground turkey",
+          "quantity": 454,
+          "unit": "g"
+        },
+        {
+          "name": "yellow onion",
+          "quantity": 1,
+          "unit": "",
+          "notes": "grated"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 3,
+          "unit": "",
+          "notes": "minced"
+        },
+        {
+          "name": "feta cheese",
+          "quantity": 113,
+          "unit": "g",
+          "notes": "crumbled (1/2 cup)"
+        },
+        {
+          "name": "egg",
+          "quantity": 1,
+          "unit": "",
+          "notes": "beaten"
+        },
+        {
+          "name": "chopped fresh parsley",
+          "quantity": 0.5,
+          "unit": "cup"
+        },
+        {
+          "name": "dried mint",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "Kosher salt",
+          "quantity": 0,
+          "unit": ""
+        },
+        {
+          "name": "Black pepper",
+          "quantity": 0,
+          "unit": ""
+        }
+      ]
+    },
+    "recipe-4": {
+      "title": "Chinese Fried Rice with Shrimp / Prawns",
+      "originalServings": 3,
+      "ingredients": [
+        {
+          "name": "peanut oil",
+          "quantity": 3,
+          "unit": "tbsp",
+          "notes": "(or vegetable), separated"
+        },
+        {
+          "name": "eggs",
+          "quantity": 2,
+          "unit": "",
+          "notes": ", lightly beaten"
+        },
+        {
+          "name": "bacon",
+          "quantity": 0.75,
+          "unit": "cup",
+          "notes": ", excess fat trimmed, chopped (or 1/2 cup Chinese Sausage) (Note 1)"
+        },
+        {
+          "name": "garlic cloves",
+          "quantity": 2,
+          "unit": "",
+          "notes": ", minced"
+        },
+        {
+          "name": "ginger",
+          "quantity": 3,
+          "unit": "tsp",
+          "notes": ", minced or very finely chopped"
+        },
+        {
+          "name": "onion",
+          "quantity": 0.5,
+          "unit": "",
+          "notes": ", finely chopped (about 3/4 cup) (brown, white or yellow)"
+        },
+        {
+          "name": "Chinese cooking wine or dry sherry",
+          "quantity": 1,
+          "unit": "tbsp",
+          "notes": "(or sake, Japanese cooking wine) (Note 2)"
+        },
+        {
+          "name": "sugar",
+          "quantity": 0.5,
+          "unit": "tsp"
+        },
+        {
+          "name": "small shrimp/prawns",
+          "quantity": 150,
+          "unit": "g",
+          "notes": ", cooked and peeled (Note 3)"
+        },
+        {
+          "name": "cooked long grain white rice",
+          "quantity": 3,
+          "unit": "cup",
+          "notes": ", refrigerated overnight (Note 4)"
+        },
+        {
+          "name": "scallions",
+          "quantity": 3,
+          "unit": "",
+          "notes": ", thinly sliced"
+        },
+        {
+          "name": "Oyster Sauce",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "soy sauce",
+          "quantity": 1.5,
+          "unit": "tbsp",
+          "notes": "(all purpose or light) (Note 3)"
+        },
+        {
+          "name": "sesame oil",
+          "quantity": 0.5,
+          "unit": "tsp",
+          "notes": "(roasted - i.e. dark colour)"
+        }
+      ],
+      "ingredientGroups": [
+        {
+          "name": "",
+          "ingredients": [
+            {
+              "name": "peanut oil",
+              "quantity": 3,
+              "unit": "tbsp",
+              "notes": "or vegetable; separated"
+            },
+            {
+              "name": "eggs",
+              "quantity": 2,
+              "unit": "",
+              "notes": "lightly beaten"
+            },
+            {
+              "name": "bacon",
+              "quantity": 0.75,
+              "unit": "cup",
+              "notes": "or 1/2 cup Chinese Sausage; Note 1; excess fat trimmed, chopped"
+            },
+            {
+              "name": "garlic cloves",
+              "quantity": 2,
+              "unit": "",
+              "notes": "minced"
+            },
+            {
+              "name": "ginger",
+              "quantity": 3,
+              "unit": "tsp",
+              "notes": "minced or very finely chopped"
+            },
+            {
+              "name": "onion",
+              "quantity": 0.5,
+              "unit": "",
+              "notes": "about 3/4 cup; brown, white or yellow; finely chopped"
+            },
+            {
+              "name": "Chinese cooking wine or dry sherry",
+              "quantity": 1,
+              "unit": "tbsp",
+              "notes": "or sake, Japanese cooking wine; Note 2"
+            },
+            {
+              "name": "sugar",
+              "quantity": 0.5,
+              "unit": "tsp"
+            },
+            {
+              "name": "small shrimp/prawns",
+              "quantity": 150,
+              "unit": "g",
+              "notes": "Note 3; cooked and peeled"
+            },
+            {
+              "name": "cooked long grain white rice",
+              "quantity": 3,
+              "unit": "cup",
+              "notes": "Note 4; refrigerated overnight"
+            },
+            {
+              "name": "scallions",
+              "quantity": 3,
+              "unit": "",
+              "notes": "thinly sliced"
+            }
+          ]
+        },
+        {
+          "name": "Sauce",
+          "ingredients": [
+            {
+              "name": "Oyster Sauce",
+              "quantity": 1,
+              "unit": "tbsp"
+            },
+            {
+              "name": "soy sauce",
+              "quantity": 1.5,
+              "unit": "tbsp",
+              "notes": "all purpose or light; Note 3"
+            },
+            {
+              "name": "sesame oil",
+              "quantity": 0.5,
+              "unit": "tsp",
+              "notes": "roasted - i.e. dark colour"
+            }
+          ]
+        }
+      ]
+    },
+    "recipe-5": {
+      "title": "Easy Sheet Pan Chicken Cordon Bleu",
+      "originalServings": 4,
+      "ingredients": [
+        {
+          "name": "chicken breasts",
+          "quantity": 4,
+          "unit": "",
+          "notes": "small, skinless and boneless"
+        },
+        {
+          "name": "salt",
+          "quantity": 1,
+          "unit": "pinch",
+          "notes": "to season"
+        },
+        {
+          "name": "pepper",
+          "quantity": 1,
+          "unit": "pinch",
+          "notes": "to season"
+        },
+        {
+          "name": "garlic powder",
+          "quantity": 1.5,
+          "unit": "tsp",
+          "notes": "divided"
+        },
+        {
+          "name": "dijon mustard",
+          "quantity": 4,
+          "unit": "tsp",
+          "notes": "divided"
+        },
+        {
+          "name": "Swiss cheese",
+          "quantity": 6,
+          "unit": "slice",
+          "notes": "halved (or Jarlsberg)"
+        },
+        {
+          "name": "ham",
+          "quantity": 4,
+          "unit": "slice"
+        },
+        {
+          "name": "eggs",
+          "quantity": 2,
+          "unit": ""
+        },
+        {
+          "name": "Panko breadcrumbs",
+          "quantity": 0.5,
+          "unit": "cup"
+        },
+        {
+          "name": "seasoned breadcrumbs",
+          "quantity": 0.25,
+          "unit": "cup"
+        },
+        {
+          "name": "broccoli florets",
+          "quantity": 2,
+          "unit": "cup",
+          "notes": "add more if desired - or another veg"
+        },
+        {
+          "name": "cauliflower florets",
+          "quantity": 2,
+          "unit": "cup",
+          "notes": "add more if desired - or another veg"
+        },
+        {
+          "name": "olive oil",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "parmesan cheese",
+          "quantity": 2,
+          "unit": "tbsp",
+          "notes": "fresh grated, optional"
+        },
+        {
+          "name": "butter",
+          "quantity": 3,
+          "unit": "tbsp"
+        },
+        {
+          "name": "garlic",
+          "quantity": 2,
+          "unit": "clove",
+          "notes": "crushed or minced"
+        },
+        {
+          "name": "flour",
+          "quantity": 2,
+          "unit": "tbsp"
+        },
+        {
+          "name": "milk",
+          "quantity": 1.5,
+          "unit": "cup",
+          "notes": "2%, skim or full cream"
+        },
+        {
+          "name": "Dijon mustard",
+          "quantity": 1,
+          "unit": "tbsp"
+        },
+        {
+          "name": "chicken stock",
+          "quantity": 1,
+          "unit": "tsp",
+          "notes": "or vegetable stock powder"
+        },
+        {
+          "name": "parmesan cheese",
+          "quantity": 0.25,
+          "unit": "cup",
+          "notes": "fresh grated"
+        },
+        {
+          "name": "salt",
+          "quantity": 1,
+          "unit": "pinch",
+          "notes": "to taste"
+        },
+        {
+          "name": "pepper",
+          "quantity": 1,
+          "unit": "pinch",
+          "notes": "to taste"
+        },
+        {
+          "name": "fresh parsley",
+          "quantity": 2,
+          "unit": "tbsp",
+          "notes": "optional, for garnish"
+        }
+      ],
+      "ingredientGroups": [
+        {
+          "name": "FOR THE CHICKEN:",
+          "ingredients": [
+            {
+              "name": "chicken breasts small",
+              "quantity": 4,
+              "unit": "",
+              "notes": "skinless and boneless"
+            },
+            {
+              "name": "salt to season",
+              "quantity": 1,
+              "unit": "pinch"
+            },
+            {
+              "name": "pepper to season",
+              "quantity": 1,
+              "unit": "pinch"
+            },
+            {
+              "name": "garlic powder divided",
+              "quantity": 1.5,
+              "unit": "tsp"
+            },
+            {
+              "name": "dijon mustard divided",
+              "quantity": 4,
+              "unit": "tsp"
+            },
+            {
+              "name": "Swiss cheese halved",
+              "quantity": 6,
+              "unit": "slice",
+              "notes": "or Jarlsberg"
+            },
+            {
+              "name": "ham",
+              "quantity": 4,
+              "unit": "slice"
+            },
+            {
+              "name": "eggs",
+              "quantity": 2,
+              "unit": ""
+            },
+            {
+              "name": "Panko breadcrumbs",
+              "quantity": 0.5,
+              "unit": "cup"
+            },
+            {
+              "name": "seasoned breadcrumbs",
+              "quantity": 0.25,
+              "unit": "cup"
+            },
+            {
+              "name": "broccoli florets add more if desired",
+              "quantity": 2,
+              "unit": "cup",
+              "notes": "or another veg"
+            },
+            {
+              "name": "cauliflower florets add more if desired",
+              "quantity": 2,
+              "unit": "cup",
+              "notes": "or another veg"
+            },
+            {
+              "name": "olive oil",
+              "quantity": 1,
+              "unit": "tbsp"
+            },
+            {
+              "name": "parmesan cheese fresh grated",
+              "quantity": 2,
+              "unit": "tbsp",
+              "notes": "optional"
+            }
+          ]
+        },
+        {
+          "name": "FOR THE DIJON CREAM SAUCE (OPTIONAL):",
+          "ingredients": [
+            {
+              "name": "butter",
+              "quantity": 3,
+              "unit": "tbsp"
+            },
+            {
+              "name": "garlic crushed or minced",
+              "quantity": 2,
+              "unit": "clove"
+            },
+            {
+              "name": "flour",
+              "quantity": 2,
+              "unit": "tbsp"
+            },
+            {
+              "name": "milk 2%",
+              "quantity": 1.5,
+              "unit": "cup",
+              "notes": "skim or full cream"
+            },
+            {
+              "name": "Dijon mustard",
+              "quantity": 1,
+              "unit": "tbsp"
+            },
+            {
+              "name": "chicken stock or vegetable stock powder",
+              "quantity": 1,
+              "unit": "tsp"
+            },
+            {
+              "name": "parmesan cheese fresh grated",
+              "quantity": 0.25,
+              "unit": "cup"
+            },
+            {
+              "name": "salt to taste",
+              "quantity": 1,
+              "unit": "pinch"
+            },
+            {
+              "name": "pepper to taste",
+              "quantity": 1,
+              "unit": "pinch"
+            },
+            {
+              "name": "fresh parsley optional",
+              "quantity": 2,
+              "unit": "tbsp",
+              "notes": "for garnish"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

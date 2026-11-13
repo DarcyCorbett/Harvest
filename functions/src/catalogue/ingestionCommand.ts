@@ -5,6 +5,7 @@ export interface IngestionArguments {
   sourceKeys?: string[];
   dryRun?: boolean;
   forceRefresh?: boolean;
+  refreshOutdatedParser?: boolean;
   writeCap?: number;
   maxPerSource?: number;
   targetUrls?: Record<string, string[]>;
@@ -29,6 +30,8 @@ export const INGESTION_MODES = [
   'snapshot-verify',
   'nutrition-canary',
   'nutrition-backfill',
+  'content-enrichment-canary',
+  'content-enrichment-backfill',
   'verify-nutrition',
   'tag-batch-prepare',
   'tag-batch-submit',
@@ -131,6 +134,11 @@ export function parseIngestionArguments(args: string[]): IngestionArguments {
     if (argument === '--force-refresh') {
       if (result.forceRefresh) invalid();
       result.forceRefresh = true;
+      continue;
+    }
+    if (argument === '--refresh-outdated-parser') {
+      if (result.refreshOutdatedParser) invalid();
+      result.refreshOutdatedParser = true;
       continue;
     }
     if (argument === '--confirm-paid-batch') {

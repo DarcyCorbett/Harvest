@@ -93,6 +93,11 @@ vi.mock('../src/callables/households.js', () => ({
   })),
 }));
 
+vi.mock('../src/callables/appInvites.js', () => ({
+  firestoreInviteStore: vi.fn(() => ({})),
+  createAppInviteHandlers: vi.fn(() => ({ permissions: vi.fn(), invite: vi.fn() })),
+}));
+
 vi.mock('../src/callables/legacyRecipes.js', () => ({
   firestoreLegacyRecipeStore: vi.fn(() => indexMocks.legacyRecipeStore),
   createLegacyRecipeHandlers: vi.fn(() => indexMocks.legacyRecipeHandlers),
@@ -444,14 +449,20 @@ describe('createAiHandlers', () => {
 });
 
 describe('Functions entrypoint', () => {
-  it('registers four secret-bound AI callables and seven fixed non-secret mutation callables', async () => {
+  it('registers fixed AI, household, connected workflow endpoints and the reconciliation trigger', async () => {
     vi.resetModules();
 
     const entrypoint = await import('../src/index.js');
 
     expect(Object.keys(entrypoint).sort()).toEqual([
+      'browseCatalogueRecipes',
+      'connectedCommand',
       'createHousehold',
+      'getAppInvitePermissions',
+      'importConnectedRecipe',
+      'inviteAppUser',
       'joinHousehold',
+      'reconcileConnectedShopping',
       'reminderFlags',
       'saveLegacyRecipe',
       'selectCatalogueRecipes',
@@ -464,15 +475,21 @@ describe('Functions entrypoint', () => {
     ]);
     expect(indexMocks.initializeApp).toHaveBeenCalledOnce();
     expect(indexMocks.firestoreQuotaStore).toHaveBeenCalledOnce();
-    expect(indexMocks.onCall).toHaveBeenCalledTimes(11);
-    for (const [options] of indexMocks.onCall.mock.calls.slice(0, 4)) {
+    expect(indexMocks.onCall).toHaveBeenCalledTimes(16);
+    for (const [options] of indexMocks.onCall.mock.calls.slice(0, 3)) {
+      expect(options).toEqual({ region: 'europe-west1' });
+    }
+    for (const [options] of indexMocks.onCall.mock.calls.slice(3, 5)) {
+      expect(options).toEqual({ region: 'europe-west1', timeoutSeconds: 120 });
+    }
+    for (const [options] of indexMocks.onCall.mock.calls.slice(5, 9)) {
       expect(options).toEqual({
         secrets: [indexMocks.secret],
         enforceAppCheck: false,
         consumeAppCheckToken: false,
       });
     }
-    for (const call of indexMocks.onCall.mock.calls.slice(4)) {
+    for (const call of indexMocks.onCall.mock.calls.slice(9)) {
       expect(call).toHaveLength(1);
       expect(call[0]).toEqual(expect.any(Function));
     }

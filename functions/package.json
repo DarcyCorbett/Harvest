@@ -8,6 +8,8 @@
     "catalogue:ingest": "npm run build && node lib/catalogue/ingestionCli.js",
     "catalogue:migrate": "npm run build && node lib/catalogue/migrationCli.js",
     "catalogue:backfill-units": "npm run build && node lib/catalogue/unitBackfillCli.js",
+    "catalogue:enrich-content": "npm run build && node lib/catalogue/contentEnrichmentCli.js",
+    "catalogue:enrich-content:refetch": "npm run build && node lib/catalogue/ingestionCli.js content-enrichment-backfill --refresh-outdated-parser",
     "test": "vitest run",
     "test:watch": "vitest"
   },

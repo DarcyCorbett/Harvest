@@ -31,11 +31,21 @@ describe('manifest refresh decisions', () => {
     expect(shouldRefreshManifestEntry(entry, {
       discoveredLastModified: '2026-06-02T00:00:00.000Z', parserVersion: 2, now: new Date(),
     })).toBe(true);
-    expect(shouldRefreshManifestEntry(entry, { parserVersion: 3, now: new Date() })).toBe(true);
+    expect(shouldRefreshManifestEntry(entry, {
+      parserVersion: 3, refreshOutdatedParser: true, now: new Date('2026-07-01T00:00:00.000Z'),
+    })).toBe(true);
     expect(shouldRefreshManifestEntry(entry, { parserVersion: 2, force: true, now: new Date() })).toBe(true);
     expect(shouldRefreshManifestEntry({ ...entry, sourceLastModified: undefined }, {
       parserVersion: 2,
       now: new Date('2026-08-31T00:00:00.000Z'),
+    })).toBe(true);
+  });
+
+  it('does not refresh solely for a parser version change unless explicitly requested', () => {
+    const now = new Date('2026-07-01T00:00:00.000Z');
+    expect(shouldRefreshManifestEntry(entry, { parserVersion: 3, now })).toBe(false);
+    expect(shouldRefreshManifestEntry(entry, {
+      parserVersion: 3, refreshOutdatedParser: true, now,
     })).toBe(true);
   });
 

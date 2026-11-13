@@ -74,6 +74,7 @@ export const rawIngredientSchema = z
     name: ingredientName,
     quantity: z.number().finite().min(0).max(1_000_000),
     unit: ingredientUnit,
+    notes: z.string().max(1000).optional(),
   })
   .strict();
 

@@ -33,6 +33,11 @@ export const selectCatalogueRecipesRequestSchema = z.object({
   slots: z.array(slotSchema).min(1).max(31),
   currentPlanRecipeIds: z.array(z.string().trim().min(1).max(160)).max(500).optional().default([]),
   recentRecipeIds: z.array(z.string().trim().min(1).max(160)).max(500).optional().default([]),
+  ranking: z.object({
+    recentProteins: z.array(ingredientControl).max(20),
+    preferredRecipeIds: z.array(z.string().max(160)).max(500),
+    depreferredRecipeIds: z.array(z.string().max(160)).max(500),
+  }).strict().optional(),
 }).strict();
 
 export type CatalogueMealSlot = z.infer<typeof slotSchema>;
@@ -267,8 +272,11 @@ export async function selectCatalogueRecipes(
     const controls = normalizedControls(slot);
     const recipe = weightedPick(
       eligible.matches,
-      (candidate) => 1 + controls.prefer.filter((token) =>
-        candidate.ingredientTokens.includes(token)).length * 2,
+      (candidate) => (1 + controls.prefer.filter((token) =>
+        candidate.ingredientTokens.includes(token)).length * 2 +
+        (parsed.ranking?.preferredRecipeIds.includes(candidate.id) ? 2 : 0)) /
+        (1 + (parsed.ranking?.recentProteins.filter(token=>candidate.ingredientTokens.includes(token)).length ?? 0) * 2 +
+        (parsed.ranking?.depreferredRecipeIds.includes(candidate.id) ? 2 : 0)),
       random,
     );
     excludedIds.add(recipe.id);

@@ -6,6 +6,7 @@ import {
   runUnitBackfill,
   type UnitBackfillStore,
 } from '../src/catalogue/unitBackfill.js';
+import { CATALOGUE_PARSER_VERSION } from '../src/catalogue/version.js';
 
 function recipe(id: string, ingredient = '2 lb beef'): CompleteCanonicalRecipeV2 {
   const effective = {
@@ -47,10 +48,10 @@ describe('unit backfill transform', () => {
     const first = normalizeRecipeForUnitBackfill(recipe('one'), '2026-08-31T00:00:00.000Z');
     expect(first.status).toBe('candidate');
     if (first.status !== 'candidate') return;
-    expect(first.recipe.content.ingredients).toEqual([{ name: 'beef', quantity: 0.9, unit: 'kg' }]);
+    expect(first.recipe.content.ingredients).toEqual([{ name: 'beef', quantity: 0.907184, unit: 'kg' }]);
     expect(first.recipe.content.instructions[0].text).toBe('Bake at 232°C in a 22.9cm pan.');
     expect(first.recipe.search.ingredientTokens).toContain('beef');
-    expect(first.recipe.classification.parserVersion).toBe(4);
+    expect(first.recipe.classification.parserVersion).toBe(CATALOGUE_PARSER_VERSION);
     expect(first.recipe.ingestion.contentHash).toMatch(/^[a-f0-9]{64}$/);
     expect(normalizeRecipeForUnitBackfill(first.recipe).status).toBe('unchanged');
   });
@@ -59,7 +60,7 @@ describe('unit backfill transform', () => {
     const result = normalizeRecipeForUnitBackfill(recipe('one', '1 can tomatoes (14 oz)'));
     expect(result).toMatchObject({
       status: 'candidate',
-      recipe: { content: { ingredients: [{ name: 'tomatoes', quantity: 1, unit: 'can', notes: '397 g' }] } },
+      recipe: { content: { ingredients: [{ name: 'tomatoes', quantity: 1, unit: 'can', notes: '396.89 g' }] } },
     });
   });
 });

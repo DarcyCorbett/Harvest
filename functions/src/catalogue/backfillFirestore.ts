@@ -335,7 +335,62 @@ export async function loadNutritionRefreshWork(
     if (values.length < maxPerSource) values.push(url);
     targets[sourceKey] = values;
   });
-  const sourceKeys = Object.keys(targets).sort();
+  const sourceOrder = new Map(SOURCE_CONFIGS.map(({ sourceKey }, index) => [sourceKey, index]));
+  const sourceKeys = Object.keys(targets).sort((left, right) => (
+    (sourceOrder.get(left) ?? Number.MAX_SAFE_INTEGER)
+    - (sourceOrder.get(right) ?? Number.MAX_SAFE_INTEGER)
+  ));
+  return {
+    sourceKeys,
+    targetUrls: targets,
+    candidates: Object.values(targets).reduce((sum, urls) => sum + urls.length, 0),
+  };
+}
+
+export async function loadContentEnrichmentWork(
+  maxPerSource = 250,
+  requestedSourceKeys?: readonly string[],
+): Promise<{ sourceKeys: string[]; targetUrls: Record<string, string[]>; candidates: number }> {
+  if (!Number.isInteger(maxPerSource) || maxPerSource < 1 || maxPerSource > 5_000) {
+    throw new Error('Invalid content enrichment source fairness cap');
+  }
+  const active = SOURCE_CONFIGS.map(({ sourceKey }) => sourceKey)
+    .filter((sourceKey) => !requestedSourceKeys || requestedSourceKeys.includes(sourceKey));
+  const db = getFirestore();
+  const targets: Record<string, string[]> = {};
+  for (const sourceKey of active) {
+    const values: string[] = [];
+    for (const status of ['ready', 'review'] as const) {
+      if (values.length >= maxPerSource) break;
+      let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+      while (values.length < maxPerSource) {
+        let query: FirebaseFirestore.Query = db.collection('recipes')
+          .where('schemaVersion', '==', 2)
+          .where('status', '==', status)
+          .where('source.key', '==', sourceKey)
+          .where('classification.parserVersion', '<', CATALOGUE_PARSER_VERSION)
+          .orderBy('classification.parserVersion', 'asc')
+          .limit(RECIPE_SCAN_PAGE_SIZE);
+        if (cursor) query = query.startAfter(cursor);
+        const snapshot = await query.get();
+        for (const document of snapshot.docs) {
+          const retryAt = Date.parse(String(document.get('ingestion.nextRetryAt') ?? ''));
+          if (Number.isFinite(retryAt) && retryAt > Date.now()) continue;
+          const url = document.get('source.canonicalUrl');
+          if (typeof url === 'string') values.push(url);
+          if (values.length >= maxPerSource) break;
+        }
+        cursor = snapshot.docs.at(-1);
+        if (snapshot.size < RECIPE_SCAN_PAGE_SIZE || !cursor) break;
+      }
+    }
+    if (values.length) targets[sourceKey] = values;
+  }
+  const sourceOrder = new Map(SOURCE_CONFIGS.map(({ sourceKey }, index) => [sourceKey, index]));
+  const sourceKeys = Object.keys(targets).sort((left, right) => (
+    (sourceOrder.get(left) ?? Number.MAX_SAFE_INTEGER)
+    - (sourceOrder.get(right) ?? Number.MAX_SAFE_INTEGER)
+  ));
   return {
     sourceKeys,
     targetUrls: targets,

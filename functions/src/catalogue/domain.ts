@@ -51,6 +51,8 @@ export interface CanonicalIngredientGroup {
 
 export interface CanonicalInstructionStep {
   text: string;
+  title?: string;
+  sourceUrl?: string;
   imageUrl?: string;
   videoEmbedUrl?: string;
   isHeader?: boolean;
@@ -61,6 +63,47 @@ export interface CanonicalNutrition {
   protein?: number;
   carbs?: number;
   fat?: number;
+  fiber?: number;
+  sugar?: number;
+  saturatedFat?: number;
+  unsaturatedFat?: number;
+  transFat?: number;
+  sodium?: number;
+  cholesterol?: number;
+}
+
+export interface CanonicalAttribution {
+  author?: string;
+  publisher?: string;
+  publishedAt?: string;
+  modifiedAt?: string;
+}
+
+export interface CanonicalSourceRating {
+  value: number;
+  count?: number;
+  capturedAt?: string;
+}
+
+export interface CanonicalEquipmentItem {
+  name: string;
+  notes?: string;
+}
+
+export interface CanonicalAdditionalTime {
+  label: string;
+  minutes: number;
+}
+
+export interface CanonicalNoteSection {
+  title?: string;
+  items: string[];
+}
+
+export interface CanonicalEstimatedCost {
+  text?: string;
+  amount?: number;
+  currency?: string;
 }
 
 export interface RecipeMetadata {
@@ -130,8 +173,20 @@ export interface CompleteCanonicalRecipeV2 extends CanonicalRecipeBase {
   content: {
     title: string;
     imageUrl?: string;
+    imageUrls?: string[];
     videoEmbedUrl?: string;
     description?: string;
+    attribution?: CanonicalAttribution;
+    sourceRating?: CanonicalSourceRating;
+    equipment?: CanonicalEquipmentItem[];
+    additionalTimes?: CanonicalAdditionalTime[];
+    noteSections?: CanonicalNoteSection[];
+    dietaryClaims?: string[];
+    cookingMethods?: string[];
+    sourceCategories?: string[];
+    sourceCuisines?: string[];
+    sourceKeywords?: string[];
+    estimatedCost?: CanonicalEstimatedCost;
     originalServings: number;
     ingredients: CanonicalIngredient[];
     ingredientGroups?: CanonicalIngredientGroup[];

@@ -1,14 +1,16 @@
+import { normalizeIngredient as normalizeStructuredIngredient, normalizeUnit as sharedNormalizeUnit, metricWeight, formatNumber } from '../shared/ingredientAmounts.js';
 import type {
   CanonicalIngredient,
   CompleteCanonicalRecipeV2,
 } from './domain.js';
+import { decodeEntities } from './htmlEntities.js';
 
 const KNOWN_UNITS_TWO_WORD = new Set([
   'fl oz', 'fluid ounce', 'fluid ounces',
 ]);
 
 const KNOWN_UNITS_ONE_WORD = new Set([
-  'tbsp', 'tbsps', 'tablespoon', 'tablespoons',
+  'tbsp', 'tbs', 'tbsps', 'tablespoon', 'tablespoons',
   'tsp', 'tsps', 'teaspoon', 'teaspoons',
   'cup', 'cups',
   'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
@@ -21,35 +23,6 @@ const KNOWN_UNITS_ONE_WORD = new Set([
   'handful', 'handfuls', 'pint', 'pints', 'quart', 'quarts',
   'stick', 'sticks', 'head', 'heads',
 ]);
-
-const UNIT_MAP: Record<string, string> = {
-  tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
-  teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
-  cup: 'cup', cups: 'cup',
-  gram: 'g', grams: 'g',
-  kilogram: 'kg', kilograms: 'kg',
-  milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
-  liter: 'l', liters: 'l', litre: 'l', litres: 'l',
-  ounce: 'oz', ounces: 'oz', ozs: 'oz',
-  pound: 'lb', pounds: 'lb', lbs: 'lb',
-  'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz',
-  clove: 'clove', cloves: 'clove',
-  slice: 'slice', slices: 'slice',
-  piece: 'piece', pieces: 'piece',
-  can: 'can', cans: 'can',
-  jar: 'jar', jars: 'jar',
-  bag: 'bag', bags: 'bag',
-  bunch: 'bunch', bunches: 'bunch',
-  stalk: 'stalk', stalks: 'stalk',
-  sprig: 'sprig', sprigs: 'sprig',
-  pinch: 'pinch', pinches: 'pinch',
-  dash: 'dash', dashes: 'dash',
-  handful: 'handful', handfuls: 'handful',
-  pint: 'pint', pints: 'pint',
-  quart: 'quart', quarts: 'quart',
-  stick: 'stick', sticks: 'stick',
-  head: 'head', heads: 'head',
-};
 
 function normalizeUnicodeFractions(value: string): string {
   return value
@@ -70,31 +43,15 @@ function parseQuantity(value: string): number {
   return Number.parseFloat(normalized) || 0;
 }
 
-function normalizeUnit(value: string): string {
-  const normalized = value.toLowerCase().trim().replace(/\.$/, '');
-  return UNIT_MAP[normalized] ?? normalized;
-}
-
-function convertIngredientWeight(
-  quantity: number,
-  unit: string,
-): { quantity: number; unit: string } {
-  if (unit === 'oz') return { quantity: Math.round(quantity * 28.35), unit: 'g' };
-  if (unit === 'lb') {
-    const grams = quantity * 453.6;
-    return grams >= 500
-      ? { quantity: Math.round(grams / 100) / 10, unit: 'kg' }
-      : { quantity: Math.round(grams), unit: 'g' };
-  }
-  return { quantity, unit };
-}
+const normalizeUnit = sharedNormalizeUnit;
+const convertIngredientWeight = metricWeight;
 
 const QUANTITY_SOURCE = String.raw`(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)`;
 const IMPERIAL_WEIGHT_SOURCE = String.raw`(?:oz|ounce|ounces|lb|lbs|pound|pounds)`;
 const METRIC_WEIGHT_SOURCE = String.raw`(?:g|gram|grams|kg|kilogram|kilograms)`;
 
 function formatQuantity(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value);
+  return formatNumber(value);
 }
 
 function convertEmbeddedIngredientWeights(value: string): string {
@@ -180,7 +137,7 @@ export type NormalizedCanonicalIngredient = CanonicalIngredient & {
 };
 
 export function parseLegacyIngredient(raw: string): NormalizedCanonicalIngredient {
-  let value = normalizeUnicodeFractions(raw).trim();
+  let value = normalizeUnicodeFractions(decodeEntities(raw)).trim();
   value = value.replace(/^[\s■-◿☀-⛿✀-➿]+/, '').trim();
 
   let notes = '';
@@ -255,6 +212,10 @@ export function parseLegacyIngredient(raw: string): NormalizedCanonicalIngredien
     }
   }
 
+  if (unit) {
+    value = value.replace(/^of\s+/i, '').trim();
+  }
+
   const commaIndex = value.search(/,(?!\d)/);
   if (commaIndex >= 0) {
     const trailing = value.slice(commaIndex + 1).trim();
@@ -272,7 +233,7 @@ export function parseLegacyIngredient(raw: string): NormalizedCanonicalIngredien
   value = convertEmbeddedIngredientWeights(value);
   notes = convertEmbeddedIngredientWeights(notes);
   return {
-    name: value.trim() || 'unknown',
+    name: value.replace(/^of\s+/i, '').trim() || 'unknown',
     quantity: converted.quantity,
     unit: converted.unit,
     ...(notes ? { notes } : {}),
@@ -335,6 +296,7 @@ function normalizeIngredient(
     return { ingredient: normalized, issues };
   }
 
+  ingredient = normalizeStructuredIngredient({ ...ingredient, quantity: ingredient.quantity ?? 0, unit: ingredient.unit ?? '' });
   const quantity = ingredient.quantity ?? 0;
   if (!Number.isFinite(quantity) || quantity < 0) {
     issues.push({ path, reason: 'invalid-quantity' });

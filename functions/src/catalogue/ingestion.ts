@@ -17,7 +17,12 @@ import {
   type CatalogueManifest,
   type CatalogueManifestEntry,
 } from './operations.js';
-import { CatalogueParseError, parseCatalogueRecipe } from './parser.js';
+import {
+  CatalogueParseError,
+  parseCatalogueRecipe,
+  type EnrichmentAvailability,
+  type EnrichmentField,
+} from './parser.js';
 import { classifyCatalogueDeterministically } from './classifier.js';
 import { hasDisplayContent } from './snapshotFirestore.js';
 import { CATALOGUE_PARSER_VERSION } from './version.js';
@@ -80,7 +85,7 @@ export interface CatalogueManifestStore {
 }
 
 export interface CatalogueRecipeStore {
-  writeComplete(recipe: CompleteCanonicalRecipeV2): Promise<void>;
+  writeComplete(recipe: CompleteCanonicalRecipeV2, enrichment?: EnrichmentAvailability): Promise<void>;
   writeOperational(record: OperationalCanonicalRecipeV2): Promise<void>;
   recoverManifestEntry?(recipeId: string): Promise<CatalogueManifestEntry | null>;
 }
@@ -182,6 +187,7 @@ export interface CatalogueIngestionOptions {
   sourceKeys?: string[];
   dryRun?: boolean;
   forceRefresh?: boolean;
+  refreshOutdatedParser?: boolean;
   writeCap?: number;
   maxPerSource?: number;
   maxConsecutiveFailures?: number;
@@ -190,6 +196,106 @@ export interface CatalogueIngestionOptions {
   parserVersion?: number;
   taxonomyVersion?: number;
   snapshotMode?: boolean;
+}
+
+type RecipeContent = CompleteCanonicalRecipeV2['content'];
+
+function normalizedStepText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function mergeInstructionEnrichment(
+  existing: RecipeContent['instructions'],
+  incoming: RecipeContent['instructions'],
+): RecipeContent['instructions'] {
+  const existingSteps = existing.filter((step) => !step.isHeader);
+  const incomingSteps = incoming.filter((step) => !step.isHeader);
+  if (existingSteps.length !== incomingSteps.length
+    || incomingSteps.some((step, index) => (
+      normalizedStepText(step.text) !== normalizedStepText(existingSteps[index].text)
+    ))) return incoming;
+
+  let stepIndex = 0;
+  const structuralSource = incoming.some((step) => step.isHeader) ? incoming : existing;
+  return structuralSource.map((structuralStep) => {
+    if (structuralStep.isHeader) return structuralStep;
+    const prior = existingSteps[stepIndex];
+    const current = incomingSteps[stepIndex++];
+    return {
+      ...current,
+      ...(!current.title && prior.title ? { title: prior.title } : {}),
+      ...(!current.sourceUrl && prior.sourceUrl ? { sourceUrl: prior.sourceUrl } : {}),
+      ...(!current.imageUrl && prior.imageUrl ? { imageUrl: prior.imageUrl } : {}),
+      ...(!current.videoEmbedUrl && prior.videoEmbedUrl
+        ? { videoEmbedUrl: prior.videoEmbedUrl }
+        : {}),
+    };
+  });
+}
+
+/** Preserve optional enrichment when a refresh path cannot supply it. */
+export function mergeRecipeContent(
+  existing: RecipeContent,
+  incoming: RecipeContent,
+  availability: EnrichmentAvailability = {},
+): RecipeContent {
+  const preserve = (field: EnrichmentField): boolean => availability[field] !== 'confirmed-absent';
+  return {
+    ...incoming,
+    ...(!incoming.imageUrl && existing.imageUrl && preserve('imageUrl') ? { imageUrl: existing.imageUrl } : {}),
+    ...(incoming.imageUrls === undefined && existing.imageUrls && preserve('imageUrls')
+      ? { imageUrls: existing.imageUrls }
+      : {}),
+    ...(!incoming.videoEmbedUrl && existing.videoEmbedUrl && preserve('videoEmbedUrl')
+      ? { videoEmbedUrl: existing.videoEmbedUrl }
+      : {}),
+    ...(!incoming.description && existing.description && preserve('description')
+      ? { description: existing.description }
+      : {}),
+    ...(incoming.attribution || (existing.attribution && preserve('attribution')) ? {
+      attribution: { ...existing.attribution, ...incoming.attribution },
+    } : {}),
+    ...(incoming.sourceRating === undefined && existing.sourceRating && preserve('sourceRating')
+      ? { sourceRating: existing.sourceRating }
+      : {}),
+    ...(incoming.equipment === undefined && existing.equipment && preserve('equipment')
+      ? { equipment: existing.equipment }
+      : {}),
+    ...(incoming.additionalTimes === undefined && existing.additionalTimes && preserve('additionalTimes')
+      ? { additionalTimes: existing.additionalTimes }
+      : {}),
+    ...(incoming.noteSections === undefined && existing.noteSections && preserve('noteSections')
+      ? { noteSections: existing.noteSections }
+      : {}),
+    ...(!incoming.notes && existing.notes && preserve('notes') ? { notes: existing.notes } : {}),
+    ...(incoming.dietaryClaims === undefined && existing.dietaryClaims && preserve('dietaryClaims')
+      ? { dietaryClaims: existing.dietaryClaims }
+      : {}),
+    ...(incoming.cookingMethods === undefined && existing.cookingMethods && preserve('cookingMethods')
+      ? { cookingMethods: existing.cookingMethods }
+      : {}),
+    ...(incoming.sourceCategories === undefined && existing.sourceCategories && preserve('sourceCategories')
+      ? { sourceCategories: existing.sourceCategories }
+      : {}),
+    ...(incoming.sourceCuisines === undefined && existing.sourceCuisines && preserve('sourceCuisines')
+      ? { sourceCuisines: existing.sourceCuisines }
+      : {}),
+    ...(incoming.sourceKeywords === undefined && existing.sourceKeywords && preserve('sourceKeywords')
+      ? { sourceKeywords: existing.sourceKeywords }
+      : {}),
+    ...(incoming.estimatedCost === undefined && existing.estimatedCost && preserve('estimatedCost')
+      ? { estimatedCost: existing.estimatedCost }
+      : {}),
+    ...(incoming.ingredientGroups === undefined && existing.ingredientGroups && preserve('ingredientGroups')
+      ? { ingredientGroups: existing.ingredientGroups }
+      : {}),
+    ...(incoming.nutrition || (existing.nutrition && preserve('nutrition')) ? {
+      nutrition: { ...(preserve('nutrition') ? existing.nutrition : {}), ...incoming.nutrition },
+    } : {}),
+    instructions: preserve('instructionEnrichment')
+      ? mergeInstructionEnrichment(existing.instructions, incoming.instructions)
+      : incoming.instructions,
+  };
 }
 
 function emptyMetrics(): CatalogueRunMetrics {
@@ -220,9 +326,11 @@ function emptySourceMetrics(): CatalogueSourceRunMetrics {
 export function mergeIngestedRecipe(
   existing: CompleteCanonicalRecipeV2 | undefined,
   incoming: CompleteCanonicalRecipeV2,
+  availability?: EnrichmentAvailability,
 ): CompleteCanonicalRecipeV2 {
   if (!existing) return incoming;
-  const contentChanged = JSON.stringify(existing.content) !== JSON.stringify(incoming.content);
+  const content = mergeRecipeContent(existing.content, incoming.content, availability);
+  const contentChanged = catalogueContentHash(existing.content) !== catalogueContentHash(content);
   const preserveClassification = existing.classification.complete;
   const preserveClassificationVersion = preserveClassification
     && !contentChanged
@@ -244,6 +352,7 @@ export function mergeIngestedRecipe(
   const randomKey = existing.search.randomKey;
   const merged: CompleteCanonicalRecipeV2 = {
     ...incoming,
+    content,
     source: {
       ...incoming.source,
       key: existing.source.key,
@@ -255,11 +364,12 @@ export function mergeIngestedRecipe(
     effective,
     search: buildSearchFields(
       effective,
-      incoming.content.ingredients.map((ingredient) => ingredient.name),
+      content.ingredients.map((ingredient) => ingredient.name),
       randomKey,
     ),
     ingestion: {
       ...incoming.ingestion,
+      contentHash: catalogueContentHash(content),
       ...(existing.ingestion.firstIngestedAt === undefined
         ? {}
         : { firstIngestedAt: existing.ingestion.firstIngestedAt }),
@@ -313,6 +423,27 @@ export function mergeOperationalFailure(
     ingestion: {
       ...existing.ingestion,
       ...safeFailure,
+    },
+  };
+}
+
+export function shouldPersistEnrichmentRecipe(
+  existing: CompleteCanonicalRecipeV2,
+  merged: CompleteCanonicalRecipeV2,
+): boolean {
+  return catalogueContentHash(merged.content) !== catalogueContentHash(existing.content)
+    || merged.classification.parserVersion !== existing.classification.parserVersion;
+}
+
+export function markEnrichmentParserChecked(
+  existing: CompleteCanonicalRecipeV2,
+  parserVersion: number,
+): CompleteCanonicalRecipeV2 {
+  return {
+    ...existing,
+    classification: {
+      ...existing.classification,
+      parserVersion,
     },
   };
 }
@@ -473,15 +604,11 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
         const targets = options.targetUrls?.[adapter.sourceKey];
         const discovery = targets
           ? (async function* targetedDiscovery() {
-            const resume = /^target-(\d+)$/.exec(manifest.cursor ?? '');
-            const priorIndex = resume ? Number(resume[1]) : -1;
-            // Resume a partial frozen inventory from its durable cursor. Once
-            // a full pass finishes, start at zero so retryable/incomplete
-            // entries are reconsidered and an idempotency pass can prove zero writes.
-            const startIndex = priorIndex >= 0 && priorIndex < targets.length - 1
-              ? priorIndex + 1
-              : 0;
-            for (let index = startIndex; index < targets.length; index += 1) {
+            // Target inventories are rebuilt from Firestore for every command.
+            // A cursor from an earlier inventory therefore cannot safely index
+            // into the new list: completed recipes have already disappeared
+            // from it, and resuming by position would skip fresh candidates.
+            for (let index = 0; index < targets.length; index += 1) {
               yield {
                 url: adapter.canonicalize(targets[index]),
                 cursor: `target-${index}`,
@@ -572,6 +699,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
             if (!shouldRefreshManifestEntry(prior, {
               discoveredLastModified: discovered.lastModified,
               parserVersion,
+              refreshOutdatedParser: options.refreshOutdatedParser,
               force: options.forceRefresh,
               preserveReady: options.snapshotMode,
               now: dependencies.now(),
@@ -609,6 +737,12 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   parsed = parseCatalogueRecipe(rendered, discovered.url);
                 }
                 increment(adapter.sourceKey, 'parsed');
+                if (parsed.content.sourceRating && !parsed.content.sourceRating.capturedAt) {
+                  parsed.content.sourceRating = {
+                    ...parsed.content.sourceRating,
+                    capturedAt: now,
+                  };
+                }
                 const classification = dependencies.classify
                   ? await dependencies.classify(parsed.content, parsed.sourceMetadata)
                   : classifyCatalogueDeterministically(parsed.content, parsed.sourceMetadata);
@@ -652,7 +786,7 @@ export function createCatalogueIngestionEngine(dependencies: CatalogueIngestionD
                   increment(adapter.sourceKey, 'review');
                 }
                 await atIngestionStage('recipe-write-complete', () =>
-                  dependencies.recipes.writeComplete(recipe));
+                  dependencies.recipes.writeComplete(recipe, parsed.enrichment));
                 increment(adapter.sourceKey, 'written');
                 recordDocument(adapter.sourceKey, recipeId, recipe);
                 wrote = true;
@@ -881,10 +1015,12 @@ export async function saveVerifiedManifestObject(
 
 export function firestoreCatalogueRecipeStore(options: {
   terminalParserVersion?: number;
+  enrichmentOnly?: boolean;
+  enrichmentRunId?: string;
 } = {}): CatalogueRecipeStore {
   const db = getFirestore();
   return {
-    writeComplete(incoming) {
+    writeComplete(incoming, enrichment) {
       const reference = db.collection('recipes').doc(incoming.id);
       return db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(reference);
@@ -892,7 +1028,74 @@ export function firestoreCatalogueRecipeStore(options: {
           && ['ready', 'review'].includes(snapshot.get('status'))
           ? snapshot.data() as CompleteCanonicalRecipeV2
           : undefined;
-        transaction.set(reference, mergeIngestedRecipe(existing, incoming));
+        if (options.enrichmentOnly && existing) {
+          const existingCore = {
+            title: existing.content.title,
+            originalServings: existing.content.originalServings,
+            ingredients: existing.content.ingredients,
+            instructions: existing.content.instructions.filter((step) => !step.isHeader)
+              .map((step) => step.text),
+          };
+          const incomingCore = {
+            title: incoming.content.title,
+            originalServings: incoming.content.originalServings,
+            ingredients: incoming.content.ingredients,
+            instructions: incoming.content.instructions.filter((step) => !step.isHeader)
+              .map((step) => step.text),
+          };
+          if (JSON.stringify(existingCore) !== JSON.stringify(incomingCore)) {
+            const runId = options.enrichmentRunId ?? 'unscoped';
+            const run = db.collection('catalogueContentEnrichmentRuns').doc(runId);
+            const backup = run.collection('backups').doc(incoming.id);
+            const backupSnapshot = await transaction.get(backup);
+            if (!backupSnapshot.exists) transaction.create(backup, snapshot.data()!);
+            transaction.set(run.collection('coreChangeReview').doc(incoming.id), {
+              sourceKey: existing.source.key,
+              existingIngredientCount: existing.content.ingredients.length,
+              incomingIngredientCount: incoming.content.ingredients.length,
+              existingInstructionCount: existingCore.instructions.length,
+              incomingInstructionCount: incomingCore.instructions.length,
+              detectedAt: new Date().toISOString(),
+            });
+            transaction.set(reference, markEnrichmentParserChecked(
+              existing,
+              incoming.classification.parserVersion,
+            ));
+            return;
+          }
+          const safeIncoming = {
+            ...incoming,
+            content: {
+              ...incoming.content,
+              title: existing.content.title,
+              originalServings: existing.content.originalServings,
+              ingredients: existing.content.ingredients,
+              instructions: incoming.content.instructions,
+            },
+          };
+          const enriched = mergeIngestedRecipe(existing, safeIncoming, enrichment);
+          const merged: CompleteCanonicalRecipeV2 = {
+            ...enriched,
+            status: existing.status,
+            sourceMetadata: existing.sourceMetadata,
+            ...(existing.manualOverrides ? { manualOverrides: existing.manualOverrides } : {}),
+            effective: existing.effective,
+            search: existing.search,
+            classification: {
+              ...existing.classification,
+              parserVersion: incoming.classification.parserVersion,
+            },
+          };
+          if (!shouldPersistEnrichmentRecipe(existing, merged)) return;
+          const runId = options.enrichmentRunId ?? 'unscoped';
+          const backup = db.collection('catalogueContentEnrichmentRuns').doc(runId)
+            .collection('backups').doc(incoming.id);
+          const backupSnapshot = await transaction.get(backup);
+          if (!backupSnapshot.exists) transaction.create(backup, snapshot.data()!);
+          transaction.set(reference, merged);
+          return;
+        }
+        transaction.set(reference, mergeIngestedRecipe(existing, incoming, enrichment));
       });
     },
     writeOperational(record) {
@@ -909,11 +1112,19 @@ export function firestoreCatalogueRecipeStore(options: {
           transaction.set(reference, record);
           return;
         }
-        transaction.set(reference, mergeStoredOperationalRecipe(
+        const merged = mergeStoredOperationalRecipe(
           existing,
           record,
           options.terminalParserVersion,
-        ));
+        );
+        if (options.enrichmentOnly) {
+          const runId = options.enrichmentRunId ?? 'unscoped';
+          const backup = db.collection('catalogueContentEnrichmentRuns').doc(runId)
+            .collection('backups').doc(record.id);
+          const backupSnapshot = await transaction.get(backup);
+          if (!backupSnapshot.exists) transaction.create(backup, snapshot.data()!);
+        }
+        transaction.set(reference, merged);
       });
     },
     async recoverManifestEntry(recipeId) {

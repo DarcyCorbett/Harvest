@@ -1,6 +1,5 @@
 import type {
   ReminderFlagsInput,
-  ShoppingGroupsInput,
   SubstitutionsInput,
   TagRecipesInput,
 } from './contracts.js';
@@ -87,36 +86,7 @@ Recipes:
 ${JSON.stringify(recipes)}`;
 }
 
-export function buildShoppingGroupsPrompt(
-  ingredients: ShoppingGroupsInput['ingredients'],
-): string {
-  return `You are given a list of recipe ingredients as JSON. Group them into shopping list items.
-
-Rules:
-1. Group ingredients that refer to the same item despite different wording. Use the most natural canonical name (e.g. "garlic", not "minced garlic").
-2. Prep-state differences done at home → merge into one group: "minced garlic" + "garlic" → "garlic"; "diced onion" + "onion" → "onion"; "chopped tomato" + "tomato" → "tomato".
-3. Different cuts or forms of meat, poultry, and fish → ALWAYS keep as separate groups (they are sold separately): "chicken breast" ≠ "chicken thighs" ≠ "chicken mince"; "beef mince" ≠ "beef steak"; "salmon fillet" ≠ "smoked salmon".
-4. "shredded chicken" with no whole-chicken ingredient → treat as "chicken breast". "shredded chicken" where a whole roast chicken ingredient also appears → merge into "whole chicken".
-5. Every ingredient id must appear in exactly one group. If uncertain, create a single-item group.
-6. Set the "category" field for each group using these rules:
-   - Herbs & Spices: fresh/dried herbs, spices, spice blends
-   - Oils, Sauces & Condiments: cooking oils, vinegar, soy sauce, fish sauce, oyster sauce, Worcestershire, sriracha, ketchup, mayo, mustard, miso, tahini, hoisin
-   - Pantry & Dry Goods: stocks, broths, canned goods, pasta, rice, flour, sugar, honey, baking
-   - Produce: fresh fruit and vegetables
-   - Meat & Seafood: raw meat, fish, seafood
-   - Dairy & Eggs: milk, cream, butter, cheese, yoghurt, eggs
-   - Bread & Bakery: bread, wraps, rolls, tortillas
-   - Frozen: anything frozen
-   - Other: anything else
-7. For dry pantry ingredients measured in ml (converted from cups/tbsp), note this in the canonicalName or leave as-is — the quantity conversion will be handled by the caller.
-8. For groups whose natural shopping unit is a count (e.g. "chicken thighs", "eggs", "onions", "lemons"), set the "unit" field to the plural noun used when counting that item at the supermarket. Examples: "chicken thighs" → unit "thighs"; "eggs" → unit "eggs"; "onions" → unit "onions"; "lemons" → unit "lemons"; "bananas" → unit "bananas". A count-style group should always have a non-empty unit so the list reads "3 onions" not "3". Only leave unit as "" when the item is measured by weight or volume (e.g. flour, olive oil).
-
-Return ONLY a valid JSON array — no markdown, no explanation:
-[{"canonicalName": "...", "category": "...", "sourceIds": [0, 4, 7], "unit": ""}, ...]
-
-Input:
-${JSON.stringify(ingredients)}`;
-}
+export { SHOPPING_PROMPT_VERSION, buildShoppingGroupsPrompt } from '../shared/shoppingPrompt.js';
 
 export function buildSubstitutionsPrompt(
   input: Omit<SubstitutionsInput, 'householdId'>,

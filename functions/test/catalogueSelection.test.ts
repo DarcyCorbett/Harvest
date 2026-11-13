@@ -63,6 +63,11 @@ function store(data: Record<string, CatalogueCandidate[]>, pageSize = 50): Catal
 }
 
 describe('selectCatalogueRecipes', () => {
+  it('uses cooking feedback softly without excluding an otherwise eligible recipe',async()=>{
+    const input=selectionRequest({ranking:{recentProteins:['chicken'],preferredRecipeIds:[],depreferredRecipeIds:['a']}});
+    const result=await selectCatalogueRecipes(input,store({recipetineats:[candidate('a','recipetineats')]}),()=>0);
+    expect(result.slots[0]).toMatchObject({status:'selected',recipeId:'a'});
+  });
   it('uses an injected Firestore instance for external pilot tooling', async () => {
     const snapshot = { docs: [], size: 0 };
     const query = {

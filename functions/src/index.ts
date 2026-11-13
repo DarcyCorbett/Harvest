@@ -1,5 +1,9 @@
 import { initializeApp } from 'firebase-admin/app';
+import { createAppInviteHandlers, firestoreInviteStore } from './callables/appInvites.js';
 import { onCall } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { connectedCommand as runConnectedCommand, reconcileHousehold } from './connected/service.js';
+import { importConnectedRecipe as runImportConnectedRecipe } from './connected/importRecipe.js';
 
 import { requestGeminiJson } from './ai/geminiProvider.js';
 import { createAiService } from './ai/service.js';
@@ -28,7 +32,21 @@ import {
 import { GEMINI_API_KEY } from './config.js';
 import { firestoreQuotaStore, reserveQuota } from './quota.js';
 
+import { browseCatalogueHandler } from './catalogue/browse.js';
 initializeApp();
+export const browseCatalogueRecipes = onCall({ region: 'europe-west1' }, browseCatalogueHandler);
+
+const appInviteHandlers = createAppInviteHandlers(firestoreInviteStore());
+export const getAppInvitePermissions = onCall({ region: 'europe-west1' }, appInviteHandlers.permissions);
+export const inviteAppUser = onCall({ region: 'europe-west1' }, appInviteHandlers.invite);
+
+export const connectedCommand = onCall({ region: 'europe-west1', timeoutSeconds: 120 },
+  request => runConnectedCommand(request, { deferReconciliation: true }));
+export const importConnectedRecipe = onCall({ region: 'europe-west1', timeoutSeconds: 120 }, runImportConnectedRecipe);
+export const reconcileConnectedShopping = onDocumentWritten({ document: 'households/{householdId}/connected/state', region: 'europe-west1', retry: true, secrets: [GEMINI_API_KEY], timeoutSeconds: 120 }, async event => {
+  const after = event.data?.after.data();
+  if (after?.status === 'pending') await reconcileHousehold(event.params.householdId, undefined, groupConnectedShopping);
+});
 
 const quotaStore = firestoreQuotaStore();
 const service = createAiService({
@@ -41,6 +59,10 @@ const service = createAiService({
     });
   },
 });
+const groupConnectedShopping: import('./connected/shoppingGrouping.js').ShoppingGrouper = async (householdId, ingredients) => {
+  await reserveQuota(quotaStore, `household-${householdId}`, 'shoppingGroups');
+  return service.shoppingGroups(ingredients);
+};
 const handlers = createAiHandlers({
   authorize: authorizeHouseholdMember,
   reserve(uid, endpoint, units) {

@@ -22,6 +22,7 @@ export function shouldRefreshManifestEntry(
   options: {
     discoveredLastModified?: string;
     parserVersion: number;
+    refreshOutdatedParser?: boolean;
     force?: boolean;
     preserveReady?: boolean;
     now: Date;
@@ -35,7 +36,7 @@ export function shouldRefreshManifestEntry(
     const retryAt = Date.parse(entry.nextRetryAt ?? '');
     return !Number.isFinite(retryAt) || retryAt <= options.now.getTime();
   }
-  if (entry.parserVersion !== options.parserVersion) return true;
+  if (options.refreshOutdatedParser && entry.parserVersion !== options.parserVersion) return true;
 
   if (options.discoveredLastModified) {
     if (!entry.sourceLastModified) return true;

@@ -13,17 +13,31 @@ service cloud.firestore {
     // Clients may read a household they belong to. Server callables own
     // household creation, membership changes, switching, and invite lookups.
     match /households/{householdId} {
+      function member() {
+        return request.auth != null && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
+      function legacyWorkflow() {
+        return get(/databases/$(database)/documents/households/$(householdId)).data.get('workflowVersion', 1) < 2;
+      }
+      match /connected/{document} { allow read: if member(); allow write: if false; }
+      match /shoppingPeriods/{document} { allow read: if member(); allow write: if false; }
+      match /drafts/{document} { allow read: if member(); allow write: if false; }
+      match /workflowArchives/{document} { allow read: if member(); allow write: if false; }
+      match /workflowRequests/{document} { allow read, write: if false; }
+      match /planTemplates/{document} { allow read, write: if member(); }
       allow get: if request.auth != null
         && request.auth.uid in resource.data.members;
       allow list, create, update, delete: if false;
 
       // Household subcollections — only members can access
       match /mealPlan/{document=**} {
-        allow read, write: if request.auth != null
+        allow read: if member();
+        allow write: if legacyWorkflow() && request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
       }
       match /shoppingList/{document=**} {
-        allow read, write: if request.auth != null
+        allow read: if member();
+        allow write: if legacyWorkflow() && request.auth != null
           && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
       }
       match /cookbook/{document=**} {

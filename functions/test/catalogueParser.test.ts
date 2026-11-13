@@ -97,6 +97,7 @@ describe('parseCatalogueRecipe', () => {
         { name: 'stock', quantity: 1, unit: 'l' },
       ],
       instructions: [
+        { text: 'Soup', isHeader: true },
         { text: 'Brown the chicken.' },
         { text: 'Add stock and simmer.' },
       ],
@@ -110,6 +111,121 @@ describe('parseCatalogueRecipe', () => {
       cuisines: ['mediterranean'],
       modifiers: ['healthy'],
     });
+  });
+
+  it('keeps named sections, step media, attribution, ratings, taxonomy, and expanded nutrition', () => {
+    const result = parseCatalogueRecipe(page({
+      name: 'Enriched Soup',
+      image: ['http://unsafe.test/no.jpg', 'https://images.example/one.jpg', 'https://images.example/two.jpg'],
+      author: { '@type': 'Person', name: 'Recipe Author' },
+      publisher: { '@type': 'Organization', name: 'Test Kitchen' },
+      datePublished: '2025-01-02',
+      dateModified: '2026-02-03',
+      aggregateRating: { ratingValue: '4.8', ratingCount: '123' },
+      recipeYield: '4',
+      recipeCategory: ['Dinner', 'Soups'],
+      recipeCuisine: ['Greek'],
+      keywords: 'warming, weeknight',
+      suitableForDiet: ['https://schema.org/GlutenFreeDiet'],
+      cookingMethod: ['Simmering'],
+      recipeIngredient: ['1 onion'],
+      recipeInstructions: [{
+        '@type': 'HowToSection', name: 'Finish the soup', itemListElement: [{
+          '@type': 'HowToStep', name: 'Season', text: 'Add salt.',
+          url: 'https://example.test/enriched#season',
+          image: 'https://images.example/step.jpg',
+          video: { embedUrl: 'https://www.youtube.com/watch?v=abc123' },
+        }],
+      }],
+      tool: [{ '@type': 'HowToTool', name: 'Dutch oven' }],
+      nutrition: {
+        calories: '200 kcal', fiberContent: '6 g', sugarContent: '3 g',
+        saturatedFatContent: '2 g', sodiumContent: '450 mg', cholesterolContent: '20 mg',
+      },
+    }), sourceUrl);
+
+    expect(result.content).toMatchObject({
+      imageUrl: 'https://images.example/one.jpg',
+      imageUrls: ['https://images.example/one.jpg', 'https://images.example/two.jpg'],
+      attribution: { author: 'Recipe Author', publisher: 'Test Kitchen', publishedAt: '2025-01-02' },
+      sourceRating: { value: 4.8, count: 123 },
+      equipment: [{ name: 'Dutch oven' }],
+      dietaryClaims: ['Gluten Free'],
+      cookingMethods: ['Simmering'],
+      sourceKeywords: ['warming', 'weeknight'],
+      nutrition: { calories: 200, fiber: 6, sugar: 3, saturatedFat: 2, sodium: 450, cholesterol: 20 },
+      instructions: [
+        { text: 'Finish the soup', isHeader: true },
+        {
+          title: 'Season', text: 'Add salt.', sourceUrl: 'https://example.test/enriched#season',
+          imageUrl: 'https://images.example/step.jpg',
+          videoEmbedUrl: 'https://www.youtube.com/embed/abc123',
+        },
+      ],
+    });
+  });
+
+  it('extracts WPRM groups, structured notes, equipment, custom time, and step images', () => {
+    const html = page({
+      name: 'Plugin Soup', recipeYield: '2',
+      recipeIngredient: ['1 onion', '2 carrots'],
+      recipeInstructions: ['Chop vegetables.', 'Simmer soup.'],
+    }).replace('</html>', `
+      <div class="wprm-recipe-container">
+        <div class="wprm-recipe-ingredients-container">
+          <div class="wprm-recipe-ingredient-group"><h4 class="wprm-recipe-ingredient-group-name">Vegetables</h4><ul>
+            <li class="wprm-recipe-ingredient">1 onion</li><li class="wprm-recipe-ingredient">2 carrots</li>
+          </ul></div>
+        </div>
+        <div class="wprm-recipe-instructions-container">
+          <div class="wprm-recipe-instruction-group"><h4 class="wprm-recipe-instruction-group-name">Cook</h4>
+            <div class="wprm-recipe-instruction">Chop vegetables.<img src="https://images.example/chop.jpg"></div>
+            <div class="wprm-recipe-instruction">Simmer soup.</div>
+          </div>
+        </div>
+        <div class="wprm-recipe-equipment-container"><div class="wprm-recipe-equipment">Stock pot</div></div>
+        <div class="wprm-recipe-notes-container"><p>Salt to taste.</p></div>
+        <div class="wprm-recipe-custom-time-container"><span class="wprm-recipe-custom-time-name">Resting:</span> 15 minutes</div>
+      </div></html>`);
+    const result = parseCatalogueRecipe(html, sourceUrl);
+    expect(result.content).toMatchObject({
+      ingredientGroups: [{ name: 'Vegetables' }],
+      equipment: [{ name: 'Stock pot' }],
+      additionalTimes: [{ label: 'Resting', minutes: 15 }],
+      noteSections: [{ items: ['Salt to taste.'] }],
+      instructions: [
+        { text: 'Cook', isHeader: true },
+        { text: 'Chop vegetables.', imageUrl: 'https://images.example/chop.jpg' },
+        { text: 'Simmer soup.' },
+      ],
+    });
+  });
+
+  it.each([
+    ['Tasty Recipes', 'tasty-recipes', 'tasty-recipes-notes-body'],
+    ['Mediavine Create', 'mv-create-card', 'mv-create-notes'],
+    ['WP Delicious', 'delicious-recipe', 'delicious-recipe-notes'],
+    ['Cooked', 'cooked-recipe-card', 'cooked-recipe-notes'],
+    ['WPZoom', 'wpzoom-recipe-card', 'wpzoom-recipe-card-notes'],
+    ['Mantle', 'recipe-card', 'recipe-card__notes'],
+  ])('uses the %s plugin profile for structured notes', (_name, containerClass, notesClass) => {
+    const html = page({
+      name: 'Profile Recipe', recipeYield: '2', recipeIngredient: ['1 onion'],
+      recipeInstructions: ['Cook.'],
+    }).replace('</html>', `<div class="${containerClass}"><div class="${notesClass}"><p>Keep chilled.</p></div></div></html>`);
+    expect(parseCatalogueRecipe(html, sourceUrl).content).toMatchObject({
+      notes: 'Keep chilled.', noteSections: [{ items: ['Keep chilled.'] }],
+    });
+  });
+
+  it('preserves mixed note paragraphs and list items in source order', () => {
+    const html = page({
+      name: 'Ordered Notes', recipeYield: '2', recipeIngredient: ['1 onion'],
+      recipeInstructions: ['Cook.'],
+    }).replace('</html>', '<div class="wprm-recipe-container"><div class="wprm-recipe-notes-container"><p>First paragraph.<br>Second line.</p><ul><li>Third item.</li></ul><p>Fourth paragraph.</p></div></div></html>');
+    expect(parseCatalogueRecipe(html, sourceUrl).content.noteSections).toEqual([
+      { items: ['First paragraph.', 'Second line.', 'Third item.', 'Fourth paragraph.'] },
+    ]);
   });
 
   it('rejects pages without a complete Recipe node', () => {
