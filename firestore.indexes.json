@@ -106,6 +106,9 @@
     }
   ],
   "fieldOverrides": [
+    { "collectionGroup": "workflowRequests", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "aiUsage", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
+    { "collectionGroup": "importUsage", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
     { "collectionGroup": "recipes", "fieldPath": "content.instructions", "indexes": [] },
     { "collectionGroup": "recipes", "fieldPath": "content.description", "indexes": [] },
     { "collectionGroup": "recipes", "fieldPath": "content.notes", "indexes": [] },

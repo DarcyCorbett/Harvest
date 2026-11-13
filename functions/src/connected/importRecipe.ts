@@ -66,7 +66,10 @@ export async function importConnectedRecipe(request: CallableRequest<unknown>) {
         "resource-exhausted",
         "The household import limit for today has been reached. Saved recipes remain available.",
       );
-    tx.set(usage, { count: count + 1 });
+    tx.set(usage, {
+      count: count + 1,
+      expireAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
   });
   let html = "";
   for (let hop = 0; hop < 5; hop++) {

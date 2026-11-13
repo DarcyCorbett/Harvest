@@ -17,6 +17,14 @@ const firebaseConfig = useEmulators ? {apiKey:'demo-key',projectId:'demo-meal-wi
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+// A bundle published without its EXPO_PUBLIC_* values cannot sign anyone in.
+// Fail at launch with a clear reason instead of a confusing auth error later.
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error(
+    'Firebase config is missing from this build. Publish with "npm run release:ota" so the production values are bundled.',
+  );
+}
+
 // Initialize Firebase (prevent re-initialization)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 

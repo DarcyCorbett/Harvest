@@ -27,7 +27,7 @@ export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { login, signInWithGoogle, pendingInviteCode, clearPendingInviteCode } = useAuth();
+  const { login, resetPassword, signInWithGoogle, pendingInviteCode, clearPendingInviteCode } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +58,31 @@ export default function LoginScreen() {
     await Clipboard.setStringAsync(pendingInviteCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Enter your email', 'Type your email address above, then tap "Forgot password?" again.');
+      return;
+    }
+    try {
+      await resetPassword(email);
+    } catch (error: any) {
+      if (error.code === 'auth/invalid-email') {
+        Alert.alert('Invalid email', 'Please enter a valid email address.');
+        return;
+      }
+      if (error.code === 'auth/too-many-requests') {
+        Alert.alert('Try again later', 'Too many attempts. Please try again later.');
+        return;
+      }
+      if (error.code !== 'auth/user-not-found') {
+        Alert.alert('Could not send email', 'Check your connection and try again.');
+        return;
+      }
+    }
+    // Same message whether or not the account exists.
+    Alert.alert('Check your email', 'If an account exists for that address, we sent a link to reset your password.');
   };
 
   const handleLogin = async () => {
@@ -209,6 +234,15 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={handleForgotPassword}
+          accessibilityRole="button"
+          style={{ alignSelf: 'center', paddingVertical: Spacing.md, minHeight: 44, justifyContent: 'center' }}
+          id="forgot-password"
+        >
+          <Text style={[styles.switchLink, { color: colors.primary }]}>Forgot password?</Text>
+        </TouchableOpacity>
 
         {/* Register Link */}
         <View style={styles.switchSection}>

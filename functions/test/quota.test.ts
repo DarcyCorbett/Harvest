@@ -207,7 +207,7 @@ describe('firestoreQuotaStore', () => {
     expect(firestore.set).toHaveBeenCalledOnce();
     expect(firestore.set).toHaveBeenCalledWith(
       firestore.docRef,
-      { units: 15, updatedAt: 'server-timestamp' },
+      { units: 15, updatedAt: 'server-timestamp', expireAt: expect.any(Date) },
       { merge: true },
     );
   });
@@ -226,7 +226,7 @@ describe('firestoreQuotaStore', () => {
     expect(readUnits).not.toHaveBeenCalled();
     expect(firestore.set).toHaveBeenCalledWith(
       firestore.docRef,
-      { units: 2, updatedAt: 'server-timestamp' },
+      { units: 2, updatedAt: 'server-timestamp', expireAt: expect.any(Date) },
       { merge: true },
     );
   });
@@ -243,7 +243,7 @@ describe('firestoreQuotaStore', () => {
     ).resolves.toBe(40);
     expect(firestore.set).toHaveBeenCalledWith(
       firestore.docRef,
-      { units: 40, updatedAt: 'server-timestamp' },
+      { units: 40, updatedAt: 'server-timestamp', expireAt: expect.any(Date) },
       { merge: true },
     );
   });
@@ -298,7 +298,7 @@ describe('firestoreQuotaStore', () => {
     expect(retryGet).toHaveBeenCalledWith(firestore.docRef);
     expect(abandonedSet).toHaveBeenCalledWith(
       firestore.docRef,
-      { units: 40, updatedAt: 'server-timestamp' },
+      { units: 40, updatedAt: 'server-timestamp', expireAt: expect.any(Date) },
       { merge: true },
     );
     expect(finalSet).not.toHaveBeenCalled();

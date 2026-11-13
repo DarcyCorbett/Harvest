@@ -749,6 +749,8 @@ export async function connectedCommand(
       fingerprint,
       result: response,
       createdAt: FieldValue.serverTimestamp(),
+      // Receipts only guard retries; a Firestore TTL policy removes them later.
+      expireAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     });
     return response;
   });

@@ -40,7 +40,12 @@ export function firestoreQuotaStore(): QuotaStore {
 
         transaction.set(
           quotaRef,
-          { units: next, updatedAt: FieldValue.serverTimestamp() },
+          {
+            units: next,
+            updatedAt: FieldValue.serverTimestamp(),
+            // Daily counters are dead after their day; a TTL policy removes them.
+            expireAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
           { merge: true },
         );
         return next;

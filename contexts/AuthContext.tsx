@@ -26,6 +26,7 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
@@ -46,6 +47,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, inviteCode?: string) => Promise<{ inviteCode?: string }>;
   logout: () => Promise<void>;
+  /** Email a password reset link. Resolves even if no account exists. */
+  resetPassword: (email: string) => Promise<void>;
   /** Join a different household by invite code. Returns false if the code is invalid. */
   switchHousehold: (inviteCode: string) => Promise<boolean>;
   /** Start the Google OAuth flow. */
@@ -139,15 +142,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for auth state changes (handles persistence)
   useEffect(() => {
+    const restoreCachedIdentity = async (firebaseUser: User): Promise<boolean> => {
+      const raw = await AsyncStorage.getItem(`connected:identity:${firebaseUser.uid}`);
+      if (!raw || auth.currentUser?.uid !== firebaseUser.uid) return false;
+      try {
+        const cached = JSON.parse(raw);
+        if (!cached.household?.members?.includes(firebaseUser.uid)) return false;
+        setUser(firebaseUser);
+        setHouseholdId(cached.householdId);
+        setHousehold(cached.household);
+        setInviteCode(cached.household.inviteCode);
+        return true;
+      } catch {
+        // An invalid cache never grants a session.
+        return false;
+      }
+    };
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (authFlowInProgress.current || passwordOnboarding.isBusy()) return;
+      try {
+        await handleAuthState(firebaseUser);
+      } catch (err) {
+        // A failed network check must never leave the app on the loading spinner.
+        console.error('Error restoring session:', err);
+        if (firebaseUser?.emailVerified) await restoreCachedIdentity(firebaseUser).catch(() => false);
+      } finally {
+        setLoading(false);
+      }
+    });
+    const handleAuthState = async (firebaseUser: User | null) => {
       if (firebaseUser) {
         if (!connected && firebaseUser.emailVerified) {
-          const raw=await AsyncStorage.getItem(`connected:identity:${firebaseUser.uid}`);
-          if(raw&&auth.currentUser?.uid===firebaseUser.uid){
-            try { const cached=JSON.parse(raw);if(cached.household?.members?.includes(firebaseUser.uid)){setUser(firebaseUser);setHouseholdId(cached.householdId);setHousehold(cached.household);setInviteCode(cached.household.inviteCode);} } catch { /* An invalid cache never grants an online session. */ }
-          }
-          setLoading(false);return;
+          await restoreCachedIdentity(firebaseUser);
+          return;
         }
         if (firebaseUser.emailVerified !== true) {
           try {
@@ -176,17 +203,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Load user profile to get householdId
+        // Load user profile to get householdId. If that fails (flaky network),
+        // fall back to the last known household instead of an empty app.
         try {
           await loadAuthenticatedUser(firebaseUser);
         } catch (err) {
           console.error('Error loading user profile:', err);
+          await restoreCachedIdentity(firebaseUser);
         }
       } else {
         clearLocalAuth();
       }
-      setLoading(false);
-    });
+    };
 
     return unsubscribe;
   }, [clearLocalAuth, loadAuthenticatedUser, connected]);
@@ -224,6 +252,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Logout ──
   const logout = useCallback(async () => {
     await signOut(auth);
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    await sendPasswordResetEmail(auth, email.trim().toLowerCase());
   }, []);
 
   // ── Switch Household ──
@@ -301,6 +333,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     register,
     logout,
+    resetPassword,
     switchHousehold,
     signInWithGoogle,
     pendingInviteCode,

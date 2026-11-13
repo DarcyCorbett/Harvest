@@ -45,6 +45,10 @@ export function MealEditor({
 }) {
   const c = useConnected();
   const [value, setValue] = useState(meal);
+  // Keep what was typed: converting on every keystroke drops "2." before "2.5".
+  const [servingsText, setServingsText] = useState(String(meal.servings));
+  const [extraText, setExtraText] = useState(String(meal.allocatedPortions ?? 0));
+  const amount = (text: string) => Number(text.trim().replace(',', '.'));
   const [picker, setPicker] = useState<"main" | "side" | null>(null);
   const receipt = useRef<{key: string; id: string; changes: {meal: Meal; expectedRevision: number}[]} | null>(null);
   const flight = useRef(false);
@@ -54,15 +58,20 @@ export function MealEditor({
     setBusy(true);
     try {
       assertDates(value.date);
-      if (value.servings <= 0 || !Number.isFinite(value.servings))
+      const servings = amount(servingsText);
+      const allocatedPortions = extraText.trim() ? amount(extraText) : 0;
+      if (servings <= 0 || !Number.isFinite(servings))
         throw new Error("Choose positive servings.");
-      if (value.kind === "recipe" && !value.recipeId)
+      if (value.kind === "recipe" && (allocatedPortions < 0 || !Number.isFinite(allocatedPortions)))
+        throw new Error("Enter extra portions as a number, or leave it empty.");
+      const current = { ...value, servings, ...(value.kind === "recipe" ? { allocatedPortions } : {}) };
+      if (current.kind === "recipe" && !current.recipeId)
         throw new Error("Choose a recipe.");
       const next = {
-        ...value,
+        ...current,
         id: meal.id,
-        customLabel: value.customLabel?.trim(),
-        ...(value.kind === "eating-out"
+        customLabel: current.customLabel?.trim(),
+        ...(current.kind === "eating-out"
           ? {
               recipeId: "",
               sides: [],
@@ -72,7 +81,7 @@ export function MealEditor({
             }
           : {}),
       };
-      const key = JSON.stringify({id: meal.id, revision: meal.revision, value});
+      const key = JSON.stringify({id: meal.id, revision: meal.revision, current});
       const retry = receipt.current?.key === key ? receipt.current : null;
       const changes: { meal: Meal; expectedRevision: number }[] = retry?.changes ?? [
         {
@@ -80,8 +89,8 @@ export function MealEditor({
           expectedRevision: meal.revision,
         },
       ];
-      if (value.kind === "leftover" && !retry) {
-        const source = c.meals.find((m) => m.id === value.sourceMealId);
+      if (current.kind === "leftover" && !retry) {
+        const source = c.meals.find((m) => m.id === current.sourceMealId);
         if (!source) throw new Error("Choose the source cooking occasion.");
         const other = c.meals
           .filter(
@@ -97,7 +106,7 @@ export function MealEditor({
             ...source,
             allocatedPortions: Math.max(
               source.allocatedPortions ?? 0,
-              other + value.servings,
+              other + current.servings,
             ),
           },
           expectedRevision: source.revision,
@@ -155,8 +164,8 @@ export function MealEditor({
       <Field
         label="Servings"
         keyboardType="decimal-pad"
-        value={String(value.servings)}
-        onChangeText={(s) => setValue((v) => ({ ...v, servings: Number(s) }))}
+        value={servingsText}
+        onChangeText={setServingsText}
       />
       {value.kind === "recipe" && (
         <>
@@ -183,10 +192,8 @@ export function MealEditor({
           <Field
             label="Extra portions reserved for later meals"
             keyboardType="decimal-pad"
-            value={String(value.allocatedPortions ?? 0)}
-            onChangeText={(s) =>
-              setValue((v) => ({ ...v, allocatedPortions: Number(s) }))
-            }
+            value={extraText}
+            onChangeText={setExtraText}
           />
         </>
       )}
@@ -230,7 +237,7 @@ export function MealEditor({
       <Button label="Cancel" secondary disabled={busy} onPress={onClose} />
       {picker && <RecipePickerModal mealType={picker === 'side' ? 'side' : value.mealType} date={value.date}
         onClose={() => setPicker(null)} onSelect={recipe => {
-          setValue(v => picker === 'side' ? {...v, sides:[...(v.sides ?? []).filter(s => s.recipeId !== recipe.id), {recipeId:recipe.id!,servings:v.servings}]} : {...v, recipeId:recipe.id!, overrides:[], sourceMealId:undefined});
+          setValue(v => picker === 'side' ? {...v, sides:[...(v.sides ?? []).filter(s => s.recipeId !== recipe.id), {recipeId:recipe.id!,servings:amount(servingsText) > 0 ? amount(servingsText) : v.servings}]} : {...v, recipeId:recipe.id!, overrides:[], sourceMealId:undefined});
           setPicker(null);
         }} />}
     </Sheet>
