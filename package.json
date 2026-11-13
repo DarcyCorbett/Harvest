@@ -8,7 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "vitest run --exclude tests/firestore.rules.test.ts --exclude .worktrees/**",
+    "test": "vitest run --exclude tests/firestore.rules.test.ts --exclude .worktrees/** --exclude apps/**",
     "test:client": "vitest run tests --exclude tests/firestore.rules.test.ts --exclude .worktrees/**",
     "test:functions": "npm --prefix functions test",
     "build:functions": "npm --prefix functions run build",

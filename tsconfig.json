@@ -16,6 +16,7 @@
   ],
   "exclude": [
     "functions",
+    "apps",
     ".phase0-dist",
     "node_modules"
   ]
