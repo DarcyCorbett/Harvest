@@ -2,7 +2,9 @@
   "name": "mealwizard-functions",
   "private": true,
   "main": "lib/index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "build": "tsc",
     "catalogue:ingest": "npm run build && node lib/catalogue/ingestionCli.js",
@@ -14,10 +16,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "playwright": "^1.59.1",
     "firebase-admin": "^13.9.0",
     "firebase-functions": "^6.4.0",
-    "zod": "^3.25.76"
+    "playwright": "^1.59.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
