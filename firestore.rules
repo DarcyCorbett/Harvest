@@ -2,6 +2,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Shared catalogue data is for invited users only. Signing up is open to
+    // anyone holding the public app config, so being signed in is not enough:
+    // the email must be verified and present on the allowlist.
+    function invitedUser() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email.lower()));
+    }
+
     // ─── User Profiles ───────────────────────────────────
     // Clients may read their own profile. Server callables own profile writes.
     match /users/{userId} {
@@ -63,10 +73,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Catalogue rollout mode is readable by signed-in clients. Only trusted
+    // Catalogue rollout mode is readable by invited clients. Only trusted
     // server tooling may change it; Phase 1 keeps generationMode="legacy".
     match /appConfig/catalogue {
-      allow get: if request.auth != null;
+      allow get: if invitedUser();
       allow list, create, update, delete: if false;
     }
 
@@ -107,16 +117,16 @@ service cloud.firestore {
     }
 
     // ─── Recipes (Global Cache) ──────────────────────────
-    // Authenticated clients can read recipes. Server callables own all writes.
+    // Invited clients can read recipes. Server callables own all writes.
     match /recipes/{recipeId} {
-      allow read: if request.auth != null;
+      allow read: if invitedUser();
       allow create, update, delete: if false;
     }
 
     // ─── Recipe Discovery Index ──────────────────────────
-    // Authenticated clients can read the legacy index. Server callables own all writes.
+    // Invited clients can read the legacy index. Server callables own all writes.
     match /recipeIndex/{site}/recipes/{recipeId} {
-      allow read: if request.auth != null;
+      allow read: if invitedUser();
       allow create, update, delete: if false;
     }
 

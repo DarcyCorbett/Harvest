@@ -18,6 +18,7 @@ import {
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
 const PROJECT_ID = 'demo-meal-wizard-rules';
+const MEMBER = { email: 'member@example.com', email_verified: true };
 const HOUSEHOLD_SUBCOLLECTIONS = [
   'mealPlan',
   'shoppingList',
@@ -248,8 +249,8 @@ describe('Firestore household security boundary', () => {
     }));
   });
 
-  it('allows authenticated recipe reads but rejects all recipe mutations', async () => {
-    const database = environment.authenticatedContext('member-1').firestore();
+  it('allows invited recipe reads but rejects all recipe mutations', async () => {
+    const database = environment.authenticatedContext('member-1', MEMBER).firestore();
 
     await assertSucceeds(getDoc(doc(database, 'recipes/recipe-1')));
     await assertSucceeds(getDocs(collection(database, 'recipes')));
@@ -258,8 +259,8 @@ describe('Firestore household security boundary', () => {
     await assertFails(deleteDoc(doc(database, 'recipes/recipe-1')));
   });
 
-  it('allows authenticated recipe-index reads but rejects all index mutations', async () => {
-    const database = environment.authenticatedContext('member-1').firestore();
+  it('allows invited recipe-index reads but rejects all index mutations', async () => {
+    const database = environment.authenticatedContext('member-1', MEMBER).firestore();
 
     await assertSucceeds(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
     await assertSucceeds(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
@@ -283,8 +284,8 @@ describe('Firestore household security boundary', () => {
     await assertFails(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
   });
 
-  it('allows authenticated catalogue config reads but keeps it server-write only', async () => {
-    const database = environment.authenticatedContext('member-1').firestore();
+  it('allows invited catalogue config reads but keeps it server-write only', async () => {
+    const database = environment.authenticatedContext('member-1', MEMBER).firestore();
     const anonymous = environment.unauthenticatedContext().firestore();
 
     await assertSucceeds(getDoc(doc(database, 'appConfig/catalogue')));
@@ -292,6 +293,36 @@ describe('Firestore household security boundary', () => {
     await assertFails(setDoc(doc(database, 'appConfig/catalogue'), {
       generationMode: 'catalogue',
     }));
+  });
+
+  it.each([
+    ['has no email claim', {}],
+    ['has an unverified email', { email: 'member@example.com', email_verified: false }],
+    ['is verified but not on the allowlist', { email: 'stranger@example.com', email_verified: true }],
+  ])('rejects catalogue reads when a signed-in user %s', async (_case, token) => {
+    const database = environment.authenticatedContext('self-registered', token).firestore();
+
+    await assertFails(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertFails(getDocs(collection(database, 'recipes')));
+    await assertFails(getDoc(doc(database, 'recipeIndex/site-1/recipes/recipe-1')));
+    await assertFails(getDocs(collection(database, 'recipeIndex/site-1/recipes')));
+    await assertFails(getDoc(doc(database, 'appConfig/catalogue')));
+  });
+
+  it('matches the allowlist regardless of the casing of the signed-in email', async () => {
+    const database = environment.authenticatedContext('member-1', {
+      email: 'Member@Example.com', email_verified: true,
+    }).firestore();
+
+    await assertSucceeds(getDoc(doc(database, 'recipes/recipe-1')));
+    await assertSucceeds(getDoc(doc(database, 'appConfig/catalogue')));
+  });
+
+  it('keeps household data readable by members without an allowlist lookup', async () => {
+    const database = environment.authenticatedContext('member-1').firestore();
+
+    await assertSucceeds(getDoc(doc(database, 'households/household-1')));
+    await assertSucceeds(getDoc(doc(database, 'households/household-1/cookbook/existing')));
   });
 
   it.each([
