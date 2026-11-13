@@ -612,6 +612,34 @@ describe('completeGoogleHouseholdOnboarding', () => {
       completeGoogleHouseholdOnboarding(user, dependencies),
     ).rejects.toBe(failure);
   });
+
+  it('joins the invited household instead of creating one for a new Google user', async () => {
+    const households = {
+      create: vi.fn(),
+      join: vi.fn(async () => 'household-9'),
+      switch: vi.fn(),
+    };
+    const user = { uid: 'google-1', email: 'New@Example.com', emailVerified: true } as never;
+    const result = await completeGoogleHouseholdOnboarding(user, {
+      isEmailAllowed: async () => true,
+      hasUserProfile: async () => false,
+      households,
+    }, ' ABC234 ');
+    expect(result.household).toEqual({ householdId: 'household-9' });
+    expect(households.join).toHaveBeenCalledWith('ABC234');
+    expect(households.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown invite code without creating a household', async () => {
+    const households = { create: vi.fn(), join: vi.fn(async () => null), switch: vi.fn() };
+    const user = { uid: 'google-1', email: 'new@example.com', emailVerified: true } as never;
+    await expect(completeGoogleHouseholdOnboarding(user, {
+      isEmailAllowed: async () => true,
+      hasUserProfile: async () => false,
+      households,
+    }, 'ZZZ999')).rejects.toMatchObject({ code: 'household/invalid-invite' });
+    expect(households.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('clearAuthenticatedFailureState', () => {

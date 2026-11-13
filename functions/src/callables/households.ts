@@ -255,6 +255,10 @@ export function createFirestoreHouseholdStore(
       return db.runTransaction(async (transaction) => {
         const household = await transaction.get(householdRef);
         const reservation = await transaction.get(inviteRef);
+        const profile = await transaction.get(userRef);
+        const previousHouseholdId: unknown = profile.exists
+          ? profile.get('householdId')
+          : undefined;
         const storedInvite: unknown = household.exists
           ? household.get('inviteCode')
           : undefined;
@@ -280,6 +284,17 @@ export function createFirestoreHouseholdStore(
         transaction.update(householdRef, {
           members: FieldValue.arrayUnion(uid),
         });
+        // Switching households leaves the previous one, so a former member
+        // does not keep read access to its plan and shopping list.
+        if (
+          typeof previousHouseholdId === 'string'
+          && previousHouseholdId.length > 0
+          && previousHouseholdId !== householdId
+        ) {
+          transaction.update(db.collection('households').doc(previousHouseholdId), {
+            members: FieldValue.arrayRemove(uid),
+          });
+        }
         transaction.set(userRef, { email, householdId }, { merge: true });
         return true;
       });

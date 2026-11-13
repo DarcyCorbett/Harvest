@@ -52,7 +52,8 @@ interface AuthContextType {
   /** Join a different household by invite code. Returns false if the code is invalid. */
   switchHousehold: (inviteCode: string) => Promise<boolean>;
   /** Start the Google OAuth flow. */
-  signInWithGoogle: () => Promise<void>;
+  /** A new Google user joins the household for `inviteCode`, or gets a new one. */
+  signInWithGoogle: (inviteCode?: string) => Promise<void>;
   /** Set when a new household was auto-created during Google sign-in. */
   pendingInviteCode: string | null;
   clearPendingInviteCode: () => void;
@@ -273,7 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [user]);
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (inviteCode?: string) => {
     authFlowInProgress.current = true;
     let authenticatedUser: User | null = null;
     try {
@@ -296,6 +297,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const onboarding = await completeGoogleHouseholdOnboarding(
         result.user,
         googleOnboardingDependencies,
+        inviteCode,
       );
 
       if (onboarding.household && 'inviteCode' in onboarding.household) {

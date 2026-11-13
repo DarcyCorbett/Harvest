@@ -344,6 +344,7 @@ export function createPasswordOnboarding(
 export async function completeGoogleHouseholdOnboarding(
   user: PasswordOnboardingUser,
   dependencies: GoogleOnboardingDependencies,
+  inviteCodeValue?: string,
 ): Promise<PasswordLoginResult> {
   const email = typeof user.email === 'string'
     ? normalizedEmail(user.email)
@@ -358,6 +359,19 @@ export async function completeGoogleHouseholdOnboarding(
 
   if (await dependencies.hasUserProfile(user.uid)) {
     return { user, household: null };
+  }
+  // A new user holding a partner's code joins that household instead of
+  // being given an empty one of their own.
+  const inviteCode = inviteCodeValue?.trim();
+  if (inviteCode) {
+    const householdId = await dependencies.households.join(inviteCode);
+    if (!householdId) {
+      throw codedError(
+        INVALID_INVITE_CODE,
+        'Invalid invite code. Check it with your partner and try again.',
+      );
+    }
+    return { user, household: { householdId } };
   }
   const household = await dependencies.households.create();
   return { user, household };

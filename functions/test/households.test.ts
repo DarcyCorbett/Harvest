@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 const firestoreAdmin = vi.hoisted(() => ({
   arrayUnion: vi.fn((value: string) => ({ operation: 'arrayUnion', value })),
+  arrayRemove: vi.fn((value: string) => ({ operation: 'arrayRemove', value })),
   getFirestore: vi.fn(),
 }));
 
 vi.mock('firebase-admin/firestore', () => ({
-  FieldValue: { arrayUnion: firestoreAdmin.arrayUnion },
+  FieldValue: { arrayUnion: firestoreAdmin.arrayUnion, arrayRemove: firestoreAdmin.arrayRemove },
   getFirestore: firestoreAdmin.getFirestore,
 }));
 
@@ -499,6 +500,7 @@ describe('createFirestoreHouseholdStore', () => {
 
   it('atomically adds membership, switches the profile, and reserves a legacy invite', async () => {
     const householdRef = { id: 'household-1', kind: 'household' };
+    const previousRef = { id: 'household-0', kind: 'household' };
     const inviteRef = { kind: 'invite' };
     const userRef = { kind: 'user' };
     const transaction = {
@@ -513,6 +515,9 @@ describe('createFirestoreHouseholdStore', () => {
           };
         }
         if (ref === inviteRef) return { exists: false };
+        if (ref === userRef) {
+          return { exists: true, get: () => 'household-0' };
+        }
         throw new Error('unexpected transaction read');
       }),
       create: vi.fn(),
@@ -521,7 +526,9 @@ describe('createFirestoreHouseholdStore', () => {
     };
     const db = {
       collection: vi.fn((name: string) => {
-        if (name === 'households') return { doc: vi.fn(() => householdRef) };
+        if (name === 'households') {
+          return { doc: vi.fn((id: string) => (id === 'household-0' ? previousRef : householdRef)) };
+        }
         if (name === 'householdInvites') return { doc: vi.fn(() => inviteRef) };
         if (name === 'users') return { doc: vi.fn(() => userRef) };
         throw new Error(`unexpected collection ${name}`);
@@ -541,6 +548,9 @@ describe('createFirestoreHouseholdStore', () => {
     expect(db.runTransaction).toHaveBeenCalledOnce();
     expect(transaction.update).toHaveBeenCalledWith(householdRef, {
       members: { operation: 'arrayUnion', value: 'user-1' },
+    });
+    expect(transaction.update).toHaveBeenCalledWith(previousRef, {
+      members: { operation: 'arrayRemove', value: 'user-1' },
     });
     expect(transaction.set).toHaveBeenCalledWith(userRef, {
       email: 'member@example.com',

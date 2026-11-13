@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  INVALID_INVITE_CODE,
   ONBOARDING_RESUME_CODE,
   VERIFICATION_REQUIRED_CODE,
 } from '@/services/householdClient';
@@ -43,9 +44,11 @@ export default function RegisterScreen() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(inviteCode.trim() || undefined);
     } catch (error: any) {
-      if (error.message === 'Access Denied') {
+      if (error.code === INVALID_INVITE_CODE) {
+        Alert.alert('Invalid Invite Code', 'No household uses that code. Check it with your partner and try again.');
+      } else if (error.message === 'Access Denied') {
         Alert.alert('Access Denied', 'Your email is not authorized to use this app. Please request an invitation.');
       } else if (error.code === 'auth/account-exists-with-different-credential') {
         Alert.alert('Account Exists', 'This email is already registered with email/password. Please sign in with your email and password instead.');
@@ -229,7 +232,7 @@ export default function RegisterScreen() {
               />
             </View>
             <Text style={[styles.helperText, { color: colors.textTertiary }]}>
-              Leave blank to create a new household
+              Leave blank to create a new household. Also used by Continue with Google.
             </Text>
           </View>
 
