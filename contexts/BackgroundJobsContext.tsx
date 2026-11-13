@@ -23,9 +23,14 @@ import {
   loadGenerationResult,
   saveGenerationResult,
   subscribeMealReminderState,
+  updateRecipeFlags,
 } from '@/services/firestoreService';
+import { getGeminiReminderFlags } from '@/services/gemini';
+import { ensureReminderFlags } from '@/services/reminderFlags';
 import { useAuth } from '@/contexts/AuthContext';
-import * as Notifications from 'expo-notifications';
+import { useConnected } from '@/contexts/ConnectedContext';
+import { notifications as Notifications } from '@/services/notifications';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearMealReminders, scheduleMealReminders } from '@/services/mealReminders';
 import { STORAGE_KEY_LAST_SCHEDULED_AT } from '@/services/mealRemindersConstants';
@@ -90,6 +95,7 @@ export function useBackgroundJobs(): BackgroundJobsContextValue {
 
 export function BackgroundJobsProvider({ children }: { children: React.ReactNode }) {
   const { householdId } = useAuth();
+  const {state:connectedState, refreshRecipes}=useConnected();
   const [generation, setGeneration] = useState<GenerationJob>({ status: 'idle' });
   const [confirm, setConfirm] = useState<ConfirmJob>({ status: 'idle' });
 
@@ -102,11 +108,13 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
   // ── Rehydrate persisted generation result on startup ──
   const hasRehydrated = useRef(false);
   useEffect(() => {
+    if(connectedState?.version===2){setGeneration({status:'idle'});return;}
     if (!householdId || hasRehydrated.current) return;
     hasRehydrated.current = true;
+    let active=true;
     loadGenerationResult(householdId)
       .then((result) => {
-        if (!result) return;
+        if (!result||!active) return;
         setGeneration((prev) =>
           prev.status !== 'idle'
             ? prev
@@ -114,39 +122,53 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
         );
       })
       .catch((err) => logEvent('warn', 'rehydration', err));
-  }, [householdId]);
+    return()=>{active=false;};
+  }, [householdId,connectedState?.version]);
 
   // Per-device meal reminder sync. When ANY household member confirms a plan,
   // this device sees the bumped `lastConfirmedAt` and reschedules its own copy.
   useEffect(() => {
     if (!householdId) return;
-    return subscribeMealReminderState(householdId, async (lastConfirmedAt) => {
-      if (!lastConfirmedAt) return;
-      try {
-        const cachedStr = await AsyncStorage.getItem(STORAGE_KEY_LAST_SCHEDULED_AT(householdId));
-        const cached = cachedStr ? new Date(cachedStr) : null;
-        // Tolerance window: the confirming device writes `lastScheduledAt` from its
-        // client clock, but the snapshot fires with a Firestore serverTimestamp().
-        // Clock skew between client and server is bounded in practice — treat any
-        // pair within 60 s as "already in sync" to avoid a redundant re-schedule.
-        if (cached && Math.abs(cached.getTime() - lastConfirmedAt.getTime()) < 60_000) return;
-        if (cached && cached >= lastConfirmedAt) return;
+    let active = true;
+    let initialSync = true;
+    let queue = Promise.resolve();
+    const unsubscribe = subscribeMealReminderState(householdId, (lastConfirmedAt) => {
+      queue = queue.then(async () => {
+        if (!active) return;
+        try {
+          const cachedStr = await AsyncStorage.getItem(STORAGE_KEY_LAST_SCHEDULED_AT(householdId));
+          const cached = cachedStr ? new Date(cachedStr) : null;
+          // Always reconcile once on launch, including plans previously synced
+          // without flags. Failed classification must remain retryable.
+          if (!initialSync && lastConfirmedAt && cached && cached >= lastConfirmedAt) return;
 
-        const [{ meals, recipes }, settings] = await Promise.all([
-          getUpcomingMealPlan(householdId),
-          getHouseholdSettings(householdId),
-        ]);
-        await clearMealReminders(householdId);
-        await scheduleMealReminders(householdId, meals, recipes, settings);
-        await AsyncStorage.setItem(
-          STORAGE_KEY_LAST_SCHEDULED_AT(householdId),
-          lastConfirmedAt.toISOString(),
-        );
-      } catch (err) {
-        logEvent('warn', 'ReminderSync', 'failed:', err);
-      }
+          const [{ meals, recipes }, settings] = await Promise.all([
+            getUpcomingMealPlan(householdId),
+            getHouseholdSettings(householdId),
+          ]);
+          if (!active) return;
+          refreshRecipes(recipes);
+          await ensureReminderFlags(
+            recipes,
+            missing => getGeminiReminderFlags(householdId, missing),
+            (id, flags) => updateRecipeFlags(householdId, id, flags),
+          );
+          if (!active) return;
+          refreshRecipes(recipes);
+          await clearMealReminders(householdId);
+          await scheduleMealReminders(householdId, meals, recipes, settings);
+          await AsyncStorage.setItem(
+            STORAGE_KEY_LAST_SCHEDULED_AT(householdId),
+            (lastConfirmedAt ?? new Date()).toISOString(),
+          );
+          initialSync = false;
+        } catch (err) {
+          logEvent('warn', 'ReminderSync', 'failed:', err);
+        }
+      });
     });
-  }, [householdId]);
+    return () => { active = false; unsubscribe(); };
+  }, [householdId,connectedState?.version,refreshRecipes]);
 
   const startGeneration = useCallback(
     (config: GenerateConfig, householdId: string): boolean => {
@@ -171,7 +193,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
           if (generationEpoch.current !== epoch) return;
           setGeneration({ status: 'done', meals, config, acknowledged: false });
           if (householdId) saveGenerationResult(householdId, meals, config).catch((err) => logEvent('warn', 'saveGenerationResult', err));
-          if (AppState.currentState !== 'active') {
+          if (Notifications && AppState.currentState !== 'active') {
             Notifications.scheduleNotificationAsync({
               content: {
                 title: 'Recipes ready',
@@ -261,7 +283,7 @@ export function BackgroundJobsProvider({ children }: { children: React.ReactNode
               }
             })();
           }
-          if (AppState.currentState !== 'active') {
+          if (Notifications && AppState.currentState !== 'active') {
             Notifications.scheduleNotificationAsync({
               content: {
                 title: 'Shopping list ready',

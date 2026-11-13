@@ -5,6 +5,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ConnectedProvider } from '@/contexts/ConnectedContext';
 import { BackgroundJobsProvider } from '@/contexts/BackgroundJobsContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { DeveloperModeProvider } from '@/contexts/DeveloperModeContext';
@@ -26,7 +27,7 @@ function RootNavigator() {
   const { user, loading, householdId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, effectiveScheme } = useTheme();
   useNotifications();
 
   useEffect(() => {
@@ -37,13 +38,16 @@ function RootNavigator() {
     } else if (user && householdId && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [user, loading, householdId, segments]);
+  }, [user, loading, householdId, segments, router]);
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+        <StatusBar style={effectiveScheme === 'light' ? 'dark' : 'light'} />
+      </>
     );
   }
 
@@ -55,7 +59,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
       </Stack>
       <JobToast />
-      <StatusBar style="auto" />
+      <StatusBar style={effectiveScheme === 'light' ? 'dark' : 'light'} />
     </>
   );
 }
@@ -81,11 +85,13 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <ConnectedProvider>
         <DeveloperModeProvider>
           <BackgroundJobsProvider>
             <RootNavigator />
           </BackgroundJobsProvider>
         </DeveloperModeProvider>
+        </ConnectedProvider>
       </AuthProvider>
     </ThemeProvider>
   );

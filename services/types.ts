@@ -23,6 +23,13 @@ export interface Nutrition {
   protein?: number; // grams
   carbs?: number;   // grams
   fat?: number;     // grams
+  fiber?: number;   // grams
+  sugar?: number;   // grams
+  saturatedFat?: number; // grams
+  unsaturatedFat?: number; // grams
+  transFat?: number; // grams
+  sodium?: number; // milligrams
+  cholesterol?: number; // milligrams
 }
 
 /** A single instruction step. May have an inline image (from JSON-LD HowToStep.image
@@ -30,10 +37,30 @@ export interface Nutrition {
  *  or be a section header flattened from a HowToSection wrapper. */
 export interface InstructionStep {
   text: string;
+  title?: string;
+  sourceUrl?: string;
   imageUrl?: string;
   videoEmbedUrl?: string;
   isHeader?: boolean;
 }
+
+export interface RecipeAttribution {
+  author?: string;
+  publisher?: string;
+  publishedAt?: string;
+  modifiedAt?: string;
+}
+
+export interface SourceRating {
+  value: number;
+  count?: number;
+  capturedAt?: string;
+}
+
+export interface RecipeEquipmentItem { name: string; notes?: string }
+export interface RecipeAdditionalTime { label: string; minutes: number }
+export interface RecipeNoteSection { title?: string; items: string[] }
+export interface RecipeEstimatedCost { text?: string; amount?: number; currency?: string }
 
 /** A fully scraped and parsed recipe (root-level collection) */
 export interface Recipe {
@@ -45,6 +72,7 @@ export interface Recipe {
   title: string;
   sourceUrl: string;
   imageUrl?: string;        // hero image URL extracted from JSON-LD / og:image
+  imageUrls?: string[];     // bounded alternate hero images, used as fallbacks
   videoEmbedUrl?: string;   // hero overview video (Vimeo/YouTube embed URL); replaces banner image when present
   prepTime: string;         // e.g. "15 min"
   cookTime: string;         // e.g. "30 min"
@@ -53,6 +81,17 @@ export interface Recipe {
   course?: string[];        // WPRM course taxonomy e.g. ["Main Course", "Dinner"]
   tags?: string[];          // Gemini-assigned labels: CuisineStyle values + course names
   description?: string;     // Short blurb from wprm-recipe-summary
+  attribution?: RecipeAttribution;
+  sourceRating?: SourceRating;
+  equipment?: RecipeEquipmentItem[];
+  additionalTimes?: RecipeAdditionalTime[];
+  noteSections?: RecipeNoteSection[];
+  dietaryClaims?: string[];
+  cookingMethods?: string[];
+  sourceCategories?: string[];
+  sourceCuisines?: string[];
+  sourceKeywords?: string[];
+  estimatedCost?: RecipeEstimatedCost;
   cuisine?: string;         // e.g. "Italian", "Asian"
   difficulty?: string;      // e.g. "Easy", "Medium"
   ingredients: Ingredient[];
@@ -124,6 +163,10 @@ export type ShoppingCategory =
 
 /** Cookbook entry (household subcollection) */
 export interface CookbookEntry {
+  notes?: string;
+  collections?: string[];
+  lastCookedAt?: string;
+  effort?: string;
   id?: string;            // same as recipeId
   recipeId: string;
   starred: boolean;
@@ -156,7 +199,11 @@ export interface KidFriendlySettings {
 }
 
 /** Per-household generation settings (stored in Firestore) */
+export interface NutritionTarget { calories?: number; protein?: number }
+export interface NutritionTargets { enabled: boolean; adults: NutritionTarget[]; children: NutritionTarget[] }
 export interface HouseholdSettings {
+  nutritionTargets?: NutritionTargets;
+  excludedIngredients?: string[];
   /** Site domain → weight multiplier. 0 = disabled, default 1 if absent. */
   sourceWeights: Record<string, number>;
   /** Ingredient name → weight multiplier. Default 1 if absent. */
@@ -180,17 +227,6 @@ export interface HouseholdSettings {
   defaultChildren?: number;
   /** Automatically regenerate mismatched meals until all criteria are met. Default true. */
   strictMatching?: boolean;
-}
-
-/** Generator input configuration */
-export interface GeneratorConfig {
-  numberOfDays: number;
-  customDateRange?: { startDate: string; endDate: string };
-  adults: number;
-  children: number;
-  mealTypes: MealType[];
-  cuisineStyles: CuisineStyle[];
-  customInstructions?: string;
 }
 
 /** A single meal in a generated plan (pre-confirmation) */

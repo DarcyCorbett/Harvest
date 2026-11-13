@@ -1,3 +1,4 @@
+import { normaliseTargets } from '@/services/plannedNutrition';
 // ============================================================
 // Meal Wizard — Settings Modal
 // Per-household catalogue settings and meal reminders.
@@ -39,6 +40,19 @@ interface SettingsModalProps {
   onSaved: () => void;
 }
 
+/** Keep intermediate decimal text while editing a target. */
+function TargetInput({label,value,onChange,placeholder}: {label:string;value?:number;onChange:(value:number|undefined)=>void;placeholder:string}) {
+  const {colors}=useTheme();
+  const [text,setText]=useState(value?.toString() ?? '');
+  return <TextInput accessibilityLabel={label} placeholder={placeholder} placeholderTextColor={colors.textSecondary}
+    keyboardType="decimal-pad" value={text}
+    style={{minHeight:44,borderWidth:1,borderColor:colors.border,borderRadius:12,padding:10,color:colors.text}}
+    onChangeText={next=>{
+      if(next && !/^\d*\.?\d*$/.test(next)) return;
+      setText(next); const n=Number(next);onChange(next && Number.isFinite(n) && n>0 ? n : undefined);
+    }} />;
+}
+
 /** Strip leading www. for display */
 function displayDomain(site: string): string {
   return site.replace(/^www\./, '');
@@ -61,6 +75,7 @@ export default function SettingsModal({
   const [sourceWeights, setSourceWeights] = useState<Record<string, number>>({});
   const [kidFriendly, setKidFriendly] = useState<KidFriendlySettings>({});
   const [newBlockTerm, setNewBlockTerm] = useState('');
+  const [exclusions, setExclusions] = useState('');
 
   // Meal reminders
   const [defrostEnabled, setDefrostEnabled] = useState(DEFAULT_MEAL_REMINDERS.defrostEnabled);
@@ -72,6 +87,8 @@ export default function SettingsModal({
   // Default servings
   const [defaultAdults, setDefaultAdults] = useState(2);
   const [defaultChildren, setDefaultChildren] = useState(2);
+
+  const [nutritionTargets, setNutritionTargets] = useState(() => normaliseTargets(undefined));
 
   // Time picker modal visibility
   const [morningPickerVisible, setMorningPickerVisible] = useState(false);
@@ -111,6 +128,7 @@ export default function SettingsModal({
     getHouseholdSettings(householdId)
       .then((s: HouseholdSettings) => {
         setLoadedSettings(s);
+        setExclusions((s.excludedIngredients ?? []).join(', '));
         setSourceWeights(s.sourceWeights);
         setKidFriendly(s.kidFriendly ?? {});
         const mr = s.mealReminders ?? DEFAULT_MEAL_REMINDERS;
@@ -118,6 +136,7 @@ export default function SettingsModal({
         setMarinateEnabled(mr.marinateEnabled);
         setMorningTime(mr.morningTime);
         setEveningTime(mr.eveningTime);
+        setNutritionTargets(normaliseTargets(s.nutritionTargets));
         setDefaultAdults(s.defaultAdults ?? 2);
         setDefaultChildren(s.defaultChildren ?? 2);
         // Pre-populate lastNonZero from existing weights
@@ -189,6 +208,7 @@ export default function SettingsModal({
     try {
       await saveHouseholdSettings(householdId, mergeCatalogueSettings(loadedSettings, {
         sourceWeights,
+        excludedIngredients: [...new Set(exclusions.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))],
         kidFriendly: Object.keys(kidFriendly).length > 0
           ? kidFriendly
           : undefined,
@@ -200,6 +220,7 @@ export default function SettingsModal({
         },
         defaultAdults,
         defaultChildren,
+        nutritionTargets,
       }));
       onSaved();
       onClose();
@@ -209,7 +230,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, loadedSettings, sourceWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, onSaved, onClose]);
+  }, [householdId, loadedSettings, sourceWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, nutritionTargets, onSaved, onClose, exclusions]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -225,6 +246,8 @@ export default function SettingsModal({
         <View style={styles.header}>
           <TouchableOpacity
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close settings"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={styles.closeBtn}
           >
@@ -233,6 +256,8 @@ export default function SettingsModal({
           <Text style={styles.title}>Generation Settings</Text>
           <TouchableOpacity
             onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityLabel="Save settings"
             disabled={saving || loading}
             style={styles.saveBtn}
           >
@@ -253,6 +278,9 @@ export default function SettingsModal({
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
+            <Text style={styles.sectionTitle}>Household exclusions</Text>
+            <Text style={styles.sectionHint}>Always excluded from suggestions for this household. Separate ingredients with commas.</Text>
+            <TextInput accessibilityLabel="Household exclusions" value={exclusions} onChangeText={setExclusions} multiline style={{ minHeight: 52, padding: 12, color: colors.text, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 24 }} />
             {/* ── Default Servings ── */}
             <Text style={styles.sectionTitle}>Default Servings</Text>
             <Text style={styles.sectionHint}>
@@ -266,6 +294,8 @@ export default function SettingsModal({
                     onPress={() => {
                       if (defaultAdults > 1) setDefaultAdults(defaultAdults - 1);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Fewer default adults"
                     disabled={defaultAdults <= 1}
                     style={[styles.counterBtn, { opacity: defaultAdults <= 1 ? 0.4 : 1 }]}
                   >
@@ -278,6 +308,8 @@ export default function SettingsModal({
                     onPress={() => {
                       if (defaultAdults < 20) setDefaultAdults(defaultAdults + 1);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="More default adults"
                     disabled={defaultAdults >= 20}
                     style={[styles.counterBtn, { opacity: defaultAdults >= 20 ? 0.4 : 1 }]}
                   >
@@ -295,6 +327,8 @@ export default function SettingsModal({
                     onPress={() => {
                       if (defaultChildren > 0) setDefaultChildren(defaultChildren - 1);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Fewer default children"
                     disabled={defaultChildren <= 0}
                     style={[styles.counterBtn, { opacity: defaultChildren <= 0 ? 0.4 : 1 }]}
                   >
@@ -307,6 +341,8 @@ export default function SettingsModal({
                     onPress={() => {
                       if (defaultChildren < 20) setDefaultChildren(defaultChildren + 1);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="More default children"
                     disabled={defaultChildren >= 20}
                     style={[styles.counterBtn, { opacity: defaultChildren >= 20 ? 0.4 : 1 }]}
                   >
@@ -317,6 +353,27 @@ export default function SettingsModal({
             </View>
 
             <View style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Nutrition targets</Text>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+              <Text style={styles.servingLabel}>Enable daily targets</Text>
+              <Switch accessibilityLabel="Enable nutrition targets" value={nutritionTargets.enabled} onValueChange={enabled => setNutritionTargets(t => ({...t,enabled}))} />
+            </View>
+            {nutritionTargets.enabled && <View style={{gap:12}}>
+              <Text style={{color:colors.textSecondary}}>Enter daily calories and protein for each default diner. Targets combine into a household goal. Blank slots leave the goal incomplete.</Text>
+              {([['adults',defaultAdults,'Adult'],['children',defaultChildren,'Child']] as const).flatMap(([group,count,label]) => Array.from({length:count},(_,index) => (
+                <View key={group+index} style={{gap:6}}>
+                  <Text style={styles.servingLabel}>{label} {index+1}</Text>
+                  {(['calories','protein'] as const).map(metric => <TargetInput key={group+index+metric+String(visible)+String(loading)} label={`${label} ${index+1} ${metric}`}
+                    placeholder={metric === 'calories' ? 'Daily calories (kcal)' : 'Daily protein (g)'} value={nutritionTargets[group][index]?.[metric]}
+                    onChange={value=>setNutritionTargets(t=>{
+                      const slots=Array.from({length:Math.max(t[group].length,count)},(_,i)=>({...t[group][i]}));
+                      if(value !== undefined) slots[index][metric]=value; else delete slots[index][metric];
+                      return {...t,[group]:slots};
+                    })} />)}
+                </View>
+              )))}
+            </View>}
 
             {/* ── Sources ── */}
             <Text style={styles.sectionTitle}>Recipe Sources</Text>

@@ -30,6 +30,13 @@ const HOUSEHOLD_SUBCOLLECTIONS = [
 describe('Firestore household security boundary', () => {
   let environment: RulesTestEnvironment;
 
+  it.each(['appAdmins', 'appInvitations', 'appDistribution'])('keeps %s server-only, including for admin clients', async name => {
+    const database = environment.authenticatedContext('admin', { email: 'owner@example.com', email_verified: true, admin: true }).firestore();
+    await assertFails(getDoc(doc(database, `${name}/target`)));
+    await assertFails(getDocs(collection(database, name)));
+    await assertFails(setDoc(doc(database, `${name}/target`), { enabled: true, canInvite: true }));
+  });
+
   beforeAll(async () => {
     environment = await initializeTestEnvironment({
       projectId: PROJECT_ID,
@@ -90,6 +97,21 @@ describe('Firestore household security boundary', () => {
       doc(database, 'households/household-1/mealPlan/monday'),
       { recipeId: 'recipe-1' },
     ));
+  });
+
+  it('upgrades a household without allowing older clients to bypass reconciliation', async () => {
+    await environment.withSecurityRulesDisabled(async context => {
+      await updateDoc(doc(context.firestore(), 'households/household-1'), {workflowVersion:2});
+      await setDoc(doc(context.firestore(), 'households/household-1/shoppingPeriods/trip'), {items:[]});
+    });
+    const member=environment.authenticatedContext('member-1').firestore();
+    for(const target of ['mealPlan/existing','shoppingList/existing','connected/state','drafts/draft','shoppingPeriods/trip','workflowArchives/original','workflowRequests/request']) {
+      await assertFails(setDoc(doc(member,`households/household-1/${target}`),{value:'bypass'}));
+    }
+    await assertFails(updateDoc(doc(member,'households/household-1'),{workflowVersion:1}));
+    await assertSucceeds(getDoc(doc(member,'households/household-1/shoppingPeriods/trip')));
+    await assertFails(getDoc(doc(environment.authenticatedContext('outsider').firestore(),'households/household-1/shoppingPeriods/trip')));
+    await assertSucceeds(setDoc(doc(member,'households/household-1/cookbook/new'),{recipeId:'recipe-1',notes:'Household only'}));
   });
 
   it('rejects household reads by non-members', async () => {

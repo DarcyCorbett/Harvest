@@ -22,14 +22,18 @@ import {
   TouchableOpacity,
   View,
   Switch,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import SettingsModal from '@/components/SettingsModal';
+import AppInviteCard from '@/components/AppInviteCard';
+import { useConnected } from '@/contexts/ConnectedContext';
 
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
   const { developerMode, setDeveloperMode } = useDeveloperMode();
-  const { user, inviteCode, switchHousehold, logout } = useAuth();
+  const { user, householdId, inviteCode, switchHousehold, logout } = useAuth();
+  const connected = useConnected();
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   const [joinCode, setJoinCode] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -95,6 +99,10 @@ export default function ProfileScreen() {
       </View>
 
       {/* Account section */}
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Household preferences and reminders" style={[s.card, { backgroundColor: colors.surface, minHeight: 48 }]} onPress={() => setSettingsVisible(true)}>
+        <Text style={{ color: colors.primary, fontSize: 18 }}>Household preferences and reminders</Text>
+      </TouchableOpacity>
+      {householdId && <SettingsModal householdId={householdId} visible={settingsVisible} onClose={() => setSettingsVisible(false)} onSaved={connected.retry} />}
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <View style={s.cardRow}>
           <View style={[s.avatarCircle, { backgroundColor: colors.primaryLight }]}>
@@ -110,6 +118,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Household code section */}
+      <AppInviteCard />
       <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>YOUR HOUSEHOLD CODE</Text>
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <Text style={[s.codeDisplay, { color: colors.primary, letterSpacing: 8 }]}>

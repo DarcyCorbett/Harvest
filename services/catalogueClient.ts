@@ -12,7 +12,8 @@ export type CatalogueCuisine =
   | 'mexican'
   | 'mediterranean'
   | 'italian'
-  | 'indian';
+  | 'indian'
+  | 'greek' | 'american' | 'french' | 'middle-eastern' | 'global';
 export type CatalogueModifier =
   | 'vegetarian'
   | 'kid-friendly'
@@ -39,6 +40,7 @@ export interface CatalogueSelectionRequest {
   slots: CatalogueMealSlot[];
   currentPlanRecipeIds: string[];
   recentRecipeIds: string[];
+  ranking?: { recentProteins: string[]; preferredRecipeIds: string[]; depreferredRecipeIds: string[] };
 }
 
 type Relaxation =
@@ -336,7 +338,7 @@ function parseRelaxation(value: unknown): Relaxation | null {
   }
   if (value.filter === 'cuisine'
     && typeof value.value === 'string'
-    && Object.values(CUISINE_MAP).includes(value.value as CatalogueCuisine)) {
+    && Object.values(CUISINE_BY_LABEL).includes(value.value as CatalogueCuisine)) {
     return value as unknown as Relaxation;
   }
   if ((value.filter === 'mustIngredient' || value.filter === 'excludedIngredient')

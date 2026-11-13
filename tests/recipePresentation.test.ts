@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasMeaningfulNutrition,
+  formatRecipeNoteItems,
+  formatRecipeNotes,
   mergeRecipeLabels,
   sumKnownNutrition,
 } from '../services/recipePresentation';
@@ -42,5 +44,23 @@ describe('recipe presentation helpers', () => {
       recipe(),
       recipe({ calories: 300, fat: 12 }),
     ])).toEqual({ calories: 550, protein: 10, fat: 12, contributingRecipes: 2 });
+  });
+
+  it('restores flattened numbered notes without splitting measurements', () => {
+    expect(formatRecipeNotes('1. Chill overnight. 2. Bake at 180°C. 3. Rest for 1.5 hours.')).toEqual([
+      '1. Chill overnight.', '2. Bake at 180°C.', '3. Rest for 1.5 hours.',
+    ]);
+    expect(formatRecipeNotes('Use 1.5 cups of water at 180°C. Stir well.')).toEqual([
+      'Use 1.5 cups of water at 180°C. Stir well.',
+    ]);
+  });
+
+  it('formats a single flattened note-section item and preserves source order', () => {
+    expect(formatRecipeNoteItems(['First note. Second note. Third note.'])).toEqual([
+      'First note. Second note.', 'Third note.',
+    ]);
+    expect(formatRecipeNoteItems(['Keep chilled', 'Serve fresh'])).toEqual([
+      '• Keep chilled', '• Serve fresh',
+    ]);
   });
 });

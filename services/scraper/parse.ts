@@ -1,3 +1,4 @@
+import { normalizeUnit as normalizeWprmUnit, metricWeight as convertIngredientWeight } from '../../functions/src/shared/ingredientAmounts';
 // ============================================================
 // HTML primitives + WPRM recipe parsing — turns raw HTML into Recipe objects.
 // ============================================================
@@ -64,8 +65,18 @@ export function htmlToText(html: string): string {
     .replace(/&reg;/g, '®')
     .replace(/&trade;/g, '™')
     // Numeric references: decimal &#123; and hex &#xAB;
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      const code = parseInt(hex, 16);
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : '';
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const code = parseInt(dec, 10);
+      return Number.isFinite(code) && code >= 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : '';
+    })
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -457,53 +468,6 @@ function parseQuantityString(s: string): number {
   if (frac) return parseInt(frac[1], 10) / parseInt(frac[2], 10);
 
   return parseFloat(s) || 0;
-}
-
-/** Normalise WPRM unit strings to canonical lowercase abbreviations. */
-function normalizeWprmUnit(unit: string): string {
-  const u = unit.toLowerCase().trim();
-  const MAP: Record<string, string> = {
-    tablespoon: 'tbsp', tablespoons: 'tbsp', tbsps: 'tbsp',
-    teaspoon: 'tsp', teaspoons: 'tsp', tsps: 'tsp',
-    cup: 'cup', cups: 'cup',
-    gram: 'g', grams: 'g',
-    kilogram: 'kg', kilograms: 'kg',
-    milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
-    liter: 'l', liters: 'l', litre: 'l', litres: 'l',
-    ounce: 'oz', ounces: 'oz', ozs: 'oz',
-    pound: 'lb', pounds: 'lb', lbs: 'lb',
-    'fluid ounce': 'fl oz', 'fluid ounces': 'fl oz',
-    clove: 'clove', cloves: 'clove',
-    slice: 'slice', slices: 'slice',
-    piece: 'piece', pieces: 'piece',
-    can: 'can', cans: 'can',
-    jar: 'jar', jars: 'jar',
-    bag: 'bag', bags: 'bag',
-    bunch: 'bunch', bunches: 'bunch',
-    stalk: 'stalk', stalks: 'stalk',
-    sprig: 'sprig', sprigs: 'sprig',
-    pinch: 'pinch', pinches: 'pinch',
-    dash: 'dash', dashes: 'dash',
-    handful: 'handful', handfuls: 'handful',
-    pint: 'pint', pints: 'pint',
-    quart: 'quart', quarts: 'quart',
-    stick: 'stick', sticks: 'stick',
-    head: 'head', heads: 'head',
-  };
-  return MAP[u] ?? u;
-}
-
-/** Convert oz → g and lb → g/kg. */
-function convertIngredientWeight(quantity: number, unit: string): { quantity: number; unit: string } {
-  if (unit === 'oz') {
-    return { quantity: Math.round(quantity * 28.35), unit: 'g' };
-  }
-  if (unit === 'lb') {
-    const grams = quantity * 453.6;
-    if (grams >= 500) return { quantity: Math.round(grams / 100) / 10, unit: 'kg' };
-    return { quantity: Math.round(grams), unit: 'g' };
-  }
-  return { quantity, unit };
 }
 
 // ─── Nutrition Parsing ───────────────────────────────────────
@@ -964,7 +928,7 @@ const KNOWN_UNITS_TWO_WORD = new Set([
   'fl oz', 'fluid ounce', 'fluid ounces',
 ]);
 const KNOWN_UNITS_ONE_WORD = new Set([
-  'tbsp', 'tbsps', 'tablespoon', 'tablespoons',
+  'tbsp', 'tbs', 'tbsps', 'tablespoon', 'tablespoons',
   'tsp', 'tsps', 'teaspoon', 'teaspoons',
   'cup', 'cups',
   'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
@@ -1044,10 +1008,33 @@ export function parseIngredientString(raw: string): Ingredient {
     s = s.slice(qtyMatch[0].length).trim();
   }
 
-  // 3. Unit (try two-word first to catch "fluid ounces")
+  // 3. Unit (try dual unit first, then two-word, then one-word)
   let unit = '';
+  const quantitySource = String.raw`(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)`;
+  const dualUnitPattern = new RegExp(
+    `^([A-Za-z]+)\\.?\\s*\\/\\s*(${quantitySource})(?:\\s*(?:[-–—]|to)\\s*${quantitySource})?\\s*([A-Za-z]+)\\.?\\s*`,
+    'i',
+  );
+  const dualUnit = dualUnitPattern.exec(s);
+  if (dualUnit) {
+    const firstUnit = normalizeWprmUnit(dualUnit[1]);
+    const secondUnit = normalizeWprmUnit(dualUnit[3]);
+    const firstKnown = KNOWN_UNITS_ONE_WORD.has(dualUnit[1].toLowerCase());
+    const secondKnown = KNOWN_UNITS_ONE_WORD.has(dualUnit[3].toLowerCase());
+    if (firstKnown && secondKnown) {
+      const secondIsMetric = ['g', 'kg', 'ml', 'l'].includes(secondUnit);
+      const firstIsMetric = ['g', 'kg', 'ml', 'l'].includes(firstUnit);
+      if (secondIsMetric && !firstIsMetric) {
+        quantity = parseQuantityString(dualUnit[2]);
+        unit = secondUnit;
+      } else {
+        unit = firstUnit;
+      }
+      s = s.slice(dualUnit[0].length).trim();
+    }
+  }
   const tokens = s.split(/\s+/);
-  if (tokens.length >= 2) {
+  if (!unit && tokens.length >= 2) {
     const twoWord = `${tokens[0]} ${tokens[1]}`.toLowerCase();
     if (KNOWN_UNITS_TWO_WORD.has(twoWord)) {
       unit = normalizeWprmUnit(twoWord);
@@ -1082,6 +1069,10 @@ export function parseIngredientString(raw: string): Ingredient {
     }
   }
 
+  if (unit) {
+    s = s.replace(/^of\s+/i, '').trim();
+  }
+
   // 4. Trailing comma-prefixed text → additional notes ("butter, melted")
   // Skip if the comma is inside something that looks like a number ("1,000").
   const commaIdx = s.search(/,(?!\d)/);
@@ -1099,7 +1090,7 @@ export function parseIngredientString(raw: string): Ingredient {
     s = s.slice(0, dashIdx).trim();
   }
 
-  let name = s.trim() || 'unknown';
+  let name = s.replace(/^of\s+/i, '').trim() || 'unknown';
 
   // 6. Apply oz/lb → metric conversion (matches existing WPRM behaviour)
   if (unit === 'oz' || unit === 'lb') {
@@ -1614,7 +1605,7 @@ export function applyServingScale(recipe: Recipe, requiredServings: number): Rec
   const factor = requiredServings / recipe.originalServings;
   const scaleIng = (ing: Ingredient): Ingredient => ({
     ...ing,
-    quantity: Math.round(ing.quantity * factor * 100) / 100,
+    quantity: ing.quantity * factor,
   });
 
   return {

@@ -42,60 +42,13 @@ describe('catalogue data safety', () => {
     expect(settings).not.toContain('Default blocked ingredients');
   });
 
-  it('does not self-delete missing historical references', () => {
-    const calendar = read('app/(tabs)/index.tsx');
-    const cookbook = read('app/(tabs)/cookbook.tsx');
-
-    expect(calendar).not.toContain('Self-healing');
-    expect(calendar).not.toMatch(/missingIds[\s\S]{0,800}deleteMealPlanEntry/);
-    expect(cookbook).not.toContain('Self-healing');
-    expect(cookbook).not.toMatch(/missingIds[\s\S]{0,800}removeFromCookbook/);
-  });
-
-  it('keeps explicit household-reference removal operations', () => {
-    const service = read('services/firestoreService.ts');
-    const calendar = read('app/(tabs)/index.tsx');
-    const cookbook = read('app/(tabs)/cookbook.tsx');
-
-    expect(service).toMatch(/export async function deleteMealPlanEntry/);
-    expect(service).toMatch(/export async function removeFromCookbook/);
-    expect(calendar).toContain('onPress={() => handleDelete(entry)}');
-    expect(calendar).toContain('deleteMealPlanEntry(ownerHouseholdId, entry.id!)');
-    expect(cookbook).toContain('removeFromCookbook(ownerHouseholdId, entry.recipeId)');
-    expect(cookbook).toContain('onRemove={() => handleRemove(entry)}');
-  });
-
-  it('wires owned settled loading into both history screens', () => {
-    const calendar = read('app/(tabs)/index.tsx');
-    const cookbook = read('app/(tabs)/cookbook.tsx');
-
-    for (const screen of [calendar, cookbook]) {
-      expect(screen).toContain('createRecipeHistoryState');
-      expect(screen).toContain('Promise.allSettled');
-      expect(screen).toContain('isCurrentHistorySession');
-      expect(screen).toContain('executeOwnedHistoryAction');
-      expect(screen).toContain('snapshotRevisionRef');
-      expect(screen).toContain('snapshotOwnership');
-      expect(screen).toContain('activeLoadTokens');
-      expect(screen).toContain('loadTokens: Object.fromEntries');
-      expect(screen).toContain('getRecipePresentation');
-      expect(screen).not.toContain('reconcileRecipeAvailability');
-    }
-
-    expect(calendar).toContain('accessibilityLabel="Remove meal"');
-    expect(calendar).not.toContain('const firstRecipe =');
-    expect(cookbook).toContain('accessibilityLabel="Remove from cookbook"');
-    expect(cookbook).toContain('accessibilityLabel={entry.starred ? \'Remove from favourites\' : \'Add to favourites\'}');
-    expect(cookbook.match(/accessibilityRole="button"/g)?.length).toBeGreaterThanOrEqual(2);
-    for (const screen of [calendar, cookbook]) {
-      expect(
-        screen.match(/executeOwnedHistoryAction\(\s*snapshotOwnership,\s*getCurrentOwnership\(\),/g)?.length,
-      ).toBeGreaterThanOrEqual(2);
-    }
-  });
+  // Connected removal, authorization, and missing-recipe preservation are exercised
+  // through the real command handler in functions/test/connectedService.test.ts.
+  // The route files now only re-export those screens, so source-text assertions
+  // against the retired screen implementations would not protect current behavior.
 });
 
-describe('recipe history state', () => {
+describe('legacy recipe history state', () => {
   it('keeps successful reads when another read rejects', () => {
     const initial = beginRecipeLoads(
       createRecipeHistoryState<{ title: string }>('household-a', 4),
@@ -267,7 +220,7 @@ describe('recipe history state', () => {
   });
 });
 
-describe('household history ownership', () => {
+describe('legacy household history ownership', () => {
   const token = (householdId: string, generation: number, snapshotRevision: number) => ({
     householdId,
     generation,

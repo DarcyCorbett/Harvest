@@ -2,9 +2,10 @@ import type { HouseholdSettings, KidFriendlySettings } from './types';
 
 type CatalogueSettingsControls = Pick<
   HouseholdSettings,
-  'sourceWeights' | 'mealReminders' | 'defaultAdults' | 'defaultChildren'
+  'sourceWeights' | 'mealReminders' | 'defaultAdults' | 'defaultChildren' | 'nutritionTargets'
 > & {
   kidFriendly?: KidFriendlySettings;
+  excludedIngredients?: string[];
 };
 
 /**

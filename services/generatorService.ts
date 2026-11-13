@@ -681,7 +681,7 @@ export async function confirmMealPlan(
   for (const meal of shoppingMeals) {
     const source = { id: meal.recipeId, title: meal.recipe.title, servings: meal.servings };
     for (const ing of meal.recipe.ingredients) {
-      rawIngredients.push({ id: rawIngredients.length, name: ing.name, quantity: ing.quantity, unit: ing.unit, source });
+      rawIngredients.push({ id: rawIngredients.length, name: ing.name, quantity: ing.quantity, unit: ing.unit, ...(ing.notes ? { notes: ing.notes } : {}), source });
     }
   }
 

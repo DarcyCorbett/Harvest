@@ -102,4 +102,83 @@ describe('lossless shopping aggregation', () => {
       expect.objectContaining({ name: 'mystery mix', quantity: 2, unit: 'piece' }),
     ]));
   });
+
+  it('combines "of white pepper" and "white pepper" when units permit it', () => {
+    const items = aggregateIngredients([
+      {
+        recipeId: 'recipe-1',
+        recipe: recipe([{ name: 'of white pepper', quantity: 1, unit: 'tsp' }]),
+        servings: 4,
+      },
+      {
+        recipeId: 'recipe-2',
+        recipe: recipe([{ name: 'white pepper', quantity: 2, unit: 'tsp' }]),
+        servings: 4,
+      },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      name: 'white pepper',
+      quantity: 3,
+      unit: 'tsp',
+    });
+  });
+
+  it('keeps incompatible units separate when aggregating pepper', () => {
+    const items = aggregateIngredients([
+      {
+        recipeId: 'recipe-1',
+        recipe: recipe([{ name: 'of white pepper', quantity: 1, unit: 'piece' }]),
+        servings: 4,
+      },
+      {
+        recipeId: 'recipe-2',
+        recipe: recipe([{ name: 'white pepper', quantity: 50, unit: 'g' }]),
+        servings: 4,
+      },
+    ]);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'white pepper', quantity: 50, unit: 'g' }),
+        expect.objectContaining({ name: 'white pepper', quantity: 1, unit: 'piece' }),
+      ]),
+    );
+  });
+
+  it('does not append duplicate rows in completeRecipeIngredients when notes differ cosmetically', () => {
+    const rootPrawns = {
+      name: 'chopped raw small prawns/shrimp',
+      quantity: 100,
+      unit: 'g',
+      notes: 'peeled and deveined (Note 4)',
+    };
+    const groupedPrawns = {
+      name: 'chopped raw small prawns/shrimp',
+      quantity: 100,
+      unit: 'g',
+      notes: 'Note 4; peeled and deveined',
+    };
+    const result = completeRecipeIngredients(
+      recipe([rootPrawns], {
+        ingredientGroups: [{ name: 'Option 1', ingredients: [groupedPrawns] }],
+      }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(groupedPrawns);
+  });
+
+  it('uses only grouped ingredients when equal-length lists differ', () => {
+    const salt = { name: 'salt', quantity: 1, unit: 'pinch' };
+    const pepper = { name: 'pepper', quantity: 1, unit: 'pinch' };
+    const oil = { name: 'oil', quantity: 1, unit: 'tbsp' };
+
+    const result = completeRecipeIngredients(
+      recipe([salt, pepper], {
+        ingredientGroups: [{ name: 'Main', ingredients: [salt, oil] }],
+      }),
+    );
+    expect(result).toEqual([salt, oil]);
+  });
 });

@@ -286,7 +286,10 @@ describe('operator Gemini adapter', () => {
 
   it('imports with root-owned runtime dependencies only', () => {
     const source = readFileSync('scripts/lib/geminiAdmin.ts', 'utf8');
-    expect(source).not.toContain('../../functions/');
+    const sharedImports = [...source.matchAll(/from ['"](\.\.\/\.\.\/functions\/[^'"]+)['"]/g)].map(match => match[1]);
+    expect(sharedImports).toEqual(['../../functions/src/shared/shoppingPrompt']);
+    const prompt = readFileSync('functions/src/shared/shoppingPrompt.ts', 'utf8');
+    expect(prompt).not.toMatch(/\bimport\s|\brequire\s*\(/);
     expect(source).not.toContain('firebase-functions');
     expect(source).not.toMatch(/from ['"]zod['"]/);
 

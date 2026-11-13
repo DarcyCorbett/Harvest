@@ -20,6 +20,7 @@ import {
 import type { Household } from '@/services/types';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -88,6 +89,8 @@ const googleOnboardingDependencies = {
 // ─── Provider ──────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [connected, setConnected] = useState(true);
+  useEffect(() => NetInfo.addEventListener(n=>setConnected(n.isConnected!==false&&n.isInternetReachable!==false)), []);
   const [user, setUser] = useState<User | null>(null);
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [household, setHousehold] = useState<Household | null>(null);
@@ -124,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (hh) {
       setHousehold(hh);
       setInviteCode(hh.inviteCode);
+      await AsyncStorage.setItem(`connected:identity:${firebaseUser.uid}`,JSON.stringify({householdId:hId,household:hh}));
     } else {
       setHousehold(null);
       setInviteCode(null);
@@ -138,6 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (authFlowInProgress.current || passwordOnboarding.isBusy()) return;
       if (firebaseUser) {
+        if (!connected && firebaseUser.emailVerified) {
+          const raw=await AsyncStorage.getItem(`connected:identity:${firebaseUser.uid}`);
+          if(raw&&auth.currentUser?.uid===firebaseUser.uid){
+            try { const cached=JSON.parse(raw);if(cached.household?.members?.includes(firebaseUser.uid)){setUser(firebaseUser);setHouseholdId(cached.householdId);setHousehold(cached.household);setInviteCode(cached.household.inviteCode);} } catch { /* An invalid cache never grants an online session. */ }
+          }
+          setLoading(false);return;
+        }
         if (firebaseUser.emailVerified !== true) {
           try {
             await sendEmailVerification(firebaseUser);
@@ -178,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return unsubscribe;
-  }, [clearLocalAuth, loadAuthenticatedUser]);
+  }, [clearLocalAuth, loadAuthenticatedUser, connected]);
 
   // ── Login ──
   const login = useCallback(async (email: string, password: string) => {
@@ -225,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setHouseholdId(newId);
       setHousehold(hh);
       setInviteCode(hh.inviteCode);
+      await AsyncStorage.setItem(`connected:identity:${user.uid}`,JSON.stringify({householdId:newId,household:hh}));
     }
     return true;
   }, [user]);

@@ -1,4 +1,5 @@
-import * as Notifications from 'expo-notifications';
+import { notifications as Notifications } from '@/services/notifications';
+import type * as NotificationTypes from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { HouseholdSettings, MealPlanEntry, Recipe } from './types';
 import {
@@ -13,8 +14,8 @@ interface ReminderSlot {
   triggerDate: Date;
   recipeIds: string[];
   recipeTitles: string[];
+  mealIds: string[];
 }
-
 /** Parse "HH:MM" into { hour, minute }. Returns null if malformed. */
 function parseHHMM(s: string): { hour: number; minute: number } | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(s);
@@ -41,11 +42,12 @@ function addDays(dateISO: string, days: number): string {
 
 /** Cancel all stored reminders for this household and clear the storage key. */
 export async function clearMealReminders(householdId: string): Promise<void> {
+  if (!Notifications) return;
   const key = STORAGE_KEY_REMINDER_IDS(householdId);
   const raw = await AsyncStorage.getItem(key);
   const ids: string[] = raw ? (JSON.parse(raw) as string[]) : [];
   await Promise.all(
-    ids.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})),
+    ids.map((id) => Notifications?.cancelScheduledNotificationAsync(id).catch(() => {})),
   );
   await AsyncStorage.removeItem(key);
 }
@@ -57,6 +59,7 @@ export async function scheduleMealReminders(
   recipes: Map<string, Recipe>,
   settings: HouseholdSettings,
 ): Promise<string[]> {
+  if (!Notifications) return [];
   const reminders = settings.mealReminders ?? DEFAULT_MEAL_REMINDERS;
   const morning = parseHHMM(reminders.morningTime) ?? parseHHMM(DEFAULT_MEAL_REMINDERS.morningTime)!;
   const evening = parseHHMM(reminders.eveningTime) ?? parseHHMM(DEFAULT_MEAL_REMINDERS.eveningTime)!;
@@ -78,8 +81,10 @@ export async function scheduleMealReminders(
           triggerDate,
           recipeIds: [],
           recipeTitles: [],
+          mealIds: [],
         };
         slot.recipeIds.push(meal.recipeId);
+        slot.mealIds.push(meal.id ?? `${meal.date}_${meal.mealType}`);
         slot.recipeTitles.push(recipe.title);
         slotsByKey.set(key, slot);
       }
@@ -95,8 +100,10 @@ export async function scheduleMealReminders(
           triggerDate,
           recipeIds: [],
           recipeTitles: [],
+          mealIds: [],
         };
         slot.recipeIds.push(meal.recipeId);
+        slot.mealIds.push(meal.id ?? `${meal.date}_${meal.mealType}`);
         slot.recipeTitles.push(recipe.title);
         slotsByKey.set(key, slot);
       }
@@ -107,21 +114,21 @@ export async function scheduleMealReminders(
   for (const slot of slotsByKey.values()) {
     const single = slot.recipeTitles.length === 1;
     const titleList = slot.recipeTitles.join(', ');
-    const content: Notifications.NotificationContentInput =
+    const content: NotificationTypes.NotificationContentInput =
       slot.type === 'defrost'
         ? {
             title: 'Defrost reminder',
             body: single
               ? `${slot.recipeTitles[0]} is on today's menu — take the protein out of the freezer`
               : `Defrost needed for today's meals: ${titleList}`,
-            data: { navigateTo: 'cookbook', recipeIds: slot.recipeIds },
+            data: { navigateTo: 'plan', householdId, mealId: slot.mealIds[0], recipeIds: slot.recipeIds },
           }
         : {
             title: 'Start marinating tonight',
             body: single
               ? `${slot.recipeTitles[0]} is on tomorrow's menu — time to start marinating`
               : `Start marinating for tomorrow: ${titleList}`,
-            data: { navigateTo: 'cookbook', recipeIds: slot.recipeIds },
+            data: { navigateTo: 'plan', householdId, mealId: slot.mealIds[0], recipeIds: slot.recipeIds },
           };
 
     const id = await Notifications.scheduleNotificationAsync({

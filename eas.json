@@ -40,6 +40,13 @@
       },
       "channel": "production"
     },
+    "invitation": {
+      "extends": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "production"
+    },
     "verify": {
       "extends": "production",
       "android": {
@@ -53,7 +60,7 @@
       "android": {
         "serviceAccountKeyPath": "./pc-api-google-play.json",
         "track": "internal",
-        "releaseStatus": "draft"
+        "releaseStatus": "completed"
       }
     }
   }

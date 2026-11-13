@@ -1,6 +1,8 @@
-import * as Notifications from 'expo-notifications';
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { notifications as Notifications } from '@/services/notifications';
+import type * as NotificationTypes from 'expo-notifications';
+import { useEffect, useRef } from 'react';
+import { Platform, Alert } from 'react-native';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { logEvent } from '@/services/devLog';
 
@@ -13,7 +15,7 @@ import { logEvent } from '@/services/devLog';
 // version), throwing here would crash the JS bundle on load — which would
 // brick the entire app rather than just notifications.
 try {
-  Notifications.setNotificationHandler({
+  Notifications?.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: false,
@@ -28,10 +30,13 @@ try {
 
 export function useNotifications() {
   const router = useRouter();
+  const {householdId,loading}=useAuth();
+  const handled=useRef<string|null>(null);
 
   // Permission request + Android channel creation (once on app start)
   useEffect(() => {
     async function setup() {
+      if (!Notifications) return;
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('mealwizard-jobs', {
           name: 'Meal Plan Jobs',
@@ -49,12 +54,22 @@ export function useNotifications() {
 
   // Notification tap → navigate to the relevant tab
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    if(!Notifications||loading||!householdId)return;
+    const open=(response:NotificationTypes.NotificationResponse)=>{
+      if(handled.current===response.notification.request.identifier)return;
+      handled.current=response.notification.request.identifier;
       const data = response.notification.request.content.data as Record<string, string>;
+      void Notifications?.clearLastNotificationResponseAsync().catch(()=>{});
+      if(data.householdId&&data.householdId!==householdId){Alert.alert('Different household','Switch to the household for this reminder to open its planned meal.');return;}
       if (data?.navigateTo === 'generate') router.push('/(tabs)/generate');
       else if (data?.navigateTo === 'shopping') router.push('/(tabs)/shopping');
       else if (data?.navigateTo === 'cookbook') router.push('/(tabs)/cookbook');
-    });
-    return () => sub.remove();
-  }, [router]);
+      else if (data?.navigateTo === 'plan') router.push({ pathname: '/', params: { mealId: data.mealId } });
+      else if (data?.navigateTo === 'cook') router.push({ pathname: '/cook', params: { mealId: data.mealId, recipeId: data.recipeId } });
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener(open);
+    let active=true;
+    Notifications.getLastNotificationResponseAsync().then(response=>{if(response&&active)open(response);}).catch(()=>{});
+    return () => {active=false;sub.remove();};
+  }, [router,householdId,loading]);
 }

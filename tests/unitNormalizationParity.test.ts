@@ -25,6 +25,10 @@ describe('catalogue and legacy unit parser parity', () => {
     '▢ 3 cloves garlic, minced',
     '1 cup stock (warm (not boiling))',
     'a swish of sherry',
+    'dash of white pepper',
+    'pinch of salt',
+    'cream of tartar',
+    '100 &ndash; 120g/3.5 &ndash; 4 oz chopped raw small prawns/shrimp',
   ])('matches the legacy ingredient result for %s', (input) => {
     expect(parseLegacyIngredient(input)).toEqual(parseIngredientString(input));
   });
@@ -57,8 +61,8 @@ describe('normalized catalogue ingredients in downstream consumers', () => {
       scrapedAt: new Date(0),
     };
     const scaled = applyServingScale(base, 8);
-    expect(scaled.ingredients[0]).toMatchObject({ quantity: 1.8, unit: 'kg', name: 'beef' });
+    expect(scaled.ingredients[0]).toMatchObject({ quantity: 1.814368, unit: 'kg', name: 'beef' });
     expect(aggregateIngredients([{ recipeId: 'one', recipe: scaled, servings: 8 }]))
-      .toEqual([expect.objectContaining({ name: 'beef', quantity: 1.8, unit: 'kg' })]);
+      .toEqual([expect.objectContaining({ name: 'beef', quantity: 1.814368, unit: 'kg' })]);
   });
 });

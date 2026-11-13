@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, FontWeights } from '@/constants/theme';
@@ -8,6 +9,8 @@ import { Colors, FontSizes, FontWeights } from '@/constants/theme';
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const insets=useSafeAreaInsets();
+  const {fontScale}=useWindowDimensions();
 
   return (
     <Tabs
@@ -19,8 +22,8 @@ export default function TabLayout() {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.tabBarBorder,
           borderTopWidth: 1,
-          height: Platform.OS === 'android' ? 76 : 92,
-          paddingBottom: Platform.OS === 'android' ? 20 : 32,
+          height: 72 + Math.max(0,fontScale-1)*18 + insets.bottom,
+          paddingBottom: Math.max(8,insets.bottom),
           paddingTop: 8,
           elevation: 8,
           shadowColor: '#000',
@@ -30,6 +33,8 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: FontSizes.xs,
+          lineHeight: 16,
+          flexShrink: 0,
           fontWeight: FontWeights.medium,
           marginTop: 2,
         },
@@ -38,7 +43,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Calendar',
+          title: 'Plan',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'calendar' : 'calendar-outline'}
@@ -90,6 +95,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          href: null,
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons

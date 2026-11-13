@@ -1,3 +1,4 @@
+import { normaliseTargets } from './plannedNutrition';
 // ============================================================
 // Meal Wizard — Firestore Service
 // Centralized module for ALL Firestore operations.
@@ -21,10 +22,13 @@ import {
   Timestamp,
   writeBatch,
   serverTimestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { logEvent } from './devLog';
 import { legacyRecipeClient } from './legacyRecipeClient';
 import { decodeRecipeDocument } from './recipeDecoder';
+import { workflowCommand } from './connectedClient';
+import { normaliseMeal, type Workflow, type Period, type Meal, type Draft } from '../functions/src/connected/model';
 import type { CatalogueGenerationMode } from './generationDispatcher';
 import type {
   GenerateConfig,
@@ -142,6 +146,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
   const snap = await getDoc(doc(db, 'households', householdId, 'settings', 'preferences'));
   if (!snap.exists()) return { ...DEFAULT_SETTINGS };
   const raw = snap.data() as {
+    excludedIngredients?: string[];
     sourceWeights?: Record<string, number>;
     ingredientWeights?: Record<string, number>;
     selectedSeeds?: string[];
@@ -150,6 +155,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     defaultAdults?: number;
     defaultChildren?: number;
     strictMatching?: boolean;
+    nutritionTargets?: HouseholdSettings['nutritionTargets'];
   };
   const sourceWeights: Record<string, number> = {};
   Object.entries(raw.sourceWeights ?? {}).forEach(([k, v]) => {
@@ -157,6 +163,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
   });
   return {
     sourceWeights,
+    excludedIngredients: raw.excludedIngredients ?? [],
     ingredientWeights: raw.ingredientWeights ?? {},
     selectedSeeds: raw.selectedSeeds ?? [],
     kidFriendly: raw.kidFriendly,
@@ -164,6 +171,7 @@ export async function getHouseholdSettings(householdId: string): Promise<Househo
     defaultAdults: raw.defaultAdults ?? 2,
     defaultChildren: raw.defaultChildren ?? 2,
     strictMatching: raw.strictMatching ?? true,
+    nutritionTargets: normaliseTargets(raw.nutritionTargets),
   };
 }
 
@@ -177,24 +185,17 @@ export async function saveHouseholdSettings(
     encodedSourceWeights[encodeSiteKey(k)] = v;
   });
   await setDoc(doc(db, 'households', householdId, 'settings', 'preferences'), {
+    excludedIngredients: settings.excludedIngredients ?? [],
     sourceWeights: encodedSourceWeights,
     ingredientWeights: settings.ingredientWeights,
     selectedSeeds: settings.selectedSeeds ?? [],
     defaultAdults: settings.defaultAdults ?? 2,
     defaultChildren: settings.defaultChildren ?? 2,
     strictMatching: settings.strictMatching ?? true,
+    ...(settings.nutritionTargets ? { nutritionTargets: normaliseTargets(settings.nutritionTargets) } : {}),
     ...(settings.kidFriendly ? { kidFriendly: settings.kidFriendly } : {}),
     ...(settings.mealReminders ? { mealReminders: settings.mealReminders } : {}),
   });
-}
-
-/** Update the course tags on a cached recipe. */
-export async function updateRecipeCourse(
-  householdId: string,
-  recipeId: string,
-  course: string[],
-): Promise<void> {
-  await legacyRecipeClient.update(householdId, recipeId, { course });
 }
 
 /** Update the Gemini-assigned tags on a cached recipe. */
@@ -232,8 +233,18 @@ export async function updateMealPlanServings(
   entryId: string,
   adults: number,
   children: number,
-  servings: number
+  servings: number,
+  expectedRevision?: number,
 ): Promise<void> {
+  const household = await getHousehold(householdId);
+  if ((household as Household & { workflowVersion?: number })?.workflowVersion === 2) {
+    const snapshot = await getDoc(doc(db, 'households', householdId, 'mealPlan', entryId));
+    if (!snapshot.exists()) throw new Error('This meal is no longer planned.');
+    const meal = normaliseMeal(snapshot.id, snapshot.data());
+    if (expectedRevision === undefined || meal.revision !== expectedRevision) throw new Error('This planned meal changed. Close and reopen it before changing servings.');
+    await workflowCommand(householdId, { operation: 'mutate', changes: [{ meal: { ...meal, adults, children, servings }, expectedRevision }] });
+    return;
+  }
   await updateDoc(
     doc(db, 'households', householdId, 'mealPlan', entryId),
     { adults, children, servings }
@@ -261,25 +272,6 @@ export function subscribeMealPlan(
     })) as MealPlanEntry[];
     callback(entries);
   });
-}
-
-/** Get meal plan entries for a date range */
-export async function getMealPlan(
-  householdId: string,
-  startDate: string,
-  endDate: string
-): Promise<MealPlanEntry[]> {
-  const q = query(
-    collection(db, 'households', householdId, 'mealPlan'),
-    where('date', '>=', startDate),
-    where('date', '<=', endDate),
-    orderBy('date', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-  })) as MealPlanEntry[];
 }
 
 // ─── Shopping List Operations ──────────────────────────────
@@ -333,6 +325,38 @@ export async function replaceShoppingItems(
   await batch.commit();
 }
 
+export function subscribeWorkflow(householdId: string, callback: (state: Workflow | null) => void, error: (error: Error) => void): () => void {
+  return onSnapshot(doc(db,'households',householdId,'connected','state'), s=>{if(!s.exists()&&s.metadata.fromCache)return;callback(s.exists()?s.data() as Workflow:null);}, error);
+}
+export function subscribeHouseholdSettings(householdId:string, callback:(settings:HouseholdSettings)=>void, error:(error:Error)=>void):()=>void {
+  let active=true;
+  const unsubscribe=onSnapshot(doc(db,'households',householdId,'settings','preferences'),()=>{getHouseholdSettings(householdId).then(s=>{if(active)callback(s);}).catch(error);},error);
+  return()=>{active=false;unsubscribe();};
+}
+export function subscribeConnectedMeals(householdId: string, callback: (meals: Meal[]) => void, error: (error: Error) => void): () => void {
+  return onSnapshot(collection(db,'households',householdId,'mealPlan'), s=>callback(s.docs.map(d=>normaliseMeal(d.id,d.data()))), error);
+}
+export function subscribeShoppingPeriod(householdId:string,id:string,callback:(period:Period)=>void,error:(error:Error)=>void):()=>void {
+  return onSnapshot(doc(db,'households',householdId,'shoppingPeriods',id),s=>{if(s.exists())callback(s.data() as Period);},error);
+}
+export function subscribeDrafts(householdId:string,callback:(drafts:Draft[])=>void,error:(error:Error)=>void):()=>void {
+  return onSnapshot(collection(db,'households',householdId,'drafts'),s=>callback(s.docs.map(d=>d.data() as Draft)),error);
+}
+export async function listShoppingPeriods(householdId:string):Promise<Period[]> {
+  const snapshot=await getDocs(collection(db,'households',householdId,'shoppingPeriods'));
+  return snapshot.docs.map(d=>d.data() as Period).sort((a,b)=>b.start.localeCompare(a.start));
+}
+export async function updateCookbookDetails(householdId:string,recipeId:string,details:{notes?:string;collections?:string[];lastCookedAt?:string;effort?:string}):Promise<void> {
+  await setDoc(doc(db,'households',householdId,'cookbook',recipeId),details,{merge:true});
+}
+export interface PlanTemplate {id:string;name:string;start:string;meals:Meal[]}
+export async function savePlanTemplate(householdId:string,template:PlanTemplate):Promise<void> {
+  await setDoc(doc(db,'households',householdId,'planTemplates',template.id),JSON.parse(JSON.stringify(template)));
+}
+export async function getPlanTemplates(householdId:string):Promise<PlanTemplate[]> {
+  const snapshot=await getDocs(collection(db,'households',householdId,'planTemplates'));return snapshot.docs.map(d=>d.data() as PlanTemplate);
+}
+
 /** Toggle an item's checked state */
 export async function toggleShoppingItem(
   householdId: string,
@@ -372,14 +396,6 @@ export async function clearPurchasedItems(householdId: string): Promise<void> {
     where('checked', '==', true)
   );
   const snapshot = await getDocs(q);
-  const batch = writeBatch(db);
-  snapshot.docs.forEach((d) => batch.delete(d.ref));
-  await batch.commit();
-}
-
-/** Delete every item on the household shopping list (used by "replace" flow). */
-export async function clearAllShoppingItems(householdId: string): Promise<void> {
-  const snapshot = await getDocs(collection(db, 'households', householdId, 'shoppingList'));
   const batch = writeBatch(db);
   snapshot.docs.forEach((d) => batch.delete(d.ref));
   await batch.commit();
@@ -429,14 +445,8 @@ export async function updateShoppingItemQuantity(
 
 /** Add a recipe to the household cookbook */
 export async function addToCookbook(householdId: string, recipeId: string): Promise<void> {
-  await setDoc(
-    doc(db, 'households', householdId, 'cookbook', recipeId),
-    {
-      recipeId,
-      starred: false,
-      addedAt: serverTimestamp(),
-    }
-  );
+  const ref = doc(db, 'households', householdId, 'cookbook', recipeId);
+  await runTransaction(db, async tx => { if (!(await tx.get(ref)).exists()) tx.set(ref, { recipeId, starred: false, addedAt: serverTimestamp() }); });
 }
 
 /** Remove a recipe from the household cookbook. */
@@ -450,10 +460,12 @@ export async function toggleStarred(
   recipeId: string,
   starred: boolean
 ): Promise<void> {
-  await updateDoc(
-    doc(db, 'households', householdId, 'cookbook', recipeId),
-    { starred }
-  );
+  const ref = doc(db, 'households', householdId, 'cookbook', recipeId);
+  await runTransaction(db, async tx => {
+    const existing = await tx.get(ref);
+    if (existing.exists()) tx.update(ref, { starred });
+    else if (starred) tx.set(ref, { recipeId, starred: true, addedAt: serverTimestamp() });
+  });
 }
 
 // ─── Generation Result Persistence ────────────────────────────
@@ -625,7 +637,9 @@ export async function getUpcomingMealPlan(
     10000,
     'getUpcomingMealPlan',
   );
-  const meals: MealPlanEntry[] = mealsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as MealPlanEntry));
+  const meals: MealPlanEntry[] = mealsSnap.docs
+    .filter(d=>!['removed','skipped','cooked'].includes(d.data().status) && (!d.data().kind||d.data().kind==='recipe'))
+    .flatMap((d) => { const meal={ id:d.id,...d.data() } as MealPlanEntry; return [meal,...((d.data().sides??[]) as {recipeId:string;servings:number}[]).map(side=>({...meal,...side}))]; });
 
   const recipes = new Map<string, Recipe>();
   const uniqueIds = Array.from(new Set(meals.map((m) => m.recipeId)));
@@ -659,6 +673,7 @@ export async function getGenerationRecipeHistory(
   const current = new Set<string>();
   const recent = new Set<string>();
   for (const document of snapshot.docs) {
+    if (['removed', 'skipped'].includes(document.data().status)) continue;
     const recipeId = document.data().recipeId;
     const date = document.data().date;
     if (typeof recipeId !== 'string' || typeof date !== 'string') continue;

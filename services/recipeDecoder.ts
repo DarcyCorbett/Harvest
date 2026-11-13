@@ -4,7 +4,12 @@ import type {
   InstructionStep,
   Nutrition,
   Recipe,
+  RecipeAdditionalTime,
+  RecipeEquipmentItem,
+  RecipeNoteSection,
 } from './types';
+import { htmlToText } from './scraper/parse';
+import { normalizeIngredient } from '../functions/src/shared/ingredientAmounts';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -84,15 +89,15 @@ function labelValues(values: unknown, labels: Record<string, string>): string[] 
 
 function decodeIngredient(value: unknown): Ingredient | null {
   if (!isRecord(value)) return null;
-  const name = asString(value.name);
-  if (!name) return null;
-  const notes = asString(value.notes);
-  return {
-    name,
+  const rawName = asString(value.name);
+  if (!rawName) return null;
+
+  return normalizeIngredient({
+    name: rawName,
     quantity: asNumber(value.quantity),
     unit: asString(value.unit) ?? '',
-    ...(notes ? { notes } : {}),
-  };
+    ...(asString(value.notes) ? { notes: htmlToText(asString(value.notes)!) } : {}),
+  });
 }
 
 function decodeIngredients(value: unknown): Ingredient[] {
@@ -111,7 +116,7 @@ function decodeGroups(value: unknown): IngredientGroup[] | undefined {
     const ingredients = decodeIngredients(entry.ingredients);
     if (ingredients.length === 0) return [];
     return [{
-      name: asString(entry.name) ?? '',
+      name: htmlToText(asString(entry.name) ?? ''),
       ingredients,
     }];
   });
@@ -121,12 +126,14 @@ function decodeGroups(value: unknown): IngredientGroup[] | undefined {
 function decodeInstructions(value: unknown): InstructionStep[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
-    if (typeof entry === 'string' && entry.trim()) return [{ text: entry }];
+    if (typeof entry === 'string' && entry.trim()) return [{ text: htmlToText(entry) }];
     if (!isRecord(entry)) return [];
     const text = asString(entry.text);
     if (!text) return [];
     return [{
-      text,
+      text: htmlToText(text),
+      ...(asString(entry.title) ? { title: htmlToText(entry.title as string) } : {}),
+      ...(asString(entry.sourceUrl) ? { sourceUrl: entry.sourceUrl as string } : {}),
       ...(asString(entry.imageUrl) ? { imageUrl: entry.imageUrl as string } : {}),
       ...(asString(entry.videoEmbedUrl) ? { videoEmbedUrl: entry.videoEmbedUrl as string } : {}),
       ...(typeof entry.isHeader === 'boolean' ? { isHeader: entry.isHeader } : {}),
@@ -137,7 +144,10 @@ function decodeInstructions(value: unknown): InstructionStep[] {
 function decodeNutrition(value: unknown): Nutrition | undefined {
   if (!isRecord(value)) return undefined;
   const nutrition: Nutrition = {};
-  for (const key of ['calories', 'protein', 'carbs', 'fat'] as const) {
+  for (const key of [
+    'calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'saturatedFat',
+    'unsaturatedFat', 'transFat', 'sodium', 'cholesterol',
+  ] as const) {
     const raw = value[key];
     const decoded = asNumber(raw, Number.NaN);
     if (Number.isFinite(decoded) && decoded >= 0) nutrition[key] = decoded;
@@ -145,6 +155,98 @@ function decodeNutrition(value: unknown): Nutrition | undefined {
   return Object.values(nutrition).some((entry) => entry !== undefined && entry > 0)
     ? nutrition
     : undefined;
+}
+
+function decodeEquipment(value: unknown): RecipeEquipmentItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.flatMap((entry) => {
+    if (typeof entry === 'string') {
+      const name = asString(entry);
+      return name ? [{ name }] : [];
+    }
+    if (!isRecord(entry)) return [];
+    const name = asString(entry.name);
+    if (!name) return [];
+    const notes = asString(entry.notes);
+    return [{ name, ...(notes ? { notes } : {}) }];
+  });
+  return items.length ? items : undefined;
+}
+
+function decodeAdditionalTimes(value: unknown): RecipeAdditionalTime[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const label = asString(entry.label);
+    const minutes = asNumber(entry.minutes);
+    return label && minutes > 0 ? [{ label, minutes }] : [];
+  });
+  return items.length ? items : undefined;
+}
+
+function decodeNoteSections(value: unknown): RecipeNoteSection[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const sections = value.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const title = asString(entry.title);
+    const items = stringArray(entry.items);
+    return items.length ? [{ ...(title ? { title } : {}), items }] : [];
+  });
+  return sections.length ? sections : undefined;
+}
+
+function decodeEnrichment(content: UnknownRecord): Partial<Recipe> {
+  const attribution = isRecord(content.attribution) ? content.attribution : {};
+  const author = asString(attribution.author);
+  const publisher = asString(attribution.publisher);
+  const publishedAt = asString(attribution.publishedAt);
+  const modifiedAt = asString(attribution.modifiedAt);
+  const sourceRating = isRecord(content.sourceRating) ? content.sourceRating : {};
+  const ratingValue = asNumber(sourceRating.value, Number.NaN);
+  const ratingCount = asNumber(sourceRating.count, Number.NaN);
+  const ratingCapturedAt = asString(sourceRating.capturedAt)
+    ?? asDate(sourceRating.capturedAt)?.toISOString();
+  const equipment = decodeEquipment(content.equipment);
+  const additionalTimes = decodeAdditionalTimes(content.additionalTimes);
+  const noteSections = decodeNoteSections(content.noteSections);
+  const estimatedCost = isRecord(content.estimatedCost) ? content.estimatedCost : {};
+  const costAmount = asNumber(estimatedCost.amount, Number.NaN);
+  const currency = asString(estimatedCost.currency);
+  const costText = asString(estimatedCost.text);
+
+  return {
+    ...(stringArray(content.imageUrls).length ? { imageUrls: stringArray(content.imageUrls) } : {}),
+    ...(author || publisher || publishedAt || modifiedAt ? {
+      attribution: {
+        ...(author ? { author } : {}),
+        ...(publisher ? { publisher } : {}),
+        ...(publishedAt ? { publishedAt } : {}),
+        ...(modifiedAt ? { modifiedAt } : {}),
+      },
+    } : {}),
+    ...(Number.isFinite(ratingValue) && ratingValue > 0 ? {
+      sourceRating: {
+        value: ratingValue,
+        ...(Number.isFinite(ratingCount) && ratingCount >= 0 ? { count: ratingCount } : {}),
+        ...(ratingCapturedAt ? { capturedAt: ratingCapturedAt } : {}),
+      },
+    } : {}),
+    ...(equipment ? { equipment } : {}),
+    ...(additionalTimes ? { additionalTimes } : {}),
+    ...(noteSections ? { noteSections } : {}),
+    ...(stringArray(content.dietaryClaims).length ? { dietaryClaims: stringArray(content.dietaryClaims) } : {}),
+    ...(stringArray(content.cookingMethods).length ? { cookingMethods: stringArray(content.cookingMethods) } : {}),
+    ...(stringArray(content.sourceCategories).length ? { sourceCategories: stringArray(content.sourceCategories) } : {}),
+    ...(stringArray(content.sourceCuisines).length ? { sourceCuisines: stringArray(content.sourceCuisines) } : {}),
+    ...(stringArray(content.sourceKeywords).length ? { sourceKeywords: stringArray(content.sourceKeywords) } : {}),
+    ...(costText || (Number.isFinite(costAmount) && costAmount >= 0) ? {
+      estimatedCost: {
+        ...(costText ? { text: costText } : {}),
+        ...(Number.isFinite(costAmount) && costAmount >= 0 ? { amount: costAmount } : {}),
+        ...(currency ? { currency } : {}),
+      },
+    } : {}),
+  };
 }
 
 function minuteLabel(value: unknown): string {
@@ -190,12 +292,14 @@ function decodeCatalogueRecipe(documentId: string, data: UnknownRecord): Recipe 
     course: mealTypes,
     tags: unique([...cuisines, ...modifiers]),
     ...(description ? { description } : {}),
+    ...decodeEnrichment(content),
     ...(cuisines[0] ? { cuisine: cuisines[0] } : {}),
     ingredients: decodeIngredients(content.ingredients),
     ...(groups ? { ingredientGroups: groups } : {}),
     instructions: decodeInstructions(content.instructions),
     notes: asString(content.notes) ?? '',
     ...(nutrition ? { nutrition } : {}),
+    ...decodeEnrichment(data),
     ...(typeof data.needsDefrost === 'boolean' ? { needsDefrost: data.needsDefrost } : {}),
     ...(typeof data.needsMarinate === 'boolean' ? { needsMarinate: data.needsMarinate } : {}),
     scrapedAt: asDate(ingestion.lastChangedAt)

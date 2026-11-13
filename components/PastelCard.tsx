@@ -16,6 +16,7 @@ interface Props {
   selectedColorHex?: string;
   /** Override the card width — use this when you want a different column count */
   cardWidth?: number;
+  cardMinHeight?: number;
 }
 
 export default function PastelCard({
@@ -26,6 +27,7 @@ export default function PastelCard({
   baseColorHex,
   selectedColorHex,
   cardWidth,
+  cardMinHeight,
 }: Props) {
   const { colors } = useTheme();
 
@@ -37,11 +39,14 @@ export default function PastelCard({
 
   return (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ selected }}
       onPress={onPress}
       activeOpacity={0.75}
       style={[
         styles.card,
-        { backgroundColor: bg, width: cardW, height: cardW * 0.95 },
+        { backgroundColor: bg, width: cardW, minHeight: cardMinHeight ?? cardW * 0.95 },
         selected ? { borderColor: colors.primary } : { borderColor: '#D1D5DB' },
       ]}
     >

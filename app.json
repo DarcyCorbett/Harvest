@@ -2,12 +2,11 @@
   "expo": {
     "name": "Harvest",
     "slug": "meal-wizard",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mealwizard",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -17,7 +16,6 @@
         "backgroundColor": "#F2EAD3",
         "foregroundImage": "./assets/images/icon.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -49,7 +47,9 @@
           "color": "#ffffff",
           "defaultChannel": "mealwizard-jobs"
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

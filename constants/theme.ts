@@ -6,14 +6,14 @@
 import { Platform } from 'react-native';
 
 // ─── Color Palette ───────────────────────────────────────────
-// Primary: warm amber/orange — feels like home cooking
-// Accent: teal — clean, modern contrast
+// Primary: consistent forest green across light and dark modes
+// Accent: warm amber — feels like home cooking
 // Surfaces: carefully tuned grays for depth
 
 export const Colors = {
   light: {
     // Core
-    primary: '#10B981',        // vivid spring green (health/freshness)
+    primary: '#047857',        // accessible green with white button text
     primaryLight: '#D1FAE5',   // soft green tint
     primaryDark: '#047857',
     accent: '#F59E0B',         // warm amber
@@ -28,7 +28,7 @@ export const Colors = {
     // Text
     text: '#1C1917',           // stone-900
     textSecondary: '#78716C',  // stone-500
-    textTertiary: '#A8A29E',   // stone-400
+    textTertiary: '#706A65',
     textInverse: '#FFFFFF',
 
     // Borders & dividers
@@ -37,7 +37,7 @@ export const Colors = {
     divider: '#F5F5F4',
 
     // Semantic
-    success: '#10B981',
+    success: '#047857',
     warning: '#F59E0B',
     error: '#EF4444',
     info: '#3B82F6',
@@ -46,7 +46,7 @@ export const Colors = {
     tabBar: '#FFFFFF',
     tabBarBorder: 'transparent', // floaty feel
     tabIconDefault: '#A8A29E',
-    tabIconSelected: '#10B981',
+    tabIconSelected: '#047857',
 
     // Pastel UI Theme Elements
     caloriesBadge: '#FEF0B6',  // pastel butter
@@ -67,9 +67,9 @@ export const Colors = {
   },
   dark: {
     // Core
-    primary: '#34D399',        // brighter spring green for dark bg
+    primary: '#047857',        // forest green with white button text
     primaryLight: '#064E3B',   // deep green tint
-    primaryDark: '#059669',
+    primaryDark: '#047857',
     accent: '#FBBF24',
     accentLight: '#78350F',
 
@@ -82,8 +82,8 @@ export const Colors = {
     // Text
     text: '#FAFAF9',           // stone-50
     textSecondary: '#A8A29E',  // stone-400
-    textTertiary: '#78716C',   // stone-500
-    textInverse: '#1C1917',
+    textTertiary: '#B3ABA5',
+    textInverse: '#FFFFFF',
 
     // Borders & dividers
     border: '#44403C',         // soft separation
@@ -91,7 +91,7 @@ export const Colors = {
     divider: '#44403C',
 
     // Semantic
-    success: '#34D399',
+    success: '#047857',
     warning: '#FBBF24',
     error: '#F87171',
     info: '#60A5FA',
@@ -100,7 +100,7 @@ export const Colors = {
     tabBar: '#1C1917',
     tabBarBorder: '#292524',
     tabIconDefault: '#78716C',
-    tabIconSelected: '#34D399',
+    tabIconSelected: '#047857',
 
     // Pastel UI Theme Elements (adapted for dark mode readability)
     caloriesBadge: '#78350F',

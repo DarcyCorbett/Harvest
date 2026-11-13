@@ -10,21 +10,21 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { catalogueMetadataClient } from '@/services/catalogueClient';
 import { updateMealPlanServings } from '@/services/firestoreService';
 import { legacyRecipeClient } from '@/services/legacyRecipeClient';
-import { applyServingScale, calculateRequiredServings } from '@/services/recipeScraperService';
-import { hasMeaningfulNutrition, mergeRecipeLabels } from '@/services/recipePresentation';
+import { calculateRequiredServings } from '@/services/recipeScraperService';
+import { formatRecipeNoteItems, formatRecipeNotes, hasMeaningfulNutrition, mergeRecipeLabels } from '@/services/recipePresentation';
 import type { Ingredient, Recipe } from '@/services/types';
 import { formatIngredientAmount } from '@/utils/ingredientFormat';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   Animated,
   Dimensions,
   Image,
   Linking,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -36,7 +36,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import IngredientSubstitutionSheet from './IngredientSubstitutionSheet';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import RecipeActionsDrawer from './connected/RecipeActionsDrawer';
+import { IconButton } from './connected/classic';
+import CookingDrawer from './connected/CookingDrawer';
+import SubstitutionDrawer from './connected/SubstitutionDrawer';
+import { useConnected } from '@/contexts/ConnectedContext';
+import { ingredientOccurrences, type IngredientOccurrence } from '@/services/stepIngredients';
+import type { Meal } from '@/services/connectedClient';
+import { useBottomDrawerGesture } from '@/hooks/useBottomDrawerGesture';
+import { useFavourite } from '@/hooks/useFavourite';
+import FavouriteButton from './connected/FavouriteButton';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9;
@@ -155,6 +165,8 @@ type ThemeColors = ReturnType<typeof useTheme>['colors'];
 type Styles = ReturnType<typeof makeStyles>;
 
 interface Props {
+  actionBar?: React.ReactNode;
+  initiallyCooking?: boolean;
   recipe: Recipe | null;
   visible: boolean;
   onClose: () => void;
@@ -174,12 +186,11 @@ interface Props {
   /** Default servings to seed the stepper when no mealPlanEntry context. */
   defaultServings?: number;
 
-  /** When set, the modal shows a star toggle in the header. */
-  starred?: boolean;
-  onStarToggle?: () => void;
 }
 
 export default function RecipeDetailModal({
+  actionBar,
+  initiallyCooking = false,
   recipe,
   visible,
   onClose,
@@ -187,13 +198,19 @@ export default function RecipeDetailModal({
   onTagsUpdate,
   mealPlanEntry,
   defaultServings,
-  starred,
-  onStarToggle,
 }: Props) {
+  const favourite = useFavourite();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { householdId } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const connected = useConnected();
+  const plannedMeal = connected.meals.find(m => m.id === mealPlanEntry?.id);
+  const [cooking, setCooking] = useState(initiallyCooking);
+  const [recipeActions, setRecipeActions] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion); const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion); return () => sub.remove(); }, []);
+  const [sideRecipe, setSideRecipe] = useState<Recipe | null>(null);
 
   // ── Servings stepper state ──
   const defaultAdults =
@@ -203,36 +220,38 @@ export default function RecipeDetailModal({
   const [adults, setAdults] = useState(defaultAdults);
   const [children, setChildren] = useState(defaultChildren);
   const [savingServings, setSavingServings] = useState(false);
+  const [savedAdults, setSavedAdults] = useState(defaultAdults);
+  const [savedChildren, setSavedChildren] = useState(defaultChildren);
+  const servingsRevision = useRef<number | undefined>(plannedMeal?.revision);
+  const [nutritionExpanded, setNutritionExpanded] = useState(false);
+  const [heroImageIndex, setHeroImageIndex] = useState(0);
 
-  // Ingredient substitution state
-  const [selectedSubstitutionIngredient, setSelectedSubstitutionIngredient] = useState<Ingredient | null>(null);
-  const [substitutionSheetVisible, setSubstitutionSheetVisible] = useState(false);
-
-  const handleIngredientLongPress = useCallback((ing: Ingredient) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setSelectedSubstitutionIngredient(ing);
-    setSubstitutionSheetVisible(true);
-  }, []);
-
-  const allIngredientNames = useMemo(() => {
-    if (!recipe?.ingredients) return [];
-    return recipe.ingredients.map(i => i.name);
-  }, [recipe]);
-
+  // Capture the occurrence and meal revision together when opening substitutions.
+  const [substitution, setSubstitution] = useState<{ occurrence: IngredientOccurrence; meal?: Meal } | null>(null);
 
   useEffect(() => {
     setAdults(defaultAdults);
     setChildren(defaultChildren);
+    setSavedAdults(defaultAdults);
+    setSavedChildren(defaultChildren);
+    servingsRevision.current = plannedMeal?.revision;
+    setNutritionExpanded(false);
+    setHeroImageIndex(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe?.id, mealPlanEntry?.id]);
 
   const currentServings = calculateRequiredServings(adults, children);
-  const defaultServingsCalc = calculateRequiredServings(defaultAdults, defaultChildren);
-  const dirtyServings = adults !== defaultAdults || children !== defaultChildren;
+  const defaultServingsCalc = calculateRequiredServings(savedAdults, savedChildren);
+  const dirtyServings = adults !== savedAdults || children !== savedChildren;
 
-  const scaledRecipe = recipe
-    ? applyServingScale(recipe, currentServings)
-    : null;
+  const cookingServings = currentServings + (recipe?.id === plannedMeal?.recipeId ? plannedMeal?.allocatedPortions ?? 0 : 0);
+  const occurrences = recipe ? ingredientOccurrences(recipe, cookingServings, plannedMeal) : [];
+  const handleIngredientLongPress = (index: number) => {
+    const occurrence = occurrences[index];
+    if (!occurrence) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setSubstitution({ occurrence, meal: plannedMeal });
+  };
 
   const clamp = (n: number) => Math.max(0, Math.min(12, n));
 
@@ -240,32 +259,26 @@ export default function RecipeDetailModal({
   const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
-  // Keep a stable ref to the latest close handler so the PanResponder
-  // (created once) can call it without stale closure issues.
-  const closeSheetRef = useRef(() => { });
-
   const closeSheet = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: SHEET_HEIGHT,
-        duration: 260,
+        duration: reduceMotion ? 0 : 260,
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 200,
+        duration: reduceMotion ? 0 : 200,
         useNativeDriver: true,
       }),
     ]).start(() => onClose());
-  }, [onClose, translateY, backdropOpacity]);
+  }, [onClose, translateY, backdropOpacity, reduceMotion]);
 
-  useEffect(() => {
-    closeSheetRef.current = closeSheet;
-  }, [closeSheet]);
 
   // Animate in when becoming visible
   useEffect(() => {
     if (visible) {
+      if (reduceMotion) { translateY.setValue(0); backdropOpacity.setValue(1); return; }
       translateY.setValue(SHEET_HEIGHT);
       backdropOpacity.setValue(0);
       Animated.parallel([
@@ -282,34 +295,9 @@ export default function RecipeDetailModal({
         }),
       ]).start();
     }
-  }, [visible, translateY, backdropOpacity]);
+  }, [visible, translateY, backdropOpacity, reduceMotion]);
 
-  // ── Swipe-to-dismiss pan responder (handle area only) ─────
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) {
-          translateY.setValue(gs.dy);
-          backdropOpacity.setValue(Math.max(0, 1 - gs.dy / (SHEET_HEIGHT * 0.6)));
-        }
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 110 || gs.vy > 0.6) {
-          closeSheetRef.current();
-        } else {
-          Animated.parallel([
-            Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-            Animated.timing(backdropOpacity, {
-              toValue: 1,
-              duration: 150,
-              useNativeDriver: true,
-            }),
-          ]).start();
-        }
-      },
-    })
-  ).current;
+  const drag = useBottomDrawerGesture({ translateY, backdropOpacity, close: closeSheet });
 
   // ── Unified label editing state (course + tags combined) ────
   const [editingLabels, setEditingLabels] = useState(false);
@@ -318,6 +306,25 @@ export default function RecipeDetailModal({
   const [localTags, setLocalTags] = useState<string[]>([]);
   const nutrition = recipe?.nutrition;
   const nutritionAvailable = hasMeaningfulNutrition(nutrition);
+  const heroImages = useMemo(() => [...new Set([
+    ...(recipe?.imageUrl ? [recipe.imageUrl] : []),
+    ...(recipe?.imageUrls ?? []),
+  ])], [recipe?.imageUrl, recipe?.imageUrls]);
+  const sourceClaims = useMemo(() => [...new Set([
+    ...(recipe?.dietaryClaims ?? []),
+    ...(recipe?.cookingMethods ?? []),
+  ])], [recipe?.dietaryClaims, recipe?.cookingMethods]);
+  const extraNutrition = nutrition ? [
+    ['Fibre', nutrition.fiber, 'g'],
+    ['Sugar', nutrition.sugar, 'g'],
+    ['Saturated fat', nutrition.saturatedFat, 'g'],
+    ['Unsaturated fat', nutrition.unsaturatedFat, 'g'],
+    ['Trans fat', nutrition.transFat, 'g'],
+    ['Sodium', nutrition.sodium, 'mg'],
+    ['Cholesterol', nutrition.cholesterol, 'mg'],
+  ].filter((entry): entry is [string, number, string] => (
+    typeof entry[1] === 'number' && Number.isFinite(entry[1])
+  )) : [];
 
   useEffect(() => {
     setLocalCourse(recipe?.course ?? []);
@@ -378,15 +385,16 @@ export default function RecipeDetailModal({
       statusBarTranslucent={Platform.OS === 'android'}
       onRequestClose={closeSheet}
     >
+      <GestureHandlerRootView style={{ flex: 1 }}>
       {/* ── Dimmed backdrop — tap to close ── */}
       <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         activeOpacity={1}
         onPress={closeSheet}
       >
         <Animated.View
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             { backgroundColor: 'rgba(0,0,0,0.45)', opacity: backdropOpacity },
           ]}
         />
@@ -404,7 +412,8 @@ export default function RecipeDetailModal({
         ]}
       >
         {/* Drag handle — only this area captures the pan gesture */}
-        <View {...panResponder.panHandlers}>
+        <GestureDetector gesture={drag.headerGesture}>
+        <View>
           <View style={styles.handleWrap}>
             <View style={styles.handle} />
           </View>
@@ -425,22 +434,32 @@ export default function RecipeDetailModal({
                   <Text style={styles.sourceText}>{sourceDomain}</Text>
                 </TouchableOpacity>
               )}
+              {(recipe.attribution?.author || recipe.attribution?.publisher || recipe.sourceRating) ? (
+                <Text style={styles.attributionText}>
+                  {[
+                    recipe.attribution?.author ? `By ${recipe.attribution.author}` : undefined,
+                    recipe.attribution?.publisher,
+                    recipe.sourceRating
+                      ? `★ ${recipe.sourceRating.value.toFixed(1)}${recipe.sourceRating.count !== undefined ? ` (${recipe.sourceRating.count})` : ''}`
+                      : undefined,
+                  ].filter(Boolean).join(' · ')}
+                </Text>
+              ) : null}
             </View>
-            {starred !== undefined && (
-              <TouchableOpacity
-                onPress={onStarToggle}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={{ marginRight: Spacing.xs, paddingTop: 4 }}
-              >
-                <Ionicons
-                  name={starred ? 'star' : 'star-outline'}
-                  size={22}
-                  color={starred ? colors.warning : colors.textTertiary}
-                />
-              </TouchableOpacity>
+            <IconButton icon="ellipsis-horizontal" label="Recipe options" onPress={() => setRecipeActions(true)} />
+            {recipe.id && (
+              <FavouriteButton
+                title={recipe.title}
+                starred={favourite.starred(recipe.id)}
+                pending={favourite.pending(recipe.id)}
+                disabled={favourite.disabled}
+                onPress={() => favourite.toggle(recipe.id!)}
+              />
             )}
             <TouchableOpacity
               onPress={closeSheet}
+              accessibilityRole="button"
+              accessibilityLabel="Close recipe"
               style={styles.closeBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
@@ -448,9 +467,13 @@ export default function RecipeDetailModal({
             </TouchableOpacity>
           </View>
         </View>
+        </GestureDetector>
 
         {/* ── Scrollable content ── */}
         <ScrollView
+          {...drag.contentHandlers}
+          onScroll={(event) => drag.setScrollOffset(event.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
@@ -460,18 +483,34 @@ export default function RecipeDetailModal({
             <View style={styles.heroVideo}>
               <VideoOrImage
                 videoUrl={recipe.videoEmbedUrl}
-                imageUrl={recipe.imageUrl}
+                imageUrl={heroImages[heroImageIndex]}
                 width={SCREEN_WIDTH}
                 height={HERO_HEIGHT}
                 imageStyle={styles.heroImage}
               />
             </View>
-          ) : recipe.imageUrl ? (
+          ) : heroImages[heroImageIndex] ? (
             <Image
-              source={{ uri: recipe.imageUrl }}
+              source={{ uri: heroImages[heroImageIndex] }}
               style={styles.heroImage}
               resizeMode="cover"
+              onError={() => setHeroImageIndex((index) => Math.min(index + 1, heroImages.length))}
             />
+          ) : null}
+
+          {actionBar}
+
+          {sourceClaims.length ? (
+            <View style={styles.sourceClaimWrap}>
+              <Text style={styles.sourceClaimLabel}>Source-declared</Text>
+              <View style={styles.sourceClaimRow}>
+                {sourceClaims.map((claim) => (
+                  <View key={claim.toLowerCase()} style={styles.sourceClaimChip}>
+                    <Text style={styles.sourceClaimText}>{claim}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           ) : null}
 
           {/* Labels (course + cuisine + modifier) — unified section */}
@@ -555,12 +594,31 @@ export default function RecipeDetailModal({
 
           {/* Macro strip */}
           {nutritionAvailable ? (
-            <View style={styles.macroStrip}>
-              <MacroBadge value={nutrition.calories === undefined ? '—' : String(nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} styles={styles} />
-              <MacroBadge value={nutrition.protein === undefined ? '—' : `${nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} styles={styles} />
-              <MacroBadge value={nutrition.carbs === undefined ? '—' : `${nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} styles={styles} />
-              <MacroBadge value={nutrition.fat === undefined ? '—' : `${nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} styles={styles} />
-            </View>
+            <>
+              <View style={[styles.macroStrip, extraNutrition.length ? { marginBottom: Spacing.sm } : null]}>
+                <MacroBadge value={nutrition.calories === undefined ? '—' : String(nutrition.calories)} label="kcal" bg={colors.caloriesBadge} fg={colors.caloriesText} styles={styles} />
+                <MacroBadge value={nutrition.protein === undefined ? '—' : `${nutrition.protein}g`} label="protein" bg={colors.proteinBadge} fg={colors.proteinText} styles={styles} />
+                <MacroBadge value={nutrition.carbs === undefined ? '—' : `${nutrition.carbs}g`} label="carbs" bg={colors.carbsBadge} fg={colors.carbsText} styles={styles} />
+                <MacroBadge value={nutrition.fat === undefined ? '—' : `${nutrition.fat}g`} label="fat" bg={colors.fatBadge} fg={colors.fatText} styles={styles} />
+              </View>
+              {extraNutrition.length ? (
+                <View style={styles.nutritionPanel}>
+                  <TouchableOpacity
+                    style={styles.nutritionToggle}
+                    onPress={() => setNutritionExpanded((expanded) => !expanded)}
+                  >
+                    <Text style={styles.nutritionToggleText}>Nutrition per serving</Text>
+                    <Ionicons name={nutritionExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  {nutritionExpanded ? extraNutrition.map(([label, value, unit]) => (
+                    <View key={label} style={styles.nutritionRow}>
+                      <Text style={styles.nutritionName}>{label}</Text>
+                      <Text style={styles.nutritionValue}>{value}{unit}</Text>
+                    </View>
+                  )) : null}
+                </View>
+              ) : null}
+            </>
           ) : (
             <Text style={[styles.nutritionUnavailable, { color: colors.textTertiary }]}>Nutrition unavailable</Text>
           )}
@@ -571,6 +629,15 @@ export default function RecipeDetailModal({
             <MetaChip icon="flame-outline" label="Cook" value={recipe.cookTime} styles={styles} colors={colors} />
             <MetaChip icon="timer-outline" label="Total" value={recipe.totalTime ?? 'N/A'} styles={styles} colors={colors} />
           </View>
+          {recipe.additionalTimes?.length ? (
+            <View style={styles.additionalTimes}>
+              {recipe.additionalTimes.map((time) => (
+                <Text key={`${time.label}-${time.minutes}`} style={styles.additionalTimeText}>
+                  {time.label}: {time.minutes} min
+                </Text>
+              ))}
+            </View>
+          ) : null}
 
           {/* Servings stepper */}
           <View style={styles.stepperWrap}>
@@ -627,20 +694,25 @@ export default function RecipeDetailModal({
                     { backgroundColor: colors.primary },
                     (savingServings || currentServings === 0) && { opacity: 0.5 },
                   ]}
-                  disabled={savingServings || currentServings === 0}
+                  disabled={savingServings || currentServings === 0 || !connected.online}
                   onPress={async () => {
                     if (!householdId) return;
                     setSavingServings(true);
                     try {
-                      await updateMealPlanServings(
-                        householdId,
-                        mealPlanEntry.id,
-                        adults,
-                        children,
-                        currentServings
-                      );
+                      if (plannedMeal) {
+                        const isSide = recipe.id !== plannedMeal.recipeId;
+                        if (isSide && !plannedMeal.sides?.some(side => side.recipeId === recipe.id)) throw new Error('This side is no longer attached to the meal.');
+                        const revision = servingsRevision.current ?? plannedMeal.revision;
+                        await connected.run({ operation: 'mutate', changes: [{ meal: isSide
+                          ? { ...plannedMeal, sides: plannedMeal.sides?.map(side => side.recipeId === recipe.id ? { ...side, servings: currentServings } : side) }
+                          : { ...plannedMeal, adults, children, servings: currentServings }, expectedRevision: revision }] });
+                        servingsRevision.current = revision + 1;
+                      } else {
+                        await updateMealPlanServings(householdId, mealPlanEntry.id, adults, children, currentServings, (mealPlanEntry as typeof mealPlanEntry & { revision?: number }).revision);
+                      }
+                      setSavedAdults(adults); setSavedChildren(children);
                     } catch (err) {
-                      console.warn('[RecipeDetailModal] save servings failed:', err);
+                      Alert.alert('Could not save servings', err instanceof Error ? err.message : 'Please retry.');
                     } finally {
                       setSavingServings(false);
                     }
@@ -654,31 +726,39 @@ export default function RecipeDetailModal({
             </View>
           </View>
 
+          {recipe.equipment?.length ? (
+            <>
+              <SectionLabel title="Equipment" styles={styles} />
+              <View style={styles.card}>
+                {recipe.equipment.map((item, index) => (
+                  <View key={`${item.name}-${index}`} style={[styles.equipmentRow, index < recipe.equipment!.length - 1 && styles.ingredientDivider]}>
+                    <Ionicons name="restaurant-outline" size={16} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.equipmentName}>{item.name}</Text>
+                      {item.notes ? <Text style={styles.ingredientNotes}>{item.notes}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
+
           {/* Ingredients */}
           <SectionLabel title="Ingredients" styles={styles} />
-          {scaledRecipe?.ingredientGroups && scaledRecipe.ingredientGroups.length > 0 ? (
-            scaledRecipe.ingredientGroups.map((group, gIdx) => (
-              <View key={gIdx}>
-                {group.name ? (
-                  <Text style={styles.groupHeader}>{group.name}</Text>
-                ) : null}
-                <IngredientCard
-                  ingredients={group.ingredients}
-                  styles={styles}
-                  onIngredientLongPress={handleIngredientLongPress}
-                />
-              </View>
-            ))
-          ) : (
-            <IngredientCard
-              ingredients={scaledRecipe?.ingredients ?? []}
-              styles={styles}
-              onIngredientLongPress={handleIngredientLongPress}
-            />
-          )}
-
-          {/* Instructions */}
-          <SectionLabel title="Instructions" styles={styles} />
+          {[...new Set(occurrences.map(o => o.groupIndex))].map(groupIndex => (
+            <View key={groupIndex}>
+              {!!occurrences.find(o => o.groupIndex === groupIndex)?.group && <Text style={styles.groupHeader}>{occurrences.find(o => o.groupIndex === groupIndex)!.group}</Text>}
+              <IngredientCard ingredients={occurrences.filter(o => o.groupIndex === groupIndex).map(o => o.ingredient)} styles={styles}
+                onIngredientLongPress={(_, index) => handleIngredientLongPress(occurrences.indexOf(occurrences.filter(o => o.groupIndex === groupIndex)[index]))} />
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
+            <Text style={[styles.sectionTitle, { flex: 1, marginTop: 0, marginBottom: 0 }]}>Instructions</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Start cooking" onPress={() => setCooking(true)} style={{ minHeight: 44, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 22, backgroundColor: colors.primaryLight }}>
+              <Ionicons name="play" size={16} color={colors.primary} /><Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.primary }}>Start cooking</Text>
+            </Pressable>
+          </View>
+          {!!plannedMeal?.sides?.length && recipe.id === plannedMeal.recipeId && <View style={{ gap: 8 }}>{plannedMeal.sides.map(side => <Pressable key={side.recipeId} accessibilityRole="button" accessibilityLabel={`Open side: ${connected.recipes[side.recipeId]?.title ?? 'Side'}`} onPress={() => connected.load(side.recipeId).then(r => setSideRecipe(r)).catch(e => Alert.alert('Could not open side', e.message))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: Fonts.medium }}>+ {connected.recipes[side.recipeId]?.title ?? 'Side'}</Text></Pressable>)}</View>}
           {(() => {
             let stepNum = 0;
             return recipe.instructions.map((step, idx) => {
@@ -696,6 +776,7 @@ export default function RecipeDetailModal({
                     <Text style={styles.stepNum}>{stepNum}</Text>
                   </View>
                   <View style={styles.stepBody}>
+                    {step.title ? <Text style={styles.stepTitle}>{step.title}</Text> : null}
                     <Text style={styles.stepText}>{step.text}</Text>
                     {step.videoEmbedUrl ? (
                       <View style={styles.stepImage}>
@@ -717,22 +798,34 @@ export default function RecipeDetailModal({
           })()}
 
           {/* Notes */}
-          {recipe.notes?.trim() ? (
+          {recipe.noteSections?.length ? (
             <View style={styles.notesBox}>
               <Text style={styles.notesTitle}>Notes</Text>
-              <Text style={styles.notesText}>{recipe.notes}</Text>
+              {recipe.noteSections.map((section, index) => (
+                <View key={`${section.title ?? 'notes'}-${index}`} style={styles.noteSection}>
+                  {section.title ? <Text style={styles.noteSectionTitle}>{section.title}</Text> : null}
+                  {formatRecipeNoteItems(section.items).map((item, itemIndex) => (
+                    <Text key={itemIndex} style={styles.notesText}>{item}</Text>
+                  ))}
+                </View>
+              ))}
+            </View>
+          ) : recipe.notes?.trim() ? (
+            <View style={styles.notesBox}>
+              <Text style={styles.notesTitle}>Notes</Text>
+              {formatRecipeNotes(recipe.notes).map((item, index) => (
+                <Text key={index} style={styles.notesText}>{item}</Text>
+              ))}
             </View>
           ) : null}
         </ScrollView>
       </Animated.View>
 
-      <IngredientSubstitutionSheet
-        visible={substitutionSheetVisible}
-        ingredient={selectedSubstitutionIngredient}
-        recipeTitle={recipe.title}
-        allIngredients={allIngredientNames}
-        onClose={() => setSubstitutionSheetVisible(false)}
-      />
+      {recipeActions && <RecipeActionsDrawer recipeId={recipe.id!} meal={recipe.id === plannedMeal?.recipeId ? plannedMeal : undefined} onClose={() => setRecipeActions(false)} />}
+      {substitution && <SubstitutionDrawer occurrence={substitution.occurrence} recipe={recipe} meal={substitution.meal} servings={cookingServings} onClose={() => setSubstitution(null)} />}
+      {cooking && <CookingDrawer recipe={recipe} meal={plannedMeal} servings={cookingServings} onClose={() => setCooking(false)} renderMedia={step => step.videoEmbedUrl ? <View style={styles.stepImage}><VideoOrImage videoUrl={step.videoEmbedUrl} imageUrl={step.imageUrl} width={STEP_VIDEO_WIDTH} height={STEP_VIDEO_HEIGHT} imageStyle={styles.stepImage} /></View> : step.imageUrl ? <Image source={{ uri: step.imageUrl }} style={styles.stepImage} /> : null} />}
+      {sideRecipe && <RecipeDetailModal recipe={sideRecipe} visible onClose={() => setSideRecipe(null)} mealPlanEntry={mealPlanEntry ? { id: mealPlanEntry.id } : undefined} defaultServings={plannedMeal?.sides?.find(s => s.recipeId === sideRecipe.id)?.servings} />}
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -746,8 +839,10 @@ function IngredientCard({
 }: {
   ingredients: Ingredient[];
   styles: Styles;
-  onIngredientLongPress?: (ing: Ingredient) => void;
+  onIngredientLongPress?: (ing: Ingredient, index: number) => void;
 }) {
+  const { colors } = useTheme();
+
   return (
     <View style={[styles.card, Shadows.sm, { marginBottom: Spacing.sm }]}>
       {ingredients.map((ing, idx) => {
@@ -772,13 +867,16 @@ function IngredientCard({
           return (
             <Pressable
               key={idx}
-              onLongPress={() => onIngredientLongPress(ing)}
+              accessibilityRole="button"
+              accessibilityLabel={`Substitutions for ${ing.name}`}
+              accessibilityHint="Long press for alternatives"
+              onLongPress={() => onIngredientLongPress(ing, idx)}
               style={({ pressed }) => [
                 styles.ingredientRow,
-                idx < ingredients.length - 1 && styles.ingredientDivider,
-                pressed && { backgroundColor: 'rgba(16, 185, 129, 0.08)' } // Subtle primary tinted press highlight
+                { width: "100%", minHeight: 48 },
+                pressed && { backgroundColor: `${colors.primary}14` } // Subtle primary tinted press highlight (~8%)
               ]}
-              android_ripple={{ color: 'rgba(16, 185, 129, 0.12)' }}
+              android_ripple={{ color: `${colors.primary}1F` }}
             >
               {content}
             </Pressable>
@@ -790,7 +888,7 @@ function IngredientCard({
             key={idx}
             style={[
               styles.ingredientRow,
-              idx < ingredients.length - 1 && styles.ingredientDivider,
+              { width: "100%", minHeight: 48 },
             ]}
           >
             {content}
@@ -875,6 +973,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: FontSizes.xs,
     fontFamily: Fonts.medium,
     color: colors.accent,
+  },
+  attributionText: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 3,
   },
   closeBtn: {
     width: 32,
@@ -982,6 +1086,29 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.lg,
   },
+  description: {
+    fontSize: FontSizes.md,
+    fontFamily: Fonts.regular,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: Spacing.md,
+  },
+  sourceClaimWrap: { marginBottom: Spacing.md, gap: Spacing.xs },
+  sourceClaimLabel: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.semibold,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  sourceClaimRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  sourceClaimChip: {
+    borderRadius: Radius.pill,
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+  },
+  sourceClaimText: { fontSize: FontSizes.xs, fontFamily: Fonts.medium, color: colors.textSecondary },
   nutritionUnavailable: {
     fontSize: FontSizes.sm,
     fontFamily: Fonts.medium,
@@ -996,6 +1123,28 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   macroValue: { fontSize: FontSizes.md, fontFamily: Fonts.bold },
   macroLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.regular },
+  nutritionPanel: {
+    borderRadius: Radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  nutritionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+  },
+  nutritionToggleText: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, color: colors.text },
+  nutritionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingVertical: Spacing.xs,
+  },
+  nutritionName: { fontSize: FontSizes.sm, fontFamily: Fonts.regular, color: colors.textSecondary },
+  nutritionValue: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, color: colors.text },
 
   // Meta chips
   metaRow: {
@@ -1013,6 +1162,18 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   metaLabel: { fontSize: FontSizes.xs, fontFamily: Fonts.regular, color: colors.textSecondary },
   metaValue: { fontSize: FontSizes.sm, fontFamily: Fonts.semibold, color: colors.text },
+  additionalTimes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: -Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  additionalTimeText: {
+    fontSize: FontSizes.xs,
+    fontFamily: Fonts.medium,
+    color: colors.textSecondary,
+  },
 
   // Section label
   sectionTitle: {
@@ -1074,6 +1235,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
+  equipmentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  equipmentName: { fontSize: FontSizes.md, fontFamily: Fonts.medium, color: colors.text },
 
   // Steps
   stepRow: {
@@ -1098,6 +1267,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Fonts.regular,
     color: colors.text,
     lineHeight: 22,
+  },
+  stepTitle: {
+    fontSize: FontSizes.md,
+    fontFamily: Fonts.bold,
+    color: colors.text,
   },
   stepImage: {
     width: '100%',
@@ -1138,6 +1312,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Fonts.regular,
     color: colors.textSecondary,
     lineHeight: 22,
+  },
+  noteSection: { gap: 3, marginTop: Spacing.xs },
+  noteSectionTitle: {
+    fontSize: FontSizes.sm,
+    fontFamily: Fonts.semibold,
+    color: colors.text,
   },
 
   // Servings stepper

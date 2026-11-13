@@ -54,9 +54,17 @@ describe('decodeRecipeDocument', () => {
           name: 'Sauce',
           ingredients: [{ name: 'olive oil', quantity: 1, unit: 'tbsp' }],
         }],
-        instructions: [{ text: 'Cook chicken.' }],
+        instructions: [{ text: 'Cook chicken.', title: 'Sear', sourceUrl: 'https://example.test/chicken#step', imageUrl: 'https://example.test/step.jpg' }],
         notes: 'Serve warm.',
-        nutrition: { calories: 420, protein: 35, carbs: 8, fat: 20 },
+        nutrition: { calories: 420, protein: 35, carbs: 8, fat: 20, fiber: 6, sodium: 450 },
+        imageUrls: ['https://example.test/chicken.jpg', 'https://example.test/alternate.jpg'],
+        attribution: { author: 'Cook', publisher: 'Kitchen' },
+        sourceRating: { value: 4.7, count: 90, capturedAt: '2026-07-02T00:00:00.000Z' },
+        equipment: [{ name: 'Skillet' }],
+        additionalTimes: [{ label: 'Resting', minutes: 10 }],
+        noteSections: [{ title: 'Serving', items: ['Serve warm.'] }],
+        dietaryClaims: ['Gluten Free'],
+        cookingMethods: ['Searing'],
       },
       effective: {
         prepMinutes: 10,
@@ -101,7 +109,17 @@ describe('decodeRecipeDocument', () => {
       quantity: 1,
       unit: 'tbsp',
     });
-    expect(decoded?.nutrition).toEqual({ calories: 420, protein: 35, carbs: 8, fat: 20 });
+    expect(decoded?.nutrition).toEqual({ calories: 420, protein: 35, carbs: 8, fat: 20, fiber: 6, sodium: 450 });
+    expect(decoded).toMatchObject({
+      imageUrls: ['https://example.test/chicken.jpg', 'https://example.test/alternate.jpg'],
+      attribution: { author: 'Cook', publisher: 'Kitchen' },
+      sourceRating: { value: 4.7, count: 90 },
+      equipment: [{ name: 'Skillet' }],
+      additionalTimes: [{ label: 'Resting', minutes: 10 }],
+      noteSections: [{ title: 'Serving', items: ['Serve warm.'] }],
+      dietaryClaims: ['Gluten Free'], cookingMethods: ['Searing'],
+    });
+    expect(decoded?.instructions[0]).toMatchObject({ title: 'Sear', imageUrl: 'https://example.test/step.jpg' });
   });
 
   it('allows review recipes to display but rejects operational v2 documents', () => {
@@ -171,4 +189,36 @@ describe('decodeRecipeDocument', () => {
       nutrition: { calories: 250, protein: '12.5' },
     })?.nutrition).toEqual({ calories: 250, protein: 12.5 });
   });
+
+  it('cleans HTML entities and repairs residual range/unit in stored ingredients', () => {
+    const decoded = decodeRecipeDocument('legacy-egg-foo-young', {
+      title: 'Egg Foo Young',
+      sourceUrl: 'https://example.test/efy',
+      ingredients: [
+        { name: 'chopped raw small prawns/shrimp', quantity: 100, unit: 'g' },
+      ],
+      ingredientGroups: [
+        {
+          name: 'Option 1: For Prawn &ndash; Shrimp',
+          ingredients: [
+            {
+              name: '&ndash; 120g/3.5 &ndash; 4 oz chopped raw small prawns/shrimp',
+              quantity: 100,
+              unit: '',
+              notes: ', peeled and deveined (Note 4)',
+            },
+          ],
+        },
+      ],
+      instructions: [{ text: 'Mix &ndash; fry.' }],
+    });
+
+    expect(decoded?.ingredientGroups?.[0]?.name).toBe('Option 1: For Prawn – Shrimp');
+    const groupIng = decoded?.ingredientGroups?.[0]?.ingredients[0];
+    expect(groupIng?.name).toBe('chopped raw small prawns/shrimp');
+    expect(groupIng?.quantity).toBe(100);
+    expect(groupIng?.unit).toBe('g');
+    expect(decoded?.instructions[0]?.text).toBe('Mix – fry.');
+  });
 });
+

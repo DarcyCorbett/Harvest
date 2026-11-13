@@ -20,6 +20,7 @@ export interface ShoppingIngredientAiInput {
   name: string;
   quantity: number;
   unit: string;
+  notes?: string;
 }
 
 export interface SubstitutionAiInput {
