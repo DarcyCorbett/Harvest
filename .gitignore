@@ -68,3 +68,12 @@ app-example
 artifacts/catalogue-tagging-evaluation/
 artifacts/catalogue-meal-type-evaluation/
 artifacts/catalogue-taxonomy-v2-canary/
+artifacts/connected-android-export/
+
+artifacts/lightweight-android-export/
+artifacts/lightweight-*.png
+artifacts/admin-invites-android-export/
+artifacts/
+
+# Benchmark lab stays on this machine only (large evaluation seed data)
+apps/benchmark-lab/
