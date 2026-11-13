@@ -58,6 +58,8 @@ interface ConnectedState {
   error: string;
   pending: PendingCheck[];
   run: <T = { ok: boolean }>(command: unknown, id?: string) => Promise<T>;
+  /** Add a typed item to the list. Offline, it is queued and sent on reconnect. */
+  addManual: (item: { name: string; quantity: number; unit: string; category: string }, id?: string) => Promise<'saved' | 'queued'>;
   check: (
     item: ListItem,
     action: "check" | "uncheck" | "dismiss" | "restore" | "delete",
@@ -473,6 +475,18 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     },
     [period, updateQueue],
   );
+  const addManual = useCallback(async (item: { name: string; quantity: number; unit: string; category: string }, id?: string): Promise<'saved' | 'queued'> => {
+    if (online) {
+      await run({ operation: 'manual', ...item }, id);
+      return 'saved';
+    }
+    if (!period?.shopping) throw new Error('Shopping list is loading.');
+    const entry = { id: id ?? requestId(), queuedAt: Date.now(), command: {
+      operation: 'manual', ...item, periodId: period.id, generation: period.shopping.generation,
+    } };
+    await updateQueue([...pendingRef.current, entry]);
+    return 'queued';
+  }, [online, run, period, updateQueue]);
   const checkGroup = useCallback(async (items: ListItem[], action: 'check' | 'uncheck' | 'delete') => {
     if (!period?.shopping) throw new Error('Shopping list is loading.');
     if (items.some(item => pendingRef.current.some(p => (p.command as { periodId?: string }).periodId === period.id && commandHasItem(p.command, item.id)))) {
@@ -544,6 +558,7 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
         error,
         pending,
         run,
+        addManual,
         check,
         checkGroup,
         load,

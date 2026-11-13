@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRouter } from "expo-router";
@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConnected } from "@/contexts/ConnectedContext";
 import {
   addToCookbook,
+  removeFromCookbook,
   updateCookbookDetails,
 } from "@/services/firestoreService";
 import { filterCookbook, indexCookbook } from "@/services/cookbookPresentation";
@@ -228,6 +229,33 @@ export default function CookbookScreen() {
                   router.push({ pathname: "/", params: { recipeId: id } });
                 }}
               />
+              {c.cookbook.some((e) => e.recipeId === preview.id) && (
+                <Button
+                  label="Remove from cookbook"
+                  secondary
+                  disabled={!c.online}
+                  onPress={() => {
+                    const id = preview.id;
+                    if (!householdId || !id) return;
+                    Alert.alert(
+                      "Remove from cookbook?",
+                      "Your notes for this recipe are removed too. Planned meals keep the recipe.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Remove",
+                          style: "destructive",
+                          onPress: () => {
+                            removeFromCookbook(householdId, id)
+                              .then(() => setPreview(null))
+                              .catch(report);
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                />
+              )}
             </Row>
           ) : undefined
         }

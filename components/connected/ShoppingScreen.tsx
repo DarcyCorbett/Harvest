@@ -77,8 +77,8 @@ function ShoppingList() {
     if (!Number.isFinite(number) || number < 0) { report(new Error('Enter a valid quantity.')); return; }
     savingRef.current = true; setSaving(true);
     try {
-      await c.run({ operation: 'manual', name, quantity: number, unit, category });
-      setLastAdded({ id: '', name }); setName(''); setQuantity('1'); setUnit('');
+      const outcome = await c.addManual({ name: name.trim(), quantity: number, unit, category });
+      setLastAdded({ id: '', name: outcome === 'queued' ? `${name.trim()} (will sync when online)` : name }); setName(''); setQuantity('1'); setUnit('');
       nameInput.current?.focus();
     } catch (e) { report(e); }
     finally { savingRef.current = false; setSaving(false); }
@@ -87,8 +87,8 @@ function ShoppingList() {
     if (savingRef.current) return;
     savingRef.current = true; setSaving(true); setQuickRequest(item);
     try {
-      await c.run({ operation: 'manual', name: item.name, quantity: 1, unit: '', category: item.category }, item.id);
-      setLastAdded({ id: `manual-${item.id}`, name: item.name }); setQuickRequest(null);
+      const outcome = await c.addManual({ name: item.name, quantity: 1, unit: '', category: item.category }, item.id);
+      setLastAdded(outcome === 'queued' ? { id: '', name: `${item.name} (will sync when online)` } : { id: `manual-${item.id}`, name: item.name }); setQuickRequest(null);
     } catch (e) { report(e); }
     finally { savingRef.current = false; setSaving(false); }
   };
@@ -172,7 +172,7 @@ function ShoppingList() {
           <Pill label="Remove" disabled={!selected.length || locked} onPress={() => bulk('delete')} />
         </Row></View> : <Button label="＋ Add items" disabled={locked} onPress={() => setAdd(true)} />}
       </View>
-      {add && <Sheet title="Add items" onClose={() => { if (!saving) setAdd(false); }} footer={<Row><View style={{ flex: 1 }}><Button label={saving ? 'Adding…' : 'Add item'} disabled={saving || locked || !name.trim() || !c.online} onPress={saveManual} /></View><Button label="Done" secondary disabled={saving} onPress={() => setAdd(false)} /></Row>}>
+      {add && <Sheet title="Add items" onClose={() => { if (!saving) setAdd(false); }} footer={<Row><View style={{ flex: 1 }}><Button label={saving ? 'Adding…' : 'Add item'} disabled={saving || locked || !name.trim()} onPress={saveManual} /></View><Button label="Done" secondary disabled={saving} onPress={() => setAdd(false)} /></Row>}>
         <Field ref={nameInput} label="Item" value={name} onChangeText={setName} returnKeyType="next" />
         <Row><View style={{ flex: 1 }}><Field label="Quantity" value={quantity} keyboardType="decimal-pad" onChangeText={setQuantity} /></View><View style={{ flex: 1 }}><Field label="Unit" value={unit} onChangeText={setUnit} /></View></Row>
         {lastAdded && <Row><Text accessibilityLiveRegion="polite" style={{ color: colors.primary }}>Added {lastAdded.name}</Text>{!!lastAdded.id && <Pill label="Undo" disabled={saving || !c.online || locked || !items.some(i => i.id === lastAdded.id)} onPress={async () => {
@@ -180,7 +180,7 @@ function ShoppingList() {
           try { await c.check(item, 'delete'); setLastAdded(null); } catch (e) { report(e); }
         }} />}</Row>}
         <Caption>Aisle</Caption><Row>{categories.map(value => <Pill key={value} label={`${emoji[value]} ${value}`} selected={category === value} onPress={() => setCategory(value)} />)}</Row>
-        {!!QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]?.length && <><Caption>Quick add from {category}</Caption><Row>{QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]!.map(item => <Pill key={item} label={item} disabled={saving || !c.online || locked} onPress={() => saveQuick({ id: requestId(), name: item, category })} />)}</Row></>}
+        {!!QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]?.length && <><Caption>Quick add from {category}</Caption><Row>{QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]!.map(item => <Pill key={item} label={item} disabled={saving || locked} onPress={() => saveQuick({ id: requestId(), name: item, category })} />)}</Row></>}
         {quickRequest && !saving && <Pill label={`Retry ${quickRequest.name}`} onPress={() => saveQuick(quickRequest)} />}
       </Sheet>}
       {detail && <Sheet title={detail.name} onClose={() => setDetailId(null)}>

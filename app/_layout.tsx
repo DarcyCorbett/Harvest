@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -21,6 +21,22 @@ import {
 } from '@expo-google-fonts/outfit';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Shown by Expo Router instead of a blank screen when a screen crashes. */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={styles.crash}>
+      <Text accessibilityRole="header" style={styles.crashTitle}>Something went wrong</Text>
+      <Text style={styles.crashBody}>
+        Your plan and shopping list are safe. Try again, and if this keeps happening, close and reopen the app.
+      </Text>
+      <Text style={styles.crashDetail} numberOfLines={3}>{error.message}</Text>
+      <Pressable accessibilityRole="button" onPress={retry} style={styles.crashButton}>
+        <Text style={styles.crashButtonText}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function RootNavigator() {
   const { user, loading, householdId } = useAuth();
@@ -95,6 +111,12 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  crash: { flex: 1, justifyContent: 'center', padding: 32, gap: 16, backgroundColor: '#F2EAD3' },
+  crashTitle: { fontSize: 24, fontWeight: '700', color: '#1F2A1F' },
+  crashBody: { fontSize: 16, lineHeight: 22, color: '#1F2A1F' },
+  crashDetail: { fontSize: 13, color: '#5C665C' },
+  crashButton: { minHeight: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2F5D3A' },
+  crashButtonText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

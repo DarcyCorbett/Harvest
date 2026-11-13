@@ -78,6 +78,13 @@ function youtubeIdFromEmbed(url: string): string | null {
  * the rendered box. `imageStyle` is applied to the fallback Image so callers
  * can match the same dimensions.
  */
+/** Video players are only loaded from hosts the recipe sources are known to use. */
+const VIDEO_HOSTS = /^https:\/\/(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|vimeo\.com|wistia\.com|wistia\.net|mediavine\.com|jwplayer\.com|jwpcdn\.com)\//i;
+const VIDEO_FILE = /^https:\/\/[^\s"'<>]+\.(?:mp4|webm|mov|m4v)(?:\?[^\s"'<>]*)?$/i;
+function isSafeVideoUrl(url: string): boolean {
+  return !/["'<>\s]/.test(url) && (VIDEO_HOSTS.test(url) || VIDEO_FILE.test(url));
+}
+
 function VideoOrImage({
   videoUrl,
   imageUrl,
@@ -94,9 +101,11 @@ function VideoOrImage({
   const [errored, setErrored] = useState(false);
   const ytId = youtubeIdFromEmbed(videoUrl);
 
-  if (errored && imageUrl) {
+  if ((errored || !isSafeVideoUrl(videoUrl)) && imageUrl) {
     return <Image source={{ uri: imageUrl }} style={imageStyle} resizeMode="cover" />;
   }
+  // Scraped links from unknown hosts are never opened in an embedded browser.
+  if (!isSafeVideoUrl(videoUrl)) return null;
 
   if (ytId) {
     return (
@@ -119,7 +128,7 @@ function VideoOrImage({
       allowsInlineMediaPlayback
       javaScriptEnabled
       domStorageEnabled
-      originWhitelist={['*']}
+      originWhitelist={['https://*']}
     />
   );
 }
