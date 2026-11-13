@@ -125,6 +125,8 @@ export async function fillDraft(
   onSave: (draft: Draft) => void,
   onlyIds?: string[],
   cancelled: () => boolean = () => false,
+  /** Lets the caller serve recipes it already holds instead of re-reading them. */
+  loadRecipe: (id: string) => Promise<Recipe | null> = getRecipe,
 ): Promise<Draft> {
   const mode = await getCatalogueGenerationMode();
   let draft = JSON.parse(JSON.stringify(input)) as Draft;
@@ -158,7 +160,7 @@ export async function fillDraft(
     ).length;
   const sharedIngredients = new Set<string>();
   for (const existing of draft.slots.filter((s) => s.locked && s.recipeId)) {
-    const r = await getRecipe(existing.recipeId!);
+    const r = await loadRecipe(existing.recipeId!);
     r?.ingredients.forEach((i) => sharedIngredients.add(i.name.toLowerCase()));
   }
   for (let i = 0; i < draft.slots.length; i++) {
@@ -177,7 +179,7 @@ export async function fillDraft(
       if (favouritesRemaining > 0)
         for (const id of favouriteIds) {
           if (used.has(id)) continue;
-          const recipe = await getRecipe(id);
+          const recipe = await loadRecipe(id);
           if (
             recipe &&
             matchesDraftSlot(recipe, slot, draft.config, settings) &&

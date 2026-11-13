@@ -262,7 +262,10 @@ function PickerBody({
           {!saved.length && (
             <Label>No saved recipes match. Try Discover to find a meal.</Label>
           )}
-          {saved.map((r) => (
+          {saved.length > 40 && (
+            <Label muted>Showing 40 of {saved.length}. Search to narrow the list.</Label>
+          )}
+          {saved.slice(0, 40).map((r) => (
             <Button
               key={r.id}
               label={r.title}

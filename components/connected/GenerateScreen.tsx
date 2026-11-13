@@ -192,6 +192,7 @@ export default function GenerateScreen() {
         (saved) => { draftRef.current = saved; setDraft(saved); },
         ids,
         () => cancel.current,
+        c.load,
       );
     } catch (e) {
       report(e);
@@ -315,6 +316,7 @@ export default function GenerateScreen() {
           (saved) => { draftRef.current = saved; setDraft(saved); },
           [slot.id],
           () => cancel.current,
+          c.load,
         );
         const result = working.slots.find((s) => s.id === slot.id)!;
         if (result.recipeId && !candidates.includes(result.recipeId))

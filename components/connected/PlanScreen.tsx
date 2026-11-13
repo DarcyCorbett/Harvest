@@ -467,7 +467,8 @@ export default function PlanScreen() {
       {swapMeal && (
         <Sheet title="Swap meal" onClose={() => setSwapMeal(null)}>
           {alive
-            .filter((m) => m.id !== swapMeal.id && m.status === "planned")
+            .filter((m) => m.id !== swapMeal.id && m.status === "planned" && m.date >= shiftDate(today, -7))
+            .sort((a, b) => a.date.localeCompare(b.date))
             .map((m) => (
               <Button
                 key={m.id}

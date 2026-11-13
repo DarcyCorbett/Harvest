@@ -69,6 +69,37 @@ interface ConnectedState {
   dismissPending: (id: string) => Promise<void>;
 }
 const Context = createContext<ConnectedState | null>(null);
+
+// Recipes are shared, rarely change and are the bulk of what the app reads.
+// Each one is cached under its own key so a cold start needs no network for
+// them, and no single stored value grows with the size of the cookbook.
+const RECIPE_CACHE_PREFIX = 'recipes:v1:';
+const RECIPE_FRESH_MS = 24 * 60 * 60 * 1000;
+const RECIPE_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+async function readRecipeCache(): Promise<{ recipes: Record<string, Recipe>; cachedAt: Map<string, number> }> {
+  const recipes: Record<string, Recipe> = {};
+  const cachedAt = new Map<string, number>();
+  const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(RECIPE_CACHE_PREFIX));
+  const expired: string[] = [];
+  for (let i = 0; i < keys.length; i += 50) {
+    for (const [key, raw] of await AsyncStorage.multiGet(keys.slice(i, i + 50))) {
+      try {
+        const entry = JSON.parse(raw ?? '') as { at: number; recipe: Recipe };
+        if (!entry.recipe?.id || Date.now() - entry.at > RECIPE_KEEP_MS) { expired.push(key); continue; }
+        recipes[entry.recipe.id] = entry.recipe;
+        cachedAt.set(entry.recipe.id, entry.at);
+      } catch {
+        expired.push(key);
+      }
+    }
+  }
+  if (expired.length) AsyncStorage.multiRemove(expired).catch(() => {});
+  return { recipes, cachedAt };
+}
+function writeRecipeCache(recipe: Recipe): void {
+  if (!recipe.id) return;
+  AsyncStorage.setItem(RECIPE_CACHE_PREFIX + recipe.id, JSON.stringify({ at: Date.now(), recipe })).catch(() => {});
+}
 export function useConnected(): ConnectedState {
   const value = useContext(Context);
   if (!value) throw new Error("Connected provider missing");
@@ -101,6 +132,9 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => { periodRef.current = period; }, [period]);
   const recipesRef = useRef(recipes);
   recipesRef.current = recipes;
+  /** When each recipe was last read from the server or the device cache. */
+  const recipeFetchedAt = useRef(new Map<string, number>());
+  const [recipeCacheReady, setRecipeCacheReady] = useState(false);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   const commandAttempts = useRef(new Map<string, { id: string; command: unknown }>());
@@ -193,6 +227,7 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     setCookbook([]);
     setPending([]);
     setQueueLoaded(false);
+    setRecipeCacheReady(false);
     setError("");
     setLoading(true);
     if (!householdId || !user) {
@@ -209,11 +244,20 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     };
     const key = cacheKey(householdId, user.uid, "snapshot");
     let fresh = false;
+    readRecipeCache()
+      .then(({ recipes: cachedRecipes, cachedAt }) => {
+        if (!owned()) return;
+        cachedAt.forEach((at, id) => { if (!recipeFetchedAt.current.has(id)) recipeFetchedAt.current.set(id, at); });
+        setRecipes((prev) => ({ ...cachedRecipes, ...prev }));
+      })
+      .catch(() => {})
+      .finally(() => { if (owned()) setRecipeCacheReady(true); });
     AsyncStorage.getItem(key)
       .then((raw) => {
         if (raw && owned()) {
           const cached = JSON.parse(raw);
-          setRecipes((prev) => ({ ...cached.recipes, ...prev }));
+          // Snapshots written by older app versions carried recipes inline.
+          if (cached.recipes) setRecipes((prev) => ({ ...cached.recipes, ...prev }));
           if (fresh) return;
           setCookbook(cached.cookbook ?? []);
           setDrafts(cached.drafts ?? []);
@@ -274,7 +318,7 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
       ),
       subscribeCookbook(householdId, (c) => {
         if (owned()) setCookbook(c);
-      }),
+      }, fail),
     ];
     return () => {
       active = false;
@@ -309,8 +353,19 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
   }, [householdId, state?.periodId, owner]);
   const load = useCallback(
     async (id: string): Promise<Recipe | null> => {
-      if (recipesRef.current[id]) return recipesRef.current[id];
-      const recipe = await getRecipe(id);
+      const known = recipesRef.current[id];
+      const fetchedAt = recipeFetchedAt.current.get(id);
+      if (known && fetchedAt !== undefined && Date.now() - fetchedAt < RECIPE_FRESH_MS) return known;
+      let recipe: Recipe | null;
+      try {
+        recipe = await getRecipe(id);
+      } catch (e) {
+        // Offline or flaky: a slightly old copy beats no recipe.
+        if (known) return known;
+        throw e;
+      }
+      recipeFetchedAt.current.set(id, Date.now());
+      if (recipe) writeRecipeCache(recipe);
       if (recipe && currentOwner.current === owner)
         setRecipes((prev) => ({ ...prev, [id]: { ...recipe,
           ...(typeof prev[id]?.needsDefrost === 'boolean' ? { needsDefrost: prev[id].needsDefrost } : {}),
@@ -322,9 +377,12 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
   );
   const refreshRecipes = useCallback((fresh: Map<string, Recipe>) => {
     if (currentOwner.current !== owner) return;
+    fresh.forEach((recipe, id) => { recipeFetchedAt.current.set(id, Date.now()); writeRecipeCache(recipe); });
     setRecipes(prev => ({ ...prev, ...Object.fromEntries(fresh) }));
   }, [owner]);
   useEffect(() => {
+    // Wait for the device cache so cached recipes are not fetched again.
+    if (!recipeCacheReady) return;
     const ids = [
       ...new Set(
         [
@@ -349,28 +407,23 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     return () => {
       stopped = true;
     };
-  }, [meals, cookbook, drafts, load]);
+  }, [meals, cookbook, drafts, load, recipeCacheReady]);
   useEffect(() => {
     if (!householdId || !user || !state || !period) return;
-    AsyncStorage.setItem(
-      cacheKey(householdId, user.uid, "snapshot"),
-      JSON.stringify({
-        state,
-        period,
-        meals,
-        recipes,
-        cookbook,
-        drafts,
-        settings,
-      }),
-    ).catch(() => {});
+    // Recipes live in their own cache; batch bursts of changes into one write.
+    const timer = setTimeout(() => {
+      AsyncStorage.setItem(
+        cacheKey(householdId, user.uid, "snapshot"),
+        JSON.stringify({ state, period, meals, cookbook, drafts, settings }),
+      ).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timer);
   }, [
     householdId,
     user?.uid,
     state,
     period,
     meals,
-    recipes,
     cookbook,
     drafts,
     settings,

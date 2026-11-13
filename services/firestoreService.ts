@@ -333,8 +333,13 @@ export function subscribeHouseholdSettings(householdId:string, callback:(setting
   const unsubscribe=onSnapshot(doc(db,'households',householdId,'settings','preferences'),()=>{getHouseholdSettings(householdId).then(s=>{if(active)callback(s);}).catch(error);},error);
   return()=>{active=false;unsubscribe();};
 }
+/** How far back the app keeps planned meals in memory. Older history stays in Firestore. */
+export const MEAL_HISTORY_DAYS = 62;
 export function subscribeConnectedMeals(householdId: string, callback: (meals: Meal[]) => void, error: (error: Error) => void): () => void {
-  return onSnapshot(collection(db,'households',householdId,'mealPlan'), s=>callback(s.docs.map(d=>normaliseMeal(d.id,d.data()))), error);
+  const from = new Date();
+  from.setDate(from.getDate() - MEAL_HISTORY_DAYS);
+  const since = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
+  return onSnapshot(query(collection(db,'households',householdId,'mealPlan'), where('date', '>=', since)), s=>callback(s.docs.map(d=>normaliseMeal(d.id,d.data()))), error);
 }
 export function subscribeShoppingPeriod(householdId:string,id:string,callback:(period:Period)=>void,error:(error:Error)=>void):()=>void {
   return onSnapshot(doc(db,'households',householdId,'shoppingPeriods',id),s=>{if(s.exists())callback(s.data() as Period);},error);
@@ -545,7 +550,8 @@ export async function clearGenerationResult(householdId: string): Promise<void> 
 /** Subscribe to cookbook in real time */
 export function subscribeCookbook(
   householdId: string,
-  callback: (entries: CookbookEntry[]) => void
+  callback: (entries: CookbookEntry[]) => void,
+  error?: (error: Error) => void,
 ): () => void {
   const q = collection(db, 'households', householdId, 'cookbook');
   return onSnapshot(q, (snapshot) => {
@@ -555,7 +561,7 @@ export function subscribeCookbook(
       addedAt: d.data().addedAt?.toDate?.() || new Date(),
     })) as CookbookEntry[];
     callback(entries);
-  });
+  }, error);
 }
 
 /** Get all starred recipes from the cookbook */
