@@ -32,8 +32,8 @@ export default function Drawer({
 }) {
   const { colors } = useTheme();
   const { height } = useWindowDimensions();
-  const y = useRef(new Animated.Value(height)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const y = useState(() => new Animated.Value(height))[0];
+  const opacity = useState(() => new Animated.Value(0))[0];
   const [reduced, setReduced] = useState(false);
   const closing = useRef(false);
   useEffect(() => {
@@ -202,6 +202,7 @@ export default function Drawer({
                   paddingTop: 8,
                 }}
               >
+                {/* eslint-disable-next-line react-hooks/refs -- close is handed over as a callback and only reads its ref when pressed */}
                 {typeof footer === "function" ? footer(close) : footer}
               </View>
             )}

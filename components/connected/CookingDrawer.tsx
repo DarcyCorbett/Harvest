@@ -140,6 +140,7 @@ export default function CookingDrawer({
       recipeId: id,
       step,
       label,
+      // eslint-disable-next-line react-hooks/purity -- runs from a button press, not during render
       endsAt: Date.now() + seconds * 1000,
     };
     update((s) => addCookingTimer(s, timer));
@@ -154,6 +155,7 @@ export default function CookingDrawer({
         !current.current.timers.some(
           (t) => t.id === timerId && t.endsAt === timer.endsAt,
         ) ||
+        // eslint-disable-next-line react-hooks/purity -- runs from a button press, not during render
         timer.endsAt <= Date.now()
       )
         return;

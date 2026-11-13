@@ -256,8 +256,8 @@ export default function RecipeDetailModal({
   const clamp = (n: number) => Math.max(0, Math.min(12, n));
 
   // ── Animation values ──────────────────────────────────────
-  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const translateY = useState(() => new Animated.Value(SHEET_HEIGHT))[0];
+  const backdropOpacity = useState(() => new Animated.Value(0))[0];
 
   const closeSheet = useCallback(() => {
     Animated.parallel([
@@ -309,11 +309,11 @@ export default function RecipeDetailModal({
   const heroImages = useMemo(() => [...new Set([
     ...(recipe?.imageUrl ? [recipe.imageUrl] : []),
     ...(recipe?.imageUrls ?? []),
-  ])], [recipe?.imageUrl, recipe?.imageUrls]);
+  ])], [recipe]);
   const sourceClaims = useMemo(() => [...new Set([
     ...(recipe?.dietaryClaims ?? []),
     ...(recipe?.cookingMethods ?? []),
-  ])], [recipe?.dietaryClaims, recipe?.cookingMethods]);
+  ])], [recipe]);
   const extraNutrition = nutrition ? [
     ['Fibre', nutrition.fiber, 'g'],
     ['Sugar', nutrition.sugar, 'g'],
@@ -356,7 +356,7 @@ export default function RecipeDetailModal({
     } finally {
       setSavingLabels(false);
     }
-  }, [householdId, recipe?.id, recipe?.schemaVersion, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
+  }, [householdId, recipe, localCourse, localTags, onCourseUpdate, onTagsUpdate]);
 
   const handleCancelLabels = useCallback(() => {
     setLocalCourse(recipe?.course ?? []);
@@ -760,7 +760,6 @@ export default function RecipeDetailModal({
           </View>
           {!!plannedMeal?.sides?.length && recipe.id === plannedMeal.recipeId && <View style={{ gap: 8 }}>{plannedMeal.sides.map(side => <Pressable key={side.recipeId} accessibilityRole="button" accessibilityLabel={`Open side: ${connected.recipes[side.recipeId]?.title ?? 'Side'}`} onPress={() => connected.load(side.recipeId).then(r => setSideRecipe(r)).catch(e => Alert.alert('Could not open side', e.message))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: Fonts.medium }}>+ {connected.recipes[side.recipeId]?.title ?? 'Side'}</Text></Pressable>)}</View>}
           {(() => {
-            let stepNum = 0;
             return recipe.instructions.map((step, idx) => {
               if (step.isHeader) {
                 return (
@@ -769,7 +768,7 @@ export default function RecipeDetailModal({
                   </Text>
                 );
               }
-              stepNum += 1;
+              const stepNum = recipe.instructions.slice(0, idx + 1).filter((entry) => !entry.isHeader).length;
               return (
                 <View key={idx} style={styles.stepRow}>
                   <View style={styles.stepBadge}>

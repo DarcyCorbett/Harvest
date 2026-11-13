@@ -13,7 +13,7 @@ import { Radius, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const AUTO_HIDE_MS = 8000;
@@ -96,8 +96,8 @@ export default function JobToast() {
     return null;
   }, [generation, confirm, acknowledgeGeneration, acknowledgeConfirm, clearConfirm, router]);
 
-  const slide = useRef(new Animated.Value(120)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const slide = useState(() => new Animated.Value(120))[0];
+  const opacity = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     if (!descriptor) {
