@@ -9,7 +9,6 @@ import {
   getRecipe,
 } from "./firestoreService";
 import {
-  scrapeRecipe,
   isVegetarian,
   isHealthy,
   isKidFriendly,
@@ -268,52 +267,8 @@ export async function fillDraft(
             throw new Error("Selected recipe is unavailable. Retry this slot.");
         }
       } else if (!selected) {
-        if (!["breakfast", "lunch", "dinner", "side"].includes(slot.mealType))
-          throw new Error("This meal type needs catalogue generation.");
-        const styles = [
-          ...draft.config.styles.filter(
-            (s) =>
-              s !== "Quick & Easy" &&
-              s !== "Moderate" &&
-              !(
-                slot.allowAnyCuisine &&
-                [
-                  "Asian",
-                  "Mexican",
-                  "Mediterranean",
-                  "Italian",
-                  "Indian",
-                ].includes(s)
-              ),
-          ),
-          ...(slot.maxMinutes === 30
-            ? ["Quick & Easy"]
-            : slot.maxMinutes === 45
-              ? ["Moderate"]
-              : []),
-        ] as CuisineStyle[];
-        for (let attempt = 0; attempt < 3 && !selected; attempt++) {
-          const result = await scrapeRecipe({
-            householdId,
-            mealType: slot.mealType as MealType,
-            cuisineStyles: styles,
-            requiredServings: slot.servings,
-            excludeRecipeIds: [...used],
-            settings,
-            forceSeed: slot.must?.[0] ?? draft.config.prefer[0],
-          });
-          used.add(result.recipeId);
-          if (matchesDraftSlot(result.recipe, slot, draft.config, settings))
-            selected = result.recipe;
-        }
-        if (!selected)
-          slot = {
-            ...slot,
-            status: "unmatched",
-            recipeId: undefined,
-            message:
-              "No eligible recipe found. Adjust optional preferences and retry.",
-          };
+        // The on-phone scraper has been retired; plans come from the catalogue.
+        throw new Error("Meal generation is switched off. Please try again later.");
       }
       if (selected) {
         const overlap = selected.ingredients.filter((ing) =>

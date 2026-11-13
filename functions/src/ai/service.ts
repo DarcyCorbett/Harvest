@@ -20,9 +20,8 @@ import {
   buildSubstitutionsPrompt,
   buildTagRecipesPrompt,
 } from './prompts.js';
+import { RECIPE_MODEL, SHOPPING_MODEL } from './models.js';
 
-const FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
-const SHOPPING_MODEL = 'gemini-3.8-flash';
 const INTERNAL_HOUSEHOLD_ID = 'internal-ai-service';
 const DUPLICATE_IDENTIFIER_MESSAGE = 'Duplicate request identifiers.';
 
@@ -126,7 +125,7 @@ export function createAiService(provider: JsonRequester) {
       });
       requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
-        FLASH_LITE_MODEL,
+        RECIPE_MODEL,
         buildTagRecipesPrompt(input.recipes),
         Math.min(32_000, 4_096 + input.recipes.length * 400),
       );
@@ -145,7 +144,7 @@ export function createAiService(provider: JsonRequester) {
       });
       requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
       const output = await provider.requestJson(
-        FLASH_LITE_MODEL,
+        RECIPE_MODEL,
         buildReminderFlagsPrompt(input.recipes),
         Math.min(8_000, 1_024 + input.recipes.length * 200),
       );
@@ -183,7 +182,7 @@ export function createAiService(provider: JsonRequester) {
       });
       const { householdId: _householdId, ...normalizedInput } = parsedInput;
       const output = await provider.requestJson(
-        FLASH_LITE_MODEL,
+        RECIPE_MODEL,
         buildSubstitutionsPrompt(normalizedInput),
         600,
       );

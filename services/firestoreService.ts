@@ -29,7 +29,8 @@ import { legacyRecipeClient } from './legacyRecipeClient';
 import { decodeRecipeDocument } from './recipeDecoder';
 import { workflowCommand } from './connectedClient';
 import { normaliseMeal, type Workflow, type Period, type Meal, type Draft } from '../functions/src/connected/model';
-import type { CatalogueGenerationMode } from './generationDispatcher';
+/** Operator-controlled engine switch. Only `catalogue` is supported by this app. */
+export type CatalogueGenerationMode = 'legacy' | 'catalogue';
 import type {
   GenerateConfig,
   GeneratedMeal,

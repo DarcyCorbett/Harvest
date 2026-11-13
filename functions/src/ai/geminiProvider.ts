@@ -1,6 +1,8 @@
 import { logger } from 'firebase-functions';
 import { z } from 'zod';
 
+import { acceptsTemperature } from './models.js';
+
 const GEMINI_API_BASE =
   'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_TIMEOUT_MS = 45_000;
@@ -102,7 +104,7 @@ export async function requestGeminiJson<T>({
           },
         ],
         generationConfig: {
-          ...(model === 'gemini-3.8-flash' ? {} : { temperature: 0 }),
+          ...(acceptsTemperature(model) ? { temperature: 0 } : {}),
           maxOutputTokens,
           responseMimeType: 'application/json',
           ...(responseJsonSchema ? { responseJsonSchema } : {}),

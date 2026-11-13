@@ -15,8 +15,9 @@ import type { StoredRecipeClassifier } from './backfill.js';
 import type { CatalogueBudget } from './ingestion.js';
 import { hasDisplayContent } from './snapshotFirestore.js';
 import { isFrozenCatalogueSource } from './sourceAdapters.js';
+import { RECIPE_MODEL } from '../ai/models.js';
 
-export const GEMINI_BATCH_MODEL = 'gemini-3.1-flash-lite';
+export const GEMINI_BATCH_MODEL = RECIPE_MODEL;
 export const MAX_BATCH_RECIPES = 5_000;
 export const MAX_BATCH_ESTIMATED_TOKENS = 8_000_000;
 export const GEMINI_BATCH_INPUT_USD_PER_MILLION = 0.125;

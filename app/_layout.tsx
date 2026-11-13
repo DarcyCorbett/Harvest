@@ -6,11 +6,10 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ConnectedProvider } from '@/contexts/ConnectedContext';
-import { BackgroundJobsProvider } from '@/contexts/BackgroundJobsContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { DeveloperModeProvider } from '@/contexts/DeveloperModeContext';
-import JobToast from '@/components/JobToast';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useMealReminderSync } from '@/hooks/useMealReminderSync';
 
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -29,6 +28,7 @@ function RootNavigator() {
   const router = useRouter();
   const { colors, effectiveScheme } = useTheme();
   useNotifications();
+  useMealReminderSync();
 
   useEffect(() => {
     if (loading) return;
@@ -58,7 +58,6 @@ function RootNavigator() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
       </Stack>
-      <JobToast />
       <StatusBar style={effectiveScheme === 'light' ? 'dark' : 'light'} />
     </>
   );
@@ -87,9 +86,7 @@ export default function RootLayout() {
       <AuthProvider>
         <ConnectedProvider>
         <DeveloperModeProvider>
-          <BackgroundJobsProvider>
-            <RootNavigator />
-          </BackgroundJobsProvider>
+          <RootNavigator />
         </DeveloperModeProvider>
         </ConnectedProvider>
       </AuthProvider>

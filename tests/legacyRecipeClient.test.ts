@@ -128,10 +128,6 @@ describe('legacy recipe client', () => {
       resolve(process.cwd(), 'services/recipeScraperService.ts'),
       'utf8',
     );
-    const generatorService = readFileSync(
-      resolve(process.cwd(), 'services/generatorService.ts'),
-      'utf8',
-    );
     const recipeModal = readFileSync(
       resolve(process.cwd(), 'components/RecipeDetailModal.tsx'),
       'utf8',
@@ -140,9 +136,6 @@ describe('legacy recipe client', () => {
     expect(findScopedDirectRecipeWrites()).toEqual([]);
     expect(scraperService).toContain('saveRecipe(request.householdId, recipe)');
     expect(scraperService).toContain('saveRecipe(request.householdId, fallbackRecipe)');
-    expect(generatorService).toContain('householdId,');
-    expect(generatorService).toContain('updateRecipeTags(householdId, meal.recipeId, merged)');
-    expect(generatorService).toContain('updateRecipeFlags(householdId, recipeId, flags)');
     expect(recipeModal).toContain('legacyRecipeClient.update(householdId, recipe.id, {');
     expect(recipeModal).toContain('catalogueMetadataClient.updateLabels(recipe.id, localCourse, localTags)');
     expect(recipeModal).not.toContain('recipe.id && !isCatalogueRecipe');
