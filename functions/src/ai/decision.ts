@@ -19,7 +19,7 @@ import { DECISION_MODEL } from './models.js';
  * scripts/evaluate-decision1-v2.ts (docs/ai-stack-evaluation.md) and bump
  * DECISION_QUESTION_SET before shipping a change.
  */
-export const DECISION_QUESTION_SET = 'v3';
+export const DECISION_QUESTION_SET = 'v4';
 export const DECISION_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/decisions';
 
 export type DecisionQuestion =
@@ -72,7 +72,7 @@ export const TAXONOMY_QUESTIONS: Record<string, DecisionQuestion> = {
     'Is this prepared recipe commonly served as a distinct accompaniment alongside a main dish (e.g. roasted or mashed vegetables, potatoes, rice, bread, a side salad, a grain or pasta salad, a vegetable stew that the recipe says can be a side)? Answer no for protein mains, complete meals, desserts, and sauces or condiments.',
   ),
   mealType_role_snack: noul(
-    'Is this recipe commonly eaten between meals or as a small appetizer: smoothies, bars, fruit, cookies, small baked goods, complete dip-and-carriers recipes, finger foods, party bites, or a small plated starter? Answer no for a main-sized portion of a protein, a complete meal, or a side dish.',
+    'Is this recipe commonly eaten between meals or as a small appetizer: smoothies, bars, fruit, cookies, small baked goods, complete dip-and-carriers recipes, finger foods, party bites, or a small plated starter? Answer no for soups, stews, salads, a main-sized portion of a protein, a complete meal, or a side dish.',
   ),
   mealType_role_dessert: noul(
     'Is this recipe a complete sweet dish primarily intended as dessert (or dessert-style pancakes/waffles/crepes or cookies/small baked goods where dessert is a normal use)? Ordinary breakfast pancakes are NOT dessert.',
@@ -121,7 +121,7 @@ export const TAXONOMY_QUESTIONS: Record<string, DecisionQuestion> = {
     'Does the recipe use a sensible cooking method and fat level (baking, roasting, steaming, poaching, grilling, air-frying, simmering, light sautéing; baked or air-fried with light breading and low oil is OK)? Battered, deep-fried, shallow-fried in substantial oil, or oil-, butter- or cream-heavy cooking fails.',
   ),
   healthy_addedSugarRestrained: noul(
-    'Is added sugar restrained in a realistic serving: roughly under 10 g per serving of added sugar, honey, syrup or sweet bottled sauce? Natural sugar from fruit, vegetables, tomatoes or dairy does not count against it. A recipe with no added sweetener is restrained.',
+    'Is added sugar restrained in a realistic serving: roughly under 10 g per serving of added sugar, honey, syrup, molasses, jam or sweet bottled sauce? Add up every sweetener in the ingredient list and divide by the servings. A sauce, glaze, compote, jam or condiment with sugar, honey, molasses or jam as a main ingredient is NOT restrained, however small its serving. Natural sugar from whole fruit, vegetables, tomatoes or dairy does not count against it. A recipe with no added sweetener is restrained.',
   ),
   healthy_refinedStarchRestrained: noul(
     'Is refined starch restrained: the dish is NOT mostly white pasta, noodles, white rice, refined flour, pastry, bread, dough or batter? A moderate portion (about 60 g dry pasta or noodles per serving or less, or bread on the side) balanced by plenty of vegetables or protein counts as restrained. Whole grains and dishes with no refined starch are restrained.',

@@ -111,7 +111,7 @@ All model names live in `functions/src/ai/models.ts`.
 
 | Feature | Model | Notes |
 |---|---|---|
-| Recipe tags, defrost/marinate reminders, catalogue taxonomy | `gemini-decision-1` | One Decisions API request per recipe. Falls back to the `gemini-3.1-flash-lite` prompt if the request fails. Set `RECIPE_LABEL_ENGINE` to `'gemini'` to turn it off. |
+| Recipe tags, defrost/marinate reminders, catalogue taxonomy (callables, weekly catalogue job, nightly recipe-index tagger) | `gemini-decision-1` | One Decisions API request per recipe. Falls back to the `gemini-3.1-flash-lite` prompt if the request fails. Set `RECIPE_LABEL_ENGINE` to `'gemini'` to turn it off. |
 | Shopping list grouping | `gemini-4-hydrogen`, thinking `low` | No temperature; `minimal` thinking is rejected. |
 | Ingredient substitutions | `gpt-6-luna`, reasoning `medium` | OpenAI Responses API. Falls back to `gemini-3.1-flash-lite` if the request fails. |
 
@@ -157,6 +157,10 @@ earlier spend still counts toward the shared Gemini cap.
 - `fresh` runs cases from `fresh/dataset.json` (recipes outside the benchmark).
 - `try "<title text>" [count]` labels up to ten matching recipes from
   `source-pool.json` and prints the result.
+
+Set v4 (2026-11-14) only tightened two questions: soups, stews and salads are
+never snacks, and sweet sauces, glazes and compotes fail added-sugar restraint.
+On the 100-recipe catalogue sample it changed exactly those five recipes.
 
 Do not fit a cut-off to a handful of positives: a Kid Friendly cut-off chosen
 from four tuning examples missed 8 of 10 on the holdout half and was withdrawn.

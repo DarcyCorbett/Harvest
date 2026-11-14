@@ -33,7 +33,10 @@ import { costDecision1, eventsDecision1, reserveDecision1 } from './evaluate-dec
 //   report  holdout-half scores are the headline; tuning-half scores are shown apart
 export const SUBDIR_V2 = `gemini-decision-1-${DECISION_QUESTION_SET}`;
 /** Spend from earlier question sets and the Hydrogen check still counts toward the Gemini cap. */
-const EARLIER_LEDGERS = ['gemini-decision-1-v2', 'gemini-4-hydrogen'].filter((dir) => dir !== SUBDIR_V2);
+const EARLIER_LEDGERS = [
+  ...fs.readdirSync(DIR).filter((dir) => /^gemini-decision-1-v\d+$/.test(dir)),
+  'gemini-4-hydrogen',
+].filter((dir) => dir !== SUBDIR_V2);
 const earlierExtensionEvents = (): any[] => EARLIER_LEDGERS.flatMap((dir) => {
   const file = path.join(DIR, dir, 'ledger.jsonl');
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean).map((x) => JSON.parse(x)) : [];

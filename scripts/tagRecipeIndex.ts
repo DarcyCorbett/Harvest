@@ -2,7 +2,8 @@
 // Offline Recipe Tagger
 //
 // Connects to Firestore and tags untagged recipes in the
-// /recipeIndex/{site}/recipes/ collection using Gemini Flash-Lite.
+// /recipeIndex/{site}/recipes/ collection using gemini-decision-1
+// (falling back to the Gemini Flash-Lite prompt; see scripts/lib/decisionAdmin.ts).
 //
 // Usage:
 //   npx tsx scripts/tagRecipeIndex.ts                         # all sites, 500/site
@@ -16,7 +17,7 @@
 import 'dotenv/config';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { tagRecipesWithAdminGemini } from './lib/geminiAdmin';
+import { tagRecipesForIndex } from './lib/decisionAdmin';
 import {
   createTaggedRecipePersistence,
   type TaggedRecipeTransactionStore,
@@ -281,12 +282,11 @@ async function tagSite(site: string, writeLimit: number, db: FirebaseFirestore.F
             .map((step) => step.text.slice(0, 300)),
           existingTags: (recipe.tags ?? []).slice(0, 30),
         }));
-        tagsById = await tagRecipesWithAdminGemini(
-          aiInput,
-          GEMINI_MODEL
-        );
+        const tagged = await tagRecipesForIndex(aiInput, GEMINI_MODEL);
+        tagsById = tagged.tagsById;
         stats.geminiCalls++;
-        console.log(`[Tagger] ${site}: Gemini returned tags for ${tagsById.size}/${valid.length} recipes (${Date.now() - tGemini}ms)`);
+        if (tagged.fallbackReason) console.log(`[Tagger] ${site}: decision model failed (${tagged.fallbackReason}); used the Gemini prompt instead.`);
+        console.log(`[Tagger] ${site}: ${tagged.engine} returned tags for ${tagsById.size}/${valid.length} recipes (${Date.now() - tGemini}ms)`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.log(`[Tagger] ${site}: Gemini error — ${msg}; aborting this site.`);
