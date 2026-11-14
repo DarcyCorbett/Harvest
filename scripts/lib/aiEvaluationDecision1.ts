@@ -246,12 +246,16 @@ const TAG_QUESTIONS: Record<string, DecisionQuestionSpec> = {
     instructions:
       'Tag as "Vegetarian" (lacto-ovo) ONLY if there is NO meat, poultry, fish, or seafood (including shellfish, fish sauce, anchovies, or any aquatic animal). Dairy and eggs are permitted.',
   },
-  'Kid Friendly': {
+  Kid_Friendly: {
     type: 'noul',
     instructions:
       'Tag as "Kid Friendly" ONLY when confident MOST apply: mild (no chili heat, minimal black pepper, no raw onion/garlic); no pungent ingredients (blue cheese, anchovies, olives, capers, fish sauce, strong curry pastes) unless undetectable; components identifiable and separated, not hidden in stew/casserole; bite-sized/fork-friendly; visually approachable; veg limited to kid-accepted ones (carrots, corn, peas, cucumber, cherry tomatoes, sweet peppers, broccoli, sweet potato); NO alcohol even if cooked off.',
   },
 };
+
+const TAG_KEY_TO_LABEL: Record<string, string> = Object.fromEntries(
+  Object.keys(TAG_QUESTIONS).map((key) => [key, key === 'Kid_Friendly' ? 'Kid Friendly' : key]),
+);
 
 const REMINDER_QUESTIONS: Record<string, DecisionQuestionSpec> = {
   needsDefrost: {
@@ -371,6 +375,15 @@ export function composeDecisionOutput(
       ]),
     ) as Record<typeof DISH_MEAL_TYPES[number], boolean>;
 
+    // Decisions API evaluates roles independently; when mode='dish' and no role
+    // exceeds threshold, honor mode='dish' by selecting the highest-probability role.
+    if (mode === 'dish' && !DISH_MEAL_TYPES.some((role) => roles[role])) {
+      const bestRole = [...DISH_MEAL_TYPES].sort(
+        (a, b) => noulProb(answers, `mealType_role_${b}`) - noulProb(answers, `mealType_role_${a}`),
+      )[0];
+      roles[bestRole] = true;
+    }
+
     const kidBlockerRaw = choiceAnswer(answers, 'kid_blocker').choice;
     const kidBlocker = KID_BLOCKERS.includes(kidBlockerRaw as any)
       ? (kidBlockerRaw as typeof KID_BLOCKERS[number])
@@ -419,7 +432,7 @@ export function composeDecisionOutput(
   if (c.task === 'tags') {
     const r = Array.isArray(c.input) ? c.input[0] : c.input;
     const probs = Object.fromEntries(
-      Object.keys(TAG_QUESTIONS).map((tag) => [tag, noulProb(answers, tag)]),
+      Object.entries(TAG_KEY_TO_LABEL).map(([key, label]) => [label, noulProb(answers, key)]),
     );
     const active = new Set(
       Object.entries(probs)
@@ -453,7 +466,7 @@ export function composeDecisionOutput(
     }
     return {
       id: r.recipeId,
-      tags: Object.keys(TAG_QUESTIONS).filter((tag) => active.has(tag)),
+      tags: Object.values(TAG_KEY_TO_LABEL).filter((tag) => active.has(tag)),
     };
   }
 

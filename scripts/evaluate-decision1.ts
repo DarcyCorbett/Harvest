@@ -6,6 +6,7 @@ import {
   hash,
   labels,
   prf,
+  redact,
   type Case,
 } from './lib/aiEvaluationCore';
 import {
@@ -18,7 +19,7 @@ import {
   type DecisionApiResponse,
 } from './lib/aiEvaluationDecision1';
 import { DIR, read, save } from './lib/aiEvaluationPrepare';
-import { loadGeminiKey, redact } from './lib/aiEvaluationProviders';
+import { loadGeminiKey } from './lib/aiEvaluationProviders';
 import { scoreRows } from './lib/aiEvaluationReport';
 import { balances, journal, resumeDisposition, validateBenchmark } from './evaluate-ai-stack';
 import { events35 } from './evaluate-gemini35';
@@ -313,9 +314,10 @@ function computeCalibrationEce(
     } else if (c.task === 'tags') {
       for (const [k, ans] of Object.entries<any>(row.answers)) {
         if (ans?.type !== 'noul') continue;
+        const label = k === 'Kid_Friendly' ? 'Kid Friendly' : k;
         const pred = ans.noul >= 0.5;
         const conf = pred ? ans.noul : 1 - ans.noul;
-        record(conf, pred === expected.has(k));
+        record(conf, pred === expected.has(label));
       }
     } else if (c.task === 'taxonomy') {
       for (const k of ['healthy', 'kid-friendly'] as const) {
