@@ -87,6 +87,11 @@ export function classifyCatalogueDeterministically(
 
 export function createCatalogueClassifier(dependencies: {
   requestJson(prompt: string, responseJsonSchema?: object, maxOutputTokens?: number): Promise<unknown>;
+  /**
+   * Taxonomy evidence from the decision model (see ai/decision.ts). When it is
+   * supplied it is preferred; if it throws, the prompt path answers instead.
+   */
+  requestTaxonomyEvidence?(content: CompleteCanonicalRecipeV2['content']): Promise<unknown>;
 }) {
   return async (
     content: CompleteCanonicalRecipeV2['content'],
@@ -122,11 +127,20 @@ export function createCatalogueClassifier(dependencies: {
       sources.cuisines = 'ai';
     }
 
-    const { derived } = parseAndDeriveTaxonomyV2(await dependencies.requestJson(
+    let evidence: unknown;
+    if (dependencies.requestTaxonomyEvidence) {
+      try {
+        evidence = await dependencies.requestTaxonomyEvidence(content);
+      } catch {
+        evidence = undefined;
+      }
+    }
+    evidence ??= await dependencies.requestJson(
       buildTaxonomyV2Prompt(content),
       TAXONOMY_V2_RESPONSE_JSON_SCHEMA as object,
       2_048,
-    ));
+    );
+    const { derived } = parseAndDeriveTaxonomyV2(evidence);
     mealTypes = derived.mealTypes;
     modifiers = [
       ...modifiers.filter((modifier) => modifier !== 'kid-friendly' && modifier !== 'healthy'),

@@ -10,6 +10,7 @@ import {
   type DecisionApiResponse,
 } from './lib/aiEvaluationDecision1';
 import {
+  DECISION_QUESTION_SET,
   THRESHOLDS_V2,
   buildDecisionRequestV2,
   composeDecisionOutputV2,
@@ -21,16 +22,22 @@ import { balances, journal, resumeDisposition, validateBenchmark } from './evalu
 import { events35 } from './evaluate-gemini35';
 import { costDecision1, eventsDecision1, reserveDecision1 } from './evaluate-decision1';
 
-// gemini-decision-1 with the v2 question set. Kept apart from the frozen v1
-// extension: own directory, ledger and manifest; v1 spend still counts toward
-// the shared Gemini cap.
+// gemini-decision-1 with the question set the app uses (functions/src/ai/decision.ts).
+// Each question set gets its own directory, ledger and frozen manifest; spend
+// from v1 and earlier sets still counts toward the shared Gemini cap.
 //
 //   dev     tuning half only (question wording and cut-offs are chosen here)
 //   run     freezes the manifest, then all cases plus two repeats of every fifth
 //   fresh   cases from <SUBDIR>/fresh/dataset.json (recipes outside the benchmark)
 //   try     "<title text>" [count]: label matching recipes from source-pool.json and print them
 //   report  holdout-half scores are the headline; tuning-half scores are shown apart
-export const SUBDIR_V2 = 'gemini-decision-1-v2';
+export const SUBDIR_V2 = `gemini-decision-1-${DECISION_QUESTION_SET}`;
+/** Spend from earlier question sets and the Hydrogen check still counts toward the Gemini cap. */
+const EARLIER_LEDGERS = ['gemini-decision-1-v2', 'gemini-4-hydrogen'].filter((dir) => dir !== SUBDIR_V2);
+const earlierExtensionEvents = (): any[] => EARLIER_LEDGERS.flatMap((dir) => {
+  const file = path.join(DIR, dir, 'ledger.jsonl');
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean).map((x) => JSON.parse(x)) : [];
+});
 const ledgerPath = () => path.join(DIR, SUBDIR_V2, 'ledger.jsonl');
 
 export const eventsDecision1V2 = (): any[] =>
@@ -97,7 +104,7 @@ async function runJobs(batch: Job[], phase: string) {
   fs.writeSync(fd, String(process.pid));
   fs.closeSync(fd);
   try {
-    const earlier = [...journal(), ...events35(), ...eventsDecision1()];
+    const earlier = [...journal(), ...events35(), ...eventsDecision1(), ...earlierExtensionEvents()];
     const events = eventsDecision1V2();
     const committed = () => balances([...earlier, ...events]).gemini;
     const key = await loadGeminiKey();
@@ -195,7 +202,7 @@ export function composedRows(cases: Case[], repeat = 0, thresholds = THRESHOLDS_
 const manifestOf = (cases: Case[]) => ({
   model: DECISION_MODEL,
   endpoint: DECISION_ENDPOINT,
-  version: 2,
+  questionSet: DECISION_QUESTION_SET,
   datasetHash: hash(read('dataset.json')),
   benchmarkHash: hash(read('benchmark.json')),
   price: DECISION_PRICE,
@@ -257,7 +264,7 @@ function report() {
     model: DECISION_MODEL,
     thresholds: THRESHOLDS_V2,
     measuredUsd: events.filter((e) => e.type === 'settle' && e.measured).reduce((s, e) => s + e.usd, 0),
-    committedGeminiUsd: balances([...journal(), ...events35(), ...eventsDecision1(), ...events]).gemini,
+    committedGeminiUsd: balances([...journal(), ...events35(), ...eventsDecision1(), ...earlierExtensionEvents(), ...events]).gemini,
     medianMs: percentile(base.map((r) => r.latencyMs), 0.5),
     p95Ms: percentile(base.map((r) => r.latencyMs), 0.95),
     inputTokensPerCase: avg(base.map((r) => r.usage?.input ?? 0)),
@@ -270,7 +277,7 @@ function report() {
   const line = (r: any) =>
     `| ${r.task} | ${r.half} | ${r.version} | ${r.valid}/${r.cases} | ${pct(r.vsFable?.macroF1)} / ${pct(r.vsFable?.exact)} | ${pct(r.vsAstraAll.macroF1)} / ${pct(r.vsAstraAll.exact)} | ${pct(r.vsAstraClear.macroF1)} / ${pct(r.vsAstraClear.exact)} (n=${r.vsAstraClear.n}) |`;
   const md = [
-    '# gemini-decision-1, v2 question set',
+    `# gemini-decision-1, ${DECISION_QUESTION_SET} question set`,
     '',
     'Question wording and cut-offs were chosen on the tuning half. The holdout half is the headline.',
     'Macro F1 / exact match. "Fable" is the claude-fable-5-2 chat-authored answer set; "Astra" is benchmark.json.',

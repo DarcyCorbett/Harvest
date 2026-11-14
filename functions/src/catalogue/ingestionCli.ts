@@ -3,7 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+import {
+  TAXONOMY_QUESTIONS,
+  buildTaxonomyDecisionInput,
+  composeTaxonomyEvidence,
+  requestDecisions,
+} from '../ai/decision.js';
 import { requestGeminiJson } from '../ai/geminiProvider.js';
+import { RECIPE_LABEL_ENGINE } from '../ai/models.js';
 import {
   DEFAULT_GEMINI_CALL_CAP,
   DEFAULT_PHASE4_WRITE_CAP,
@@ -131,6 +138,21 @@ async function main(): Promise<void> {
     totalTokenCount: 0,
   };
   const classifier = createCatalogueClassifier({
+    ...(RECIPE_LABEL_ENGINE === 'decision' ? {
+      async requestTaxonomyEvidence(content) {
+        if (gemini.calls >= geminiCallCap) throw new GeminiCallCapError();
+        gemini.calls += 1;
+        return composeTaxonomyEvidence(await requestDecisions({
+          apiKey: secret,
+          input: buildTaxonomyDecisionInput(content),
+          questions: TAXONOMY_QUESTIONS,
+          onUsage(usage) {
+            gemini.promptTokenCount += usage.inputTokens;
+            gemini.totalTokenCount += usage.inputTokens;
+          },
+        }));
+      },
+    } : {}),
     requestJson(prompt, responseJsonSchema, maxOutputTokens = 512) {
       if (gemini.calls >= geminiCallCap) throw new GeminiCallCapError();
       gemini.calls += 1;

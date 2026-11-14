@@ -20,10 +20,23 @@ import {
   buildSubstitutionsPrompt,
   buildTagRecipesPrompt,
 } from './prompts.js';
-import { RECIPE_MODEL, SHOPPING_MODEL } from './models.js';
+import {
+  REMINDER_QUESTIONS,
+  TAG_QUESTIONS,
+  buildReminderDecisionInput,
+  buildTagDecisionInput,
+  composeReminders,
+  composeTags,
+  mapInParallel,
+  type DecisionAnswers,
+  type DecisionQuestion,
+} from './decision.js';
+import { RECIPE_LABEL_ENGINE, RECIPE_MODEL, SHOPPING_MODEL } from './models.js';
 
 const INTERNAL_HOUSEHOLD_ID = 'internal-ai-service';
 const DUPLICATE_IDENTIFIER_MESSAGE = 'Duplicate request identifiers.';
+/** Decision requests in flight per call. One request labels one recipe. */
+const DECISION_LANES = 8;
 
 export interface JsonRequester {
   requestJson(
@@ -31,7 +44,23 @@ export interface JsonRequester {
     prompt: string,
     maxOutputTokens: number,
   ): Promise<unknown>;
+  /**
+   * Yes/no and choice decisions about one input (gemini-decision-1). When
+   * present and RECIPE_LABEL_ENGINE is 'decision', tags and reminders use it
+   * and fall back to requestJson if it fails.
+   */
+  requestDecisions?(
+    input: string,
+    questions: Record<string, DecisionQuestion>,
+  ): Promise<DecisionAnswers>;
+  /** Substitution suggestions (SUBSTITUTION_MODEL). Falls back to requestJson if it fails. */
+  requestSubstitutionJson?(prompt: string): Promise<unknown>;
+  /** Told when a preferred provider failed and the fallback answered instead. */
+  onFallback?(endpoint: 'tagRecipes' | 'reminderFlags' | 'substitutions', reason: string): void;
 }
+
+const failureReason = (error: unknown): string =>
+  error instanceof Error ? error.message.slice(0, 80) : 'unknown';
 
 class AiServiceError extends Error {
   constructor(
@@ -124,6 +153,20 @@ export function createAiService(provider: JsonRequester) {
         recipes,
       });
       requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
+      const { requestDecisions } = provider;
+      if (RECIPE_LABEL_ENGINE === 'decision' && requestDecisions) {
+        try {
+          const results = await mapInParallel(input.recipes, DECISION_LANES, async (recipe) => ({
+            id: recipe.recipeId,
+            // The prompt path never repeats a tag the recipe already has.
+            tags: composeTags(await requestDecisions(buildTagDecisionInput(recipe), TAG_QUESTIONS))
+              .filter((tag) => !recipe.existingTags.includes(tag)),
+          }));
+          return parseProviderOutput(tagRecipesResponse, { results });
+        } catch (error) {
+          provider.onFallback?.('tagRecipes', failureReason(error));
+        }
+      }
       const output = await provider.requestJson(
         RECIPE_MODEL,
         buildTagRecipesPrompt(input.recipes),
@@ -143,6 +186,18 @@ export function createAiService(provider: JsonRequester) {
         recipes,
       });
       requireUniqueInputIds(input.recipes, ({ recipeId }) => recipeId);
+      const { requestDecisions } = provider;
+      if (RECIPE_LABEL_ENGINE === 'decision' && requestDecisions) {
+        try {
+          const results = await mapInParallel(input.recipes, DECISION_LANES, async (recipe) => ({
+            id: recipe.recipeId,
+            ...composeReminders(await requestDecisions(buildReminderDecisionInput(recipe), REMINDER_QUESTIONS)),
+          }));
+          return parseProviderOutput(reminderFlagsResponse, { results });
+        } catch (error) {
+          provider.onFallback?.('reminderFlags', failureReason(error));
+        }
+      }
       const output = await provider.requestJson(
         RECIPE_MODEL,
         buildReminderFlagsPrompt(input.recipes),
@@ -165,7 +220,9 @@ export function createAiService(provider: JsonRequester) {
       const output = await provider.requestJson(
         SHOPPING_MODEL,
         buildShoppingGroupsPrompt(input.ingredients),
-        Math.min(65_536, 4_096 + input.ingredients.length * 200),
+        // The shopping model thinks before answering and thinking counts as
+        // output, so the cap leaves room for both.
+        Math.min(65_536, 16_384 + input.ingredients.length * 400),
       );
       const parsed = parseProviderOutput(shoppingGroupsResponse, output);
       requireExactCoverage(
@@ -181,6 +238,16 @@ export function createAiService(provider: JsonRequester) {
         householdId: INTERNAL_HOUSEHOLD_ID,
       });
       const { householdId: _householdId, ...normalizedInput } = parsedInput;
+      if (provider.requestSubstitutionJson) {
+        try {
+          return parseProviderOutput(
+            substitutionsResponse,
+            await provider.requestSubstitutionJson(buildSubstitutionsPrompt(normalizedInput)),
+          );
+        } catch (error) {
+          provider.onFallback?.('substitutions', failureReason(error));
+        }
+      }
       const output = await provider.requestJson(
         RECIPE_MODEL,
         buildSubstitutionsPrompt(normalizedInput),

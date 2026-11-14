@@ -66,6 +66,7 @@ vi.mock('firebase-functions/v2/https', async () => {
 
 vi.mock('../src/config.js', () => ({
   GEMINI_API_KEY: indexMocks.secret,
+  OPENAI_API_KEY: indexMocks.secret,
 }));
 
 vi.mock('../src/authz.js', () => ({
@@ -482,13 +483,19 @@ describe('Functions entrypoint', () => {
     for (const [options] of indexMocks.onCall.mock.calls.slice(3, 5)) {
       expect(options).toEqual({ region: 'europe-west1', timeoutSeconds: 120 });
     }
-    for (const [options] of indexMocks.onCall.mock.calls.slice(5, 9)) {
+    for (const [options] of indexMocks.onCall.mock.calls.slice(5, 8)) {
       expect(options).toEqual({
         secrets: [indexMocks.secret],
         enforceAppCheck: false,
         consumeAppCheckToken: false,
       });
     }
+    // Substitutions also needs the OpenAI key.
+    expect(indexMocks.onCall.mock.calls[8][0]).toEqual({
+      secrets: [indexMocks.secret, indexMocks.secret],
+      enforceAppCheck: false,
+      consumeAppCheckToken: false,
+    });
     for (const call of indexMocks.onCall.mock.calls.slice(9)) {
       expect(call).toHaveLength(1);
       expect(call[0]).toEqual(expect.any(Function));

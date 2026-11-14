@@ -2,10 +2,14 @@ import { initializeApp } from 'firebase-admin/app';
 import { createAppInviteHandlers, firestoreInviteStore } from './callables/appInvites.js';
 import { onCall } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { logger } from 'firebase-functions';
 import { connectedCommand as runConnectedCommand, reconcileHousehold } from './connected/service.js';
 import { importConnectedRecipe as runImportConnectedRecipe } from './connected/importRecipe.js';
 
+import { requestDecisions } from './ai/decision.js';
 import { requestGeminiJson } from './ai/geminiProvider.js';
+import { SUBSTITUTION_MODEL, SUBSTITUTION_REASONING_EFFORT, thinkingLevelFor } from './ai/models.js';
+import { requestOpenAiJson } from './ai/openaiProvider.js';
 import { createAiService } from './ai/service.js';
 import {
   authorizeAllowlistedUser,
@@ -29,7 +33,7 @@ import {
   createLegacyRecipeHandlers,
   firestoreLegacyRecipeStore,
 } from './callables/legacyRecipes.js';
-import { GEMINI_API_KEY } from './config.js';
+import { GEMINI_API_KEY, OPENAI_API_KEY } from './config.js';
 import { firestoreQuotaStore, reserveQuota } from './quota.js';
 
 import { browseCatalogueHandler } from './catalogue/browse.js';
@@ -56,7 +60,25 @@ const service = createAiService({
       model,
       prompt,
       maxOutputTokens,
+      thinkingLevel: thinkingLevelFor(model),
     });
+  },
+  requestDecisions(input, questions) {
+    return requestDecisions({ apiKey: GEMINI_API_KEY.value(), input, questions });
+  },
+  requestSubstitutionJson(prompt) {
+    return requestOpenAiJson({
+      apiKey: OPENAI_API_KEY.value(),
+      model: SUBSTITUTION_MODEL,
+      prompt,
+      // Reasoning tokens count toward this cap; the answer itself is about 200.
+      maxOutputTokens: 4_096,
+      reasoningEffort: SUBSTITUTION_REASONING_EFFORT,
+      timeoutMs: 30_000,
+    });
+  },
+  onFallback(endpoint, reason) {
+    logger.warn('ai_provider_fallback', { endpoint, reason });
   },
 });
 const groupConnectedShopping: import('./connected/shoppingGrouping.js').ShoppingGrouper = async (householdId, ingredients) => {
@@ -103,7 +125,10 @@ const aiOptions = {
 export const tagRecipes = onCall(aiOptions, handlers.tagRecipes);
 export const reminderFlags = onCall(aiOptions, handlers.reminderFlags);
 export const shoppingGroups = onCall(aiOptions, handlers.shoppingGroups);
-export const substitutions = onCall(aiOptions, handlers.substitutions);
+export const substitutions = onCall(
+  { ...aiOptions, secrets: [GEMINI_API_KEY, OPENAI_API_KEY] },
+  handlers.substitutions,
+);
 export const createHousehold = onCall(householdHandlers.create);
 export const joinHousehold = onCall(householdHandlers.join);
 export const switchHousehold = onCall(householdHandlers.switch);

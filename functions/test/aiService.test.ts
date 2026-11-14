@@ -475,8 +475,8 @@ describe('createAiService', () => {
         { canonicalName: 'One', category: 'Other', sourceIds: [1] },
         { canonicalName: 'Two', category: 'Other', sourceIds: [2] },
       ],
-      expectedModel: 'gemini-3.8-flash',
-      expectedTokens: 4_496,
+      expectedModel: 'gemini-4-hydrogen',
+      expectedTokens: 17_184,
       invoke: (provider: JsonRequester) => createAiService(provider).shoppingGroups([
         rawIngredient(1),
         rawIngredient(2),

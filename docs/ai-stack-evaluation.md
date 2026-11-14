@@ -105,30 +105,86 @@ The combined four-stack report links from the original HTML report. Running
 the original report generator later recreates that original page; run the
 extension's `report` stage afterward to restore its banner link.
 
-## Gemini Decision 1, v2 question set
+## Models the app uses
 
-Use `node node_modules/tsx/dist/cli.mjs scripts/evaluate-decision1-v2.ts <stage>`
-with `dev`, `run`, `fresh`, or `report`. Outputs live under
-`artifacts/ai-stack-evaluation/gemini-decision-1-v2/`; the v1 extension stays
-frozen and its spend still counts toward the shared Gemini cap.
+All model names live in `functions/src/ai/models.ts`.
 
-The Decisions API answers each question independently, so v2 moves rules that
-other models resolve by reasoning into the questions or into
-`composeDecisionOutputV2` (`scripts/lib/aiEvaluationDecision1V2.ts`): dinner
-accepts unaccompanied mains, lunch is limited to midday dish types, the
-forced-choice blocker questions become one yes/no question per blocker, the
-healthy restraint gate is split in three, defrost excludes pre-cooked protein,
-and marinate covers long soaks. Per-question cut-offs are in `THRESHOLDS_V2`.
+| Feature | Model | Notes |
+|---|---|---|
+| Recipe tags, defrost/marinate reminders, catalogue taxonomy | `gemini-decision-1` | One Decisions API request per recipe. Falls back to the `gemini-3.1-flash-lite` prompt if the request fails. Set `RECIPE_LABEL_ENGINE` to `'gemini'` to turn it off. |
+| Shopping list grouping | `gemini-4-hydrogen`, thinking `low` | No temperature; `minimal` thinking is rejected. |
+| Ingredient substitutions | `gpt-6-luna`, reasoning `medium` | OpenAI Responses API. Falls back to `gemini-3.1-flash-lite` if the request fails. |
 
-Recipes are split in half by a recipe-level hash. `dev` runs the tuning half
-only; wording and cut-offs may change until `run` freezes the manifest. A job
-is identified by its exact request, so unchanged requests are never re-billed.
-`report` scores v1 and v2 on each half against `benchmark.json` and, when
-`claude-fable-5-2/answers.json` exists, against that second answer set. Quote
-the holdout half. `fresh` runs cases from `fresh/dataset.json`, which holds
-recipes outside the frozen benchmark. `try "<title text>" [count]` labels up to
-ten matching recipes from `source-pool.json` and prints the result.
+`gemini-decision-1` returns probabilities and no text, so it cannot group a
+shopping list or write substitutions. Provider fallbacks log
+`ai_provider_fallback`.
 
-This is an evaluation adapter only. The app still calls `RECIPE_MODEL` and
-`SHOPPING_MODEL` from `functions/src/ai/models.ts`. `gemini-decision-1` returns
-no text, so it cannot do shopping grouping or substitutions.
+Before deploying functions, create the OpenAI secret once (the deploy fails
+without it):
+
+```
+firebase functions:secrets:set mealwizard-openai-api-key
+```
+
+The catalogue's Gemini Batch API paths (`geminiBatch.ts`,
+`taxonomyRetagBatch.ts`) still use the prompt model: the Decisions API has no
+batch mode. Use the retag script below for bulk relabelling.
+
+## Gemini Decision 1 question set
+
+The questions, cut-offs and answer composition are production code in
+`functions/src/ai/decision.ts`. The Decisions API answers each question
+independently, so rules that other models resolve by reasoning are stated in
+each question or applied when the answers are combined: dinner accepts
+unaccompanied mains, lunch is limited to midday dish types, each blocker is its
+own yes/no question, the healthy restraint gate is split in three, defrost
+excludes pre-cooked protein, and marinate covers long soaks.
+
+Evaluate it with `node node_modules/tsx/dist/cli.mjs scripts/evaluate-decision1-v2.ts <stage>`;
+the script imports the production module, so it measures what the app runs.
+Outputs live under `artifacts/ai-stack-evaluation/gemini-decision-1-<set>/`,
+where `<set>` is `DECISION_QUESTION_SET`. Bump that constant whenever a question
+or cut-off changes; each set gets its own ledger and frozen manifest, and
+earlier spend still counts toward the shared Gemini cap.
+
+- `dev` runs the tuning half only (recipes are split by a recipe-level hash).
+  Wording and cut-offs may change until `run` freezes the manifest. A job is
+  identified by its exact request, so unchanged requests are never re-billed.
+- `run` runs every case plus two repeats of every fifth.
+- `report` scores v1 and the current set on each half against `benchmark.json`
+  and, when `claude-fable-5-2/answers.json` exists, against that second answer
+  set. Quote the holdout half.
+- `fresh` runs cases from `fresh/dataset.json` (recipes outside the benchmark).
+- `try "<title text>" [count]` labels up to ten matching recipes from
+  `source-pool.json` and prints the result.
+
+Do not fit a cut-off to a handful of positives: a Kid Friendly cut-off chosen
+from four tuning examples missed 8 of 10 on the holdout half and was withdrawn.
+
+## Shopping model check
+
+`scripts/evaluate-hydrogen-shopping.ts run low medium` runs the shopping model
+on every fifth frozen list through the production request path, and `report`
+compares thinking levels with the previous model on the same lists. On six
+lists `low` matched or beat `medium` for less time and cost, so production uses
+`low`. Six lists is a sanity check, not a ranking.
+
+## Retagging the catalogue with the decision model
+
+`node node_modules/tsx/dist/cli.mjs scripts/retag-catalogue-decision.ts <stage>`
+relabels meal types, healthy and kid-friendly on every ready catalogue recipe.
+Cuisines and other modifiers are untouched and manual overrides keep winning.
+
+1. `plan` counts recipes and estimates cost and time. No model calls, no writes.
+2. `stage [--limit N] [--lanes N] [--max-usd N]` asks the model, one request per
+   recipe with 12 in flight, and appends answers to
+   `artifacts/catalogue-decision-retag/<set>/staged.jsonl`. It is resumable and
+   stops at `--max-usd` (default 20). No Firestore writes.
+3. `diff` summarises what would change from the staged answers.
+4. `apply` counts what it would write; `apply --confirm` writes, skipping any
+   recipe whose content changed since it was staged, and saves the previous
+   labels to `applied.jsonl`.
+5. `revert --confirm` restores those saved labels where nothing else has
+   changed since.
+
+Spend from this script is operational and is not counted in the evaluation cap.
