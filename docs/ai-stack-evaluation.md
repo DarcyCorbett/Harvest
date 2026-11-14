@@ -104,3 +104,31 @@ still be recognizable; masking does not guarantee perfect blinding.
 The combined four-stack report links from the original HTML report. Running
 the original report generator later recreates that original page; run the
 extension's `report` stage afterward to restore its banner link.
+
+## Gemini Decision 1, v2 question set
+
+Use `node node_modules/tsx/dist/cli.mjs scripts/evaluate-decision1-v2.ts <stage>`
+with `dev`, `run`, `fresh`, or `report`. Outputs live under
+`artifacts/ai-stack-evaluation/gemini-decision-1-v2/`; the v1 extension stays
+frozen and its spend still counts toward the shared Gemini cap.
+
+The Decisions API answers each question independently, so v2 moves rules that
+other models resolve by reasoning into the questions or into
+`composeDecisionOutputV2` (`scripts/lib/aiEvaluationDecision1V2.ts`): dinner
+accepts unaccompanied mains, lunch is limited to midday dish types, the
+forced-choice blocker questions become one yes/no question per blocker, the
+healthy restraint gate is split in three, defrost excludes pre-cooked protein,
+and marinate covers long soaks. Per-question cut-offs are in `THRESHOLDS_V2`.
+
+Recipes are split in half by a recipe-level hash. `dev` runs the tuning half
+only; wording and cut-offs may change until `run` freezes the manifest. A job
+is identified by its exact request, so unchanged requests are never re-billed.
+`report` scores v1 and v2 on each half against `benchmark.json` and, when
+`claude-fable-5-2/answers.json` exists, against that second answer set. Quote
+the holdout half. `fresh` runs cases from `fresh/dataset.json`, which holds
+recipes outside the frozen benchmark. `try "<title text>" [count]` labels up to
+ten matching recipes from `source-pool.json` and prints the result.
+
+This is an evaluation adapter only. The app still calls `RECIPE_MODEL` and
+`SHOPPING_MODEL` from `functions/src/ai/models.ts`. `gemini-decision-1` returns
+no text, so it cannot do shopping grouping or substitutions.
