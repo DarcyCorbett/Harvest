@@ -7,7 +7,6 @@
 import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState, useCallback } from 'react';
@@ -21,7 +20,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsModal from '@/components/SettingsModal';
@@ -31,7 +29,6 @@ import { useConnected } from '@/contexts/ConnectedContext';
 
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
-  const { developerMode, setDeveloperMode } = useDeveloperMode();
   const { user, householdId, inviteCode, switchHousehold, logout } = useAuth();
   const connected = useConnected();
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -223,22 +220,6 @@ export default function ProfileScreen() {
           })}
         </View>
 
-        <View style={[s.divider, { backgroundColor: colors.border, marginVertical: Spacing.lg }]} />
-
-        <View style={s.preferenceRow}>
-          <View style={s.preferenceTextContainer}>
-            <Text style={[s.preferenceLabel, { color: colors.text }]}>Developer Mode</Text>
-            <Text style={[s.preferenceSublabel, { color: colors.textSecondary }]}>
-              Show real-time execution logs during meal generation and shopping list confirmation.
-            </Text>
-          </View>
-          <Switch
-            value={developerMode}
-            onValueChange={setDeveloperMode}
-            trackColor={{ false: colors.border, true: colors.primaryLight }}
-            thumbColor={developerMode ? colors.primary : '#f4f3f4'}
-          />
-        </View>
       </View>
 
 
@@ -372,29 +353,6 @@ const s = StyleSheet.create({
   themeChipText: {
     fontSize: FontSizes.sm,
     fontFamily: Fonts.semibold,
-  },
-  preferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  preferenceTextContainer: {
-    flex: 1,
-    paddingRight: Spacing.md,
-  },
-  preferenceLabel: {
-    fontSize: FontSizes.md,
-    fontFamily: Fonts.semibold,
-  },
-  preferenceSublabel: {
-    fontSize: FontSizes.xs,
-    fontFamily: Fonts.regular,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  divider: {
-    height: 1,
-    width: '100%',
   },
 
   signOutBtn: {

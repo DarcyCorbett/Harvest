@@ -7,7 +7,6 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ConnectedProvider } from '@/contexts/ConnectedContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
-import { DeveloperModeProvider } from '@/contexts/DeveloperModeContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useMealReminderSync } from '@/hooks/useMealReminderSync';
 
@@ -101,9 +100,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <AuthProvider>
         <ConnectedProvider>
-        <DeveloperModeProvider>
           <RootNavigator />
-        </DeveloperModeProvider>
         </ConnectedProvider>
       </AuthProvider>
     </ThemeProvider>
