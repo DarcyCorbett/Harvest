@@ -21,3 +21,9 @@ export function formatIngredientAmount(quantity: number, unit: string): string {
   const suffix = formatAmount(amount).slice(formatNumber(amount.quantity).length);
   return `${toFraction(amount.quantity)}${suffix}`;
 }
+
+/** Editable starting value for a replacement amount (blank when there is no usable amount). */
+export function prefillQuantity(quantity: number | undefined): string {
+  if (!quantity || !Number.isFinite(quantity) || quantity <= 0) return "";
+  return String(Math.round(quantity * 100) / 100);
+}

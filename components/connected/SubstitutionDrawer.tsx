@@ -8,7 +8,7 @@ import {
 import type { Meal } from "@/services/connectedClient";
 import type { Recipe } from "@/services/types";
 import type { IngredientOccurrence } from "@/services/stepIngredients";
-import { formatIngredientAmount } from "@/utils/ingredientFormat";
+import { formatIngredientAmount, prefillQuantity } from "@/utils/ingredientFormat";
 import { Sheet, Caption, Pill } from "./classic";
 import { Button, Field, Label, report } from "./ui";
 
@@ -88,7 +88,8 @@ export default function SubstitutionDrawer({
           selected={chosen === s}
           onPress={() => {
             setChosen(s);
-            setQuantity("");
+            // Start from the scaled amount being replaced; most swaps are like-for-like.
+            setQuantity(prefillQuantity(occurrence.ingredient.quantity));
             setUnit(occurrence.ingredient.unit);
           }}
         />
@@ -97,6 +98,12 @@ export default function SubstitutionDrawer({
         <>
           <Label>{chosen.reason}</Label>
           <Caption>{chosen.adjustment}</Caption>
+          {!meal && (
+            <Caption>
+              Swaps are saved to a planned meal. Add this recipe to your plan,
+              then open it from the calendar to apply this swap.
+            </Caption>
+          )}
           {meal && occurrence.index >= 0 && (
             <>
               <Caption>

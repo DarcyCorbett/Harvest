@@ -66,6 +66,7 @@ export default function GenerateScreen() {
   const [busy, setBusy] = useState(false);
   const cancel = useRef(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewServings, setPreviewServings] = useState<number | undefined>();
   const [slotOptions, setSlotOptions] = useState<string | null>(null);
   const [summary, setSummary] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -447,7 +448,11 @@ export default function GenerateScreen() {
               starDisabled={favourite.disabled || !slot.recipeId}
               onStarToggle={() => {if (slot.recipeId) favourite.toggle(slot.recipeId);}}
               recipe={c.recipes[slot.recipeId!]}
-              onPreview={() => slot.recipeId && setPreview(slot.recipeId)}
+              onPreview={() => {
+                if (!slot.recipeId) return;
+                setPreviewServings(slot.servings);
+                setPreview(slot.recipeId);
+              }}
               onOptions={() => setSlotOptions(slot.id)}
             >
               {slot.sourceMealId &&
@@ -683,7 +688,9 @@ export default function GenerateScreen() {
       )}
       {reviewMeals && <PlanReview meals={reviewMeals} onClose={() => setReviewMeals(null)} onApply={applyReviewed} />}
       <RecipeDetailModal
+        key={`${preview}:${previewServings}`}
         recipe={preview ? (c.recipes[preview] ?? null) : null}
+        defaultServings={previewServings}
         visible={!!preview}
         onClose={() => setPreview(null)}
       />
