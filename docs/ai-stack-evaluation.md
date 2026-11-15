@@ -123,7 +123,7 @@ Before deploying functions, create the OpenAI secret once (the deploy fails
 without it):
 
 ```
-firebase functions:secrets:set mealwizard-openai-api-key
+firebase functions:secrets:set MEALWIZARD_OPENAI_API_KEY
 ```
 
 The catalogue's Gemini Batch API paths (`geminiBatch.ts`,
