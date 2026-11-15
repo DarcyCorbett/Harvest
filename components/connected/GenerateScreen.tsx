@@ -644,21 +644,7 @@ export default function GenerateScreen() {
           <Button
             label={saving ? "Saving…" : "Add to Calendar"}
             disabled={busy || saving || !c.online}
-            onPress={() => {
-              const occupied = draft.slots.some(
-                (s) => !s.removed && s.expectedRevision > 0,
-              );
-              if (occupied)
-                Alert.alert(
-                  "Replace existing meals?",
-                  "This draft targets some existing meal slots. Confirming will replace those meals.",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Confirm", onPress: confirm },
-                  ],
-                );
-              else confirm();
-            }}
+            onPress={confirm}
           />
           <Button
             label="Back — keep draft"

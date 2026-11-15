@@ -31,6 +31,21 @@ import type {
   CookbookEntry,
 } from "./types";
 
+/**
+ * Slots are persisted with the server's status enum ("ready" | "unmatched" | "failed",
+ * functions/src/connected/service.ts), which has no "queued" state. A slot that has not
+ * been attempted yet is stored as "failed" with this message, so the UI must not print
+ * the raw status for it.
+ */
+export const QUEUED_SLOT_MESSAGE = "Ready to generate";
+
+export function slotStatusLabel(slot: { status: string; message?: string; removed?: boolean }): string {
+  if (slot.removed) return "Removed";
+  if (slot.status === "ready") return "Ready";
+  if (slot.status === "unmatched") return "No match";
+  return slot.message === QUEUED_SLOT_MESSAGE ? "Waiting to generate" : "Needs retry";
+}
+
 export function createDraft(
   slots: { date: string; mealType: string; maxMinutes?: 30 | 45 }[],
   config: Draft["config"],
@@ -50,7 +65,7 @@ export function createDraft(
       expectedRevision: 0,
       servings: config.adults + config.children * 0.5,
       status: "failed",
-      message: "Ready to generate",
+      message: QUEUED_SLOT_MESSAGE,
       locked: false,
       removed: false,
       must:

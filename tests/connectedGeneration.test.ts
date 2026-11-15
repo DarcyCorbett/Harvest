@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 const mocks = vi.hoisted(() => ({
   mode: vi.fn(),
   recipe: vi.fn(),
@@ -44,9 +45,11 @@ vi.mock("../services/recipeScraperService", () => ({
   matchesWord: (value: string, term: string) => value.includes(term),
 }));
 import {
+  QUEUED_SLOT_MESSAGE,
   createDraft,
   fillDraft,
   matchesDraftSlot,
+  slotStatusLabel,
 } from "../services/connectedGeneration";
 import type { Recipe } from "../services/types";
 const recipe = (id: string): Recipe => ({
@@ -223,5 +226,22 @@ describe("persisted connected generation", () => {
       [],
     );
     expect(every.slots.every((s) => s.must?.includes("tomato"))).toBe(true);
+  });
+});
+
+describe("draft slot status labels", () => {
+  it("never shows a queued slot as failed, while keeping the server's status enum", () => {
+    expect(slotStatusLabel({ status: "failed", message: QUEUED_SLOT_MESSAGE })).toBe("Waiting to generate");
+    expect(slotStatusLabel({ status: "failed", message: "Selected recipe is unavailable." })).toBe("Needs retry");
+    expect(slotStatusLabel({ status: "unmatched", message: "No match" })).toBe("No match");
+    expect(slotStatusLabel({ status: "failed", removed: true })).toBe("Removed");
+    expect(readFileSync("components/connected/DraftRecipeCard.tsx", "utf8")).toContain(": slotStatusLabel(slot)}");
+    expect(readFileSync("functions/src/connected/service.ts", "utf8")).toContain('z.enum(["ready", "unmatched", "failed"])');
+  });
+
+  it("drops the replace-existing alert that could never fire", () => {
+    const screen = readFileSync("components/connected/GenerateScreen.tsx", "utf8");
+    expect(screen).not.toContain("s.expectedRevision > 0");
+    expect(screen).not.toContain("Replace existing meals?");
   });
 });

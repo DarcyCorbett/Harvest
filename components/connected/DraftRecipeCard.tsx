@@ -4,6 +4,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Fonts, Shadows } from "@/constants/theme";
 import type { Recipe } from "@/services/types";
 import type { DraftSlot } from "@/services/connectedClient";
+import { slotStatusLabel } from "@/services/connectedGeneration";
 import { Caption, IconButton } from "./classic";
 import FavouriteButton from './FavouriteButton';
 export default function DraftRecipeCard({
@@ -101,7 +102,7 @@ export default function DraftRecipeCard({
                 ? `♻️ ${slot.servings} portions from ${sourceDate ?? 'source meal'}`
                 : recipe
                   ? `◷ ${recipe.totalTime || `${recipe.prepTime} prep · ${recipe.cookTime} cook`}${slot.locked ? " · 🔒 Kept" : ""}`
-                  : slot.status}
+                  : slotStatusLabel(slot)}
           </Caption>
         </View>
         {recipe?.imageUrl ? (
