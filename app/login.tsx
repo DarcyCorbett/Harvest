@@ -10,10 +10,9 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Modal,
 } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -21,20 +20,20 @@ import {
   VERIFICATION_REQUIRED_CODE,
 } from '@/services/householdClient';
 import { Colors, FontSizes, FontWeights, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';
-import * as Clipboard from 'expo-clipboard';
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { login, resetPassword, signInWithGoogle, pendingInviteCode, clearPendingInviteCode } = useAuth();
+  const { user, householdId, loading: authLoading, login, logout, resetPassword, signInWithGoogle } = useAuth();
 
-  const [email, setEmail] = useState('');
+  // Registration sends people here to log in after verifying; keep the address they typed.
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(typeof params.email === 'string' ? params.email : '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -51,13 +50,6 @@ export default function LoginScreen() {
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  const handleCopyCode = async () => {
-    if (!pendingInviteCode) return;
-    await Clipboard.setStringAsync(pendingInviteCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const handleForgotPassword = async () => {
@@ -146,6 +138,19 @@ export default function LoginScreen() {
             Plan smarter. Cook better. Together.
           </Text>
         </View>
+
+        {/* Signed in, but no household: e.g. setup was interrupted. Logging in again resumes it. */}
+        {!!user && !householdId && !authLoading && !loading && !googleLoading && (
+          <View accessibilityRole="alert" style={[styles.formCard, { backgroundColor: colors.surface, marginBottom: Spacing.lg }, Shadows.md]}>
+            <Text style={[styles.formTitle, { color: colors.text }]}>Finish setting up</Text>
+            <Text style={{ color: colors.textSecondary, fontFamily: Fonts.regular, fontSize: FontSizes.md, lineHeight: 22 }}>
+              Your account isn&apos;t linked to a household yet. Log in again below to finish setup, or sign out to use a different account.
+            </Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => { void logout(); }} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+              <Text style={[styles.switchLink, { color: colors.primaryText }]}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Form */}
         <View style={[styles.formCard, { backgroundColor: colors.surface }, Shadows.md]}>
@@ -255,39 +260,6 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
 
-      {/* New household invite code modal (shown for first-time Google sign-in) */}
-      <Modal
-        visible={!!pendingInviteCode}
-        transparent
-        animationType="fade"
-        onRequestClose={clearPendingInviteCode}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }, Shadows.lg]}>
-            <View style={[styles.modalIconContainer, { backgroundColor: colors.primaryLight }]}>
-              <Ionicons name="checkmark-circle" size={48} color={colors.primaryText} />
-            </View>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Household Created!</Text>
-            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              Share this code with others to join your household:
-            </Text>
-            <View style={[styles.codeContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-              <Text style={[styles.codeText, { color: colors.primaryText }]}>{pendingInviteCode}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.copyButton, { backgroundColor: colors.primary }]}
-              onPress={handleCopyCode}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={copiedCode ? 'checkmark' : 'copy-outline'} size={20} color="#fff" style={{ marginRight: Spacing.sm }} />
-              <Text style={styles.copyButtonText}>{copiedCode ? 'Copied!' : 'Copy Code'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dismissButton} onPress={clearPendingInviteCode} activeOpacity={0.7}>
-              <Text style={[styles.dismissButtonText, { color: colors.textSecondary }]}>Continue to App</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -411,71 +383,5 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xxl,
-  },
-  modalCard: {
-    borderRadius: Radius.xl,
-    padding: Spacing.xxxl,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 360,
-  },
-  modalIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.pill,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  modalTitle: {
-    fontSize: FontSizes.xxl,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.sm,
-  },
-  modalSubtitle: {
-    fontSize: FontSizes.md,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: Spacing.xl,
-  },
-  codeContainer: {
-    borderRadius: Radius.md,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.xxxl,
-    marginBottom: Spacing.xl,
-  },
-  codeText: {
-    fontSize: FontSizes.xxxl,
-    fontFamily: Fonts.bold,
-    letterSpacing: 4,
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.xxl,
-    width: '100%',
-    marginBottom: Spacing.md,
-  },
-  copyButtonText: {
-    color: '#FFFFFF',
-    fontSize: FontSizes.md,
-    fontFamily: Fonts.bold,
-  },
-  dismissButton: {
-    padding: Spacing.md,
-  },
-  dismissButtonText: {
-    fontSize: FontSizes.md,
   },
 });

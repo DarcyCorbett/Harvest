@@ -1,3 +1,4 @@
+import HouseholdCreatedModal from '@/components/HouseholdCreatedModal';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -52,6 +53,9 @@ function RootNavigator() {
       router.replace('/login');
     } else if (user && householdId && inAuthGroup) {
       router.replace('/(tabs)');
+    } else if (user && !householdId && !inAuthGroup) {
+      // Without a household every tab is empty; the login screen explains how to finish setup.
+      router.replace('/login');
     }
   }, [user, loading, householdId, segments, router]);
 
@@ -68,6 +72,7 @@ function RootNavigator() {
 
   return (
     <>
+      <HouseholdCreatedModal />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />

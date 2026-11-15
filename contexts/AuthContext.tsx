@@ -45,7 +45,8 @@ interface AuthContextType {
   inviteCode: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, inviteCode?: string) => Promise<{ inviteCode?: string }>;
+  /** Always rejects: registration ends signed out with VERIFICATION_REQUIRED_CODE or ONBOARDING_RESUME_CODE (see passwordOnboarding). */
+  register: (email: string, password: string, inviteCode?: string) => Promise<never>;
   logout: () => Promise<void>;
   /** Email a password reset link. Resolves even if no account exists. */
   resetPassword: (email: string) => Promise<void>;
@@ -239,11 +240,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     existingInviteCode?: string
-  ): Promise<{ inviteCode?: string }> => {
+  ): Promise<never> => {
     authFlowInProgress.current = true;
     try {
-      await passwordOnboarding.register(email, password, existingInviteCode);
-      return {};
+      return await passwordOnboarding.register(email, password, existingInviteCode);
     } finally {
       clearLocalAuth();
       authFlowInProgress.current = false;
@@ -284,7 +284,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
       if (response.type !== 'success') {
-        throw new Error('Google sign-in cancelled');
+        // Screens treat ERR_REQUEST_CANCELED as a deliberate cancel, not a failure.
+        throw Object.assign(new Error('Google sign-in cancelled'), { code: 'ERR_REQUEST_CANCELED' });
       }
       const idToken = response.data.idToken;
       if (!idToken) {
