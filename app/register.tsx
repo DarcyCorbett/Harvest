@@ -333,12 +333,15 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    // Without minWidth: 0 the input's intrinsic width pushes the eye toggle out of the field on web.
+    minWidth: 0,
     fontSize: FontSizes.md,
     height: '100%',
   },
   eyeButton: {
     minWidth: 44,
     minHeight: 44,
+    marginRight: -Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },

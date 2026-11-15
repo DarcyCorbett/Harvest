@@ -200,6 +200,16 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          {/* Inside the form, next to the password, so it is visible without scrolling. */}
+          <TouchableOpacity
+            onPress={handleForgotPassword}
+            accessibilityRole="button"
+            style={{ alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginTop: -Spacing.sm }}
+            id="forgot-password"
+          >
+            <Text style={[styles.switchLink, { color: colors.primaryText }]}>Forgot password?</Text>
+          </TouchableOpacity>
+
           {/* Login Button */}
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}
@@ -239,15 +249,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          onPress={handleForgotPassword}
-          accessibilityRole="button"
-          style={{ alignSelf: 'center', paddingVertical: Spacing.md, minHeight: 44, justifyContent: 'center' }}
-          id="forgot-password"
-        >
-          <Text style={[styles.switchLink, { color: colors.primaryText }]}>Forgot password?</Text>
-        </TouchableOpacity>
 
         {/* Register Link */}
         <View style={styles.switchSection}>
@@ -327,12 +328,15 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    // Without minWidth: 0 the input's intrinsic width pushes the eye toggle out of the field on web.
+    minWidth: 0,
     fontSize: FontSizes.md,
     height: '100%',
   },
   eyeButton: {
     minWidth: 44,
     minHeight: 44,
+    marginRight: -Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },

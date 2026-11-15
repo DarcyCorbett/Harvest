@@ -34,3 +34,13 @@ describe('auth and onboarding fixes', () => {
     expect(login).toContain('Finish setting up');
   });
 });
+
+describe('login and register layout', () => {
+  it('keeps the password eye toggle inside the field and Forgot password inside the form', () => {
+    for (const screen of ['app/login.tsx', 'app/register.tsx']) {
+      expect(read(screen)).toMatch(/ {2}input: \{\s*flex: 1,[^}]*minWidth: 0,/);
+    }
+    const login = read('app/login.tsx');
+    expect(login.indexOf('id="forgot-password"')).toBeLessThan(login.indexOf('{/* Login Button */}'));
+  });
+});
