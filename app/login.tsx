@@ -19,7 +19,7 @@ import {
   INVALID_INVITE_CODE,
   VERIFICATION_REQUIRED_CODE,
 } from '@/services/householdClient';
-import { Colors, FontSizes, FontWeights, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';
+import { Colors, FontSizes, Fonts, Spacing, Radius, Shadows } from '@/constants/theme';
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -288,13 +288,13 @@ const styles = StyleSheet.create({
   },
   appName: {
     fontSize: FontSizes.xxxl,
-    fontWeight: FontWeights.extrabold,
+    fontFamily: Fonts.bold,
     letterSpacing: -1,
   },
   tagline: {
     fontSize: FontSizes.md,
     marginTop: Spacing.xs,
-    fontWeight: FontWeights.regular,
+    fontFamily: Fonts.regular,
   },
   formCard: {
     borderRadius: Radius.xl,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   formTitle: {
     fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
+    fontFamily: Fonts.bold,
     marginBottom: Spacing.xl,
   },
   inputGroup: {
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: FontSizes.sm,
-    fontWeight: FontWeights.medium,
+    fontFamily: Fonts.medium,
     marginBottom: Spacing.sm,
   },
   inputContainer: {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: FontSizes.lg,
-    fontWeight: FontWeights.semibold,
+    fontFamily: Fonts.semibold,
   },
   switchSection: {
     flexDirection: 'row',
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   switchLink: {
     fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
+    fontFamily: Fonts.semibold,
   },
   dividerRow: {
     flexDirection: 'row',
@@ -385,6 +385,6 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
+    fontFamily: Fonts.semibold,
   },
 });

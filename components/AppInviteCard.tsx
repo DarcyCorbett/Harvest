@@ -3,6 +3,7 @@ import { ActivityIndicator, Share, Text, TextInput, TouchableOpacity, View } fro
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Fonts } from '@/constants/theme';
 import { appInvitationMessage, getAppInvitePermissions, inviteAppUser, type AppInvitation } from '@/services/appInvites';
 
 export default function AppInviteCard() {
@@ -26,7 +27,7 @@ export default function AppInviteCard() {
   const button = (label: string, action: () => void) => (
     <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={action}
       style={{ minHeight: 48, justifyContent: 'center', padding: 12, borderRadius: 12, backgroundColor: colors.primaryLight, opacity: busy ? 0.5 : 1 }}>
-      <Text style={{ color: colors.primaryText, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
+      <Text style={{ color: colors.primaryText, fontFamily: Fonts.semibold, textAlign: 'center' }}>{label}</Text>
     </TouchableOpacity>
   );
   if (permissionError) return button('Retry account permissions', () => setAttempt(value => value + 1));
@@ -46,7 +47,7 @@ export default function AppInviteCard() {
     } catch { setMessage('Could not share. Try copying the invitation.'); }
   }
   return <View style={{ padding: 20, marginBottom: 20, gap: 12, borderRadius: 20, backgroundColor: colors.surface }}>
-    <Text style={{ color: colors.text, fontSize: 20, fontWeight: '600' }}>Admin · Invite to Harvest</Text>
+    <Text style={{ color: colors.text, fontSize: 20, fontFamily: Fonts.semibold }}>Admin · Invite to Harvest</Text>
     <Text style={{ color: colors.textSecondary }}>Enter the email they will use to sign in. Enable access, then share the download link. They can create their own household.</Text>
     <TextInput accessibilityLabel="Invitee email address" placeholder="Email address" placeholderTextColor={colors.textSecondary}
       value={email} onChangeText={value => { setEmail(value); setInvitation(null); setMessage(''); }} editable={!busy}

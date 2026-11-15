@@ -10,6 +10,7 @@ import { ConnectedProvider } from '@/contexts/ConnectedContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useMealReminderSync } from '@/hooks/useMealReminderSync';
+import { Fonts } from '@/constants/theme';
 
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -115,11 +116,11 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   crash: { flex: 1, justifyContent: 'center', padding: 32, gap: 16, backgroundColor: '#F2EAD3' },
-  crashTitle: { fontSize: 24, fontWeight: '700', color: '#1F2A1F' },
+  crashTitle: { fontSize: 24, fontFamily: Fonts.bold, color: '#1F2A1F' },
   crashBody: { fontSize: 16, lineHeight: 22, color: '#1F2A1F' },
   crashDetail: { fontSize: 13, color: '#5C665C' },
   crashButton: { minHeight: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2F5D3A' },
-  crashButtonText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  crashButtonText: { fontSize: 16, fontFamily: Fonts.semibold, color: '#FFFFFF' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

@@ -4,7 +4,7 @@ import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSizes, FontWeights } from '@/constants/theme';
+import { Colors, FontSizes, Fonts } from '@/constants/theme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -35,7 +35,7 @@ export default function TabLayout() {
           fontSize: FontSizes.xs,
           lineHeight: 16,
           flexShrink: 0,
-          fontWeight: FontWeights.medium,
+          fontFamily: Fonts.medium,
           marginTop: 2,
         },
       }}

@@ -88,3 +88,12 @@ describe('touch targets and scannable shopping rows', () => {
     expect(screen).toContain("marginLeft: 32, marginRight: 8, marginTop: 4");
   });
 });
+
+describe('typography', () => {
+  it('uses the loaded Outfit faces rather than fontWeight, which falls back to the system font', () => {
+    for (const file of ['app/login.tsx', 'app/(tabs)/_layout.tsx', 'components/AppInviteCard.tsx', 'app/_layout.tsx']) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/fontWeight:/);
+    }
+    expect(readFileSync('constants/theme.ts', 'utf8')).not.toContain('extrabold');
+  });
+});
