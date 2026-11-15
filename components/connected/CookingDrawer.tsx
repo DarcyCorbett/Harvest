@@ -33,12 +33,15 @@ export default function CookingDrawer({
   meal,
   servings,
   onClose,
+  onDone,
   renderMedia,
 }: {
   recipe: Recipe;
   meal?: Meal;
   servings: number;
   onClose: () => void;
+  /** Called when Done is tapped on the last step, before the drawer closes. */
+  onDone?: () => void;
   renderMedia?: (step: Recipe["instructions"][number]) => React.ReactNode;
 }) {
   const { householdId, user } = useAuth();
@@ -217,6 +220,7 @@ export default function CookingDrawer({
               onPress={() => {
                 if (step >= steps.length - 1) {
                   update((s) => finishCooking(s, id));
+                  onDone?.();
                   close();
                 }
                 else

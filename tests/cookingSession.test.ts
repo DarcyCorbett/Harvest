@@ -87,10 +87,12 @@ describe("cooking progress", () => {
   });
 });
 describe("cooking route exit", () => {
-  it("closes the /cook route when the cooking drawer closes, instead of leaving the recipe modal behind", () => {
+  it("offers Mark cooked after the last step, and closes /cook instead of leaving the recipe modal behind", () => {
     const modal = readFileSync("components/RecipeDetailModal.tsx", "utf8");
-    expect(modal).toContain("onClose={() => { setCooking(false); if (initiallyCooking) onClose(); }}");
+    expect(modal).toContain("onDone={() => { finishedCooking.current = true; }}");
+    expect(modal).toMatch(/finishedCooking\.current && !!recipe\.id && recipe\.id === plannedMeal\?\.recipeId && plannedMeal\.status !== 'cooked'\) \{ setRecipeActions\(true\); return; \}/);
+    expect(modal).toContain("if (initiallyCooking) onClose();");
     const drawer = readFileSync("components/connected/CookingDrawer.tsx", "utf8");
-    expect(drawer).toContain("update((s) => finishCooking(s, id));");
+    expect(drawer).toMatch(/update\(\(s\) => finishCooking\(s, id\)\);\s*onDone\?\.\(\);\s*close\(\);/);
   });
 });

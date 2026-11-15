@@ -217,6 +217,7 @@ export default function RecipeDetailModal({
   const plannedMeal = connected.meals.find(m => m.id === mealPlanEntry?.id);
   const [cooking, setCooking] = useState(initiallyCooking);
   const [recipeActions, setRecipeActions] = useState(false);
+  const finishedCooking = useRef(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => { AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion); const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion); return () => sub.remove(); }, []);
   const [sideRecipe, setSideRecipe] = useState<Recipe | null>(null);
@@ -508,6 +509,13 @@ export default function RecipeDetailModal({
           ) : null}
 
           {actionBar}
+
+          {/* Primary cooking entry point, above the fold; the Instructions header keeps its own. */}
+          {recipe.instructions.some(step => !step.isHeader) && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Start cooking" testID="start-cooking-top" onPress={() => setCooking(true)} style={{ minHeight: 48, marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 24, backgroundColor: colors.primary }}>
+              <Ionicons name="play" size={18} color={colors.textInverse} /><Text style={{ fontFamily: Fonts.semibold, fontSize: 16, color: colors.textInverse }}>Start cooking</Text>
+            </Pressable>
+          )}
 
           {sourceClaims.length ? (
             <View style={styles.sourceClaimWrap}>
@@ -829,9 +837,15 @@ export default function RecipeDetailModal({
         </ScrollView>
       </Animated.View>
 
-      {recipeActions && <RecipeActionsDrawer recipeId={recipe.id!} meal={recipe.id === plannedMeal?.recipeId ? plannedMeal : undefined} onClose={() => setRecipeActions(false)} />}
+      {recipeActions && <RecipeActionsDrawer recipeId={recipe.id!} meal={recipe.id === plannedMeal?.recipeId ? plannedMeal : undefined} onClose={() => { setRecipeActions(false); if (finishedCooking.current) { finishedCooking.current = false; if (initiallyCooking) onClose(); } }} />}
       {substitution && <SubstitutionDrawer occurrence={substitution.occurrence} recipe={recipe} meal={substitution.meal} servings={cookingServings} onClose={() => setSubstitution(null)} />}
-      {cooking && <CookingDrawer recipe={recipe} meal={plannedMeal} servings={cookingServings} onClose={() => { setCooking(false); if (initiallyCooking) onClose(); }} renderMedia={step => step.videoEmbedUrl ? <View style={styles.stepImage}><VideoOrImage videoUrl={step.videoEmbedUrl} imageUrl={step.imageUrl} width={STEP_VIDEO_WIDTH} height={STEP_VIDEO_HEIGHT} imageStyle={styles.stepImage} /></View> : step.imageUrl ? <Image source={{ uri: step.imageUrl }} style={styles.stepImage} /> : null} />}
+      {cooking && <CookingDrawer recipe={recipe} meal={plannedMeal} servings={cookingServings} onDone={() => { finishedCooking.current = true; }} onClose={() => {
+        setCooking(false);
+        // Finishing the last step offers "Mark cooked" and effort; /cook exits once that closes.
+        if (finishedCooking.current && !!recipe.id && recipe.id === plannedMeal?.recipeId && plannedMeal.status !== 'cooked') { setRecipeActions(true); return; }
+        finishedCooking.current = false;
+        if (initiallyCooking) onClose();
+      }} renderMedia={step => step.videoEmbedUrl ? <View style={styles.stepImage}><VideoOrImage videoUrl={step.videoEmbedUrl} imageUrl={step.imageUrl} width={STEP_VIDEO_WIDTH} height={STEP_VIDEO_HEIGHT} imageStyle={styles.stepImage} /></View> : step.imageUrl ? <Image source={{ uri: step.imageUrl }} style={styles.stepImage} /> : null} />}
       {sideRecipe && <RecipeDetailModal recipe={sideRecipe} visible onClose={() => setSideRecipe(null)} mealPlanEntry={mealPlanEntry ? { id: mealPlanEntry.id } : undefined} defaultServings={plannedMeal?.sides?.find(s => s.recipeId === sideRecipe.id)?.servings} />}
       </GestureHandlerRootView>
     </Modal>
