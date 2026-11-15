@@ -40,7 +40,7 @@ export default function FavouriteButton({
       }}
     >
       {pending ? (
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.primaryText} />
       ) : (
         <Ionicons
           name={starred ? "star" : "star-outline"}

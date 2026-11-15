@@ -53,7 +53,7 @@ export default function DraftRecipeCard({
         >
           <Text
             style={{
-              color: colors.primary,
+              color: colors.primaryText,
               fontSize: 12,
               fontFamily: Fonts.semibold,
             }}

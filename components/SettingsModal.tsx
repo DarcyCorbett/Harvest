@@ -262,7 +262,7 @@ export default function SettingsModal({
             style={styles.saveBtn}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color={colors.primaryText} />
             ) : (
               <Text style={styles.saveBtnText}>Save</Text>
             )}
@@ -271,7 +271,7 @@ export default function SettingsModal({
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={colors.primaryText} />
           </View>
         ) : (
           <ScrollView
@@ -452,7 +452,7 @@ export default function SettingsModal({
                 style={styles.addTermBtn}
                 activeOpacity={0.7}
               >
-                <Ionicons name="add" size={20} color={colors.primary} />
+                <Ionicons name="add" size={20} color={colors.primaryText} />
               </TouchableOpacity>
             </View>
 
@@ -575,7 +575,7 @@ export default function SettingsModal({
               Debug log ({debugLogEntries.length})
             </Text>
             <TouchableOpacity onPress={onCopyLog} style={{ paddingHorizontal: Spacing.sm }}>
-              <Text style={{ color: colors.primary, fontFamily: Fonts.medium }}>Copy</Text>
+              <Text style={{ color: colors.primaryText, fontFamily: Fonts.medium }}>Copy</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onClearLog} style={{ paddingHorizontal: Spacing.sm }}>
               <Text style={{ color: colors.error, fontFamily: Fonts.medium }}>Clear</Text>
@@ -637,7 +637,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
   saveBtnText: {
     fontSize: FontSizes.md,
     fontFamily: Fonts.semibold,
-    color: colors.primary,
+    color: colors.primaryText,
   },
 
   // Loading
@@ -734,7 +734,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     color: colors.textSecondary,
   },
   weightChipTextActive: {
-    color: colors.primary,
+    color: colors.primaryText,
   },
 
   // Custom exclusion chips

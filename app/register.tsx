@@ -143,7 +143,7 @@ export default function RegisterScreen() {
         {/* Logo / Header */}
         <View style={styles.headerSection}>
           <View style={[styles.logoContainer, { backgroundColor: colors.primaryLight }]}>
-            <Ionicons name="restaurant" size={48} color={colors.primary} />
+            <Ionicons name="restaurant" size={48} color={colors.primaryText} />
           </View>
           <Text style={[styles.appName, { color: colors.text }]}>Harvest</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
@@ -282,7 +282,7 @@ export default function RegisterScreen() {
             Already have an account?{' '}
           </Text>
           <TouchableOpacity onPress={() => router.back()} id="go-to-login">
-            <Text style={[styles.switchLink, { color: colors.primary }]}>Log In</Text>
+            <Text style={[styles.switchLink, { color: colors.primaryText }]}>Log In</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -306,7 +306,7 @@ export default function RegisterScreen() {
 
             {/* Code Display */}
             <View style={[styles.codeContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-              <Text style={[styles.codeText, { color: colors.primary }]}>{generatedCode}</Text>
+              <Text style={[styles.codeText, { color: colors.primaryText }]}>{generatedCode}</Text>
             </View>
 
             <TouchableOpacity

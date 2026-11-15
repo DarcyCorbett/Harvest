@@ -15,6 +15,7 @@ export const Colors = {
     // Core
     primary: '#047857',        // accessible green with white button text
     primaryLight: '#D1FAE5',   // soft green tint
+    primaryText: '#047857',    // green text/icons on surfaces and primaryLight (4.8:1 on primaryLight)
     primaryDark: '#047857',
     accent: '#F59E0B',         // warm amber
     accentLight: '#FEF3C7',    // buttery warm tint
@@ -69,6 +70,7 @@ export const Colors = {
     // Core
     primary: '#047857',        // forest green with white button text
     primaryLight: '#064E3B',   // deep green tint
+    primaryText: '#6EE7B7',    // primary is too dark for text on dark surfaces (2.8:1); this is 6.4:1 on primaryLight
     primaryDark: '#047857',
     accent: '#FBBF24',
     accentLight: '#78350F',

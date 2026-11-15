@@ -118,7 +118,7 @@ export default function CookbookScreen() {
             <IconButton icon="settings-outline" label="Settings" onPress={() => router.push("/profile")} />
           </View>
           <StatusNotice style={{ paddingHorizontal: 0 }} />
-          {c.loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading household" /> : <>
+          {c.loading ? <ActivityIndicator color={colors.primaryText} accessibilityLabel="Loading household" /> : <>
 
             <Field
               label="Search recipes, ingredients, and cuisines"

@@ -199,7 +199,7 @@ export function DateField({
           gap: 12,
         }}
       >
-        <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+        <Ionicons name="calendar-outline" size={20} color={colors.primaryText} />
         <Text
           style={{
             flex: 1,
@@ -366,7 +366,7 @@ export function Screen({
         <StatusNotice style={{ paddingHorizontal: 0 }} />
         {c.loading ? (
           <ActivityIndicator
-            color={colors.primary}
+            color={colors.primaryText}
             accessibilityLabel="Loading household"
           />
         ) : (

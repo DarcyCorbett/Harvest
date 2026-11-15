@@ -209,7 +209,7 @@ export function StatusNotice({ style, hideShoppingProgress = false, hidePendingP
     return (
       <ActivityIndicator
         accessibilityLabel="Loading household"
-        color={colors.primary}
+        color={colors.primaryText}
         style={{ padding: 12 }}
       />
     );

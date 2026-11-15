@@ -60,7 +60,7 @@ function RootNavigator() {
     return (
       <>
         <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primaryText} />
         </View>
         <StatusBar style={effectiveScheme === 'light' ? 'dark' : 'light'} />
       </>

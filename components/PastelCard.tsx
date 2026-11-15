@@ -47,7 +47,7 @@ export default function PastelCard({
       style={[
         styles.card,
         { backgroundColor: bg, width: cardW, minHeight: cardMinHeight ?? cardW * 0.95 },
-        selected ? { borderColor: colors.primary } : { borderColor: '#D1D5DB' },
+        { borderColor: selected ? colors.primary : colors.border },
       ]}
     >
       <View style={[
@@ -57,7 +57,7 @@ export default function PastelCard({
         <Text style={styles.emoji}>{emoji}</Text>
       </View>
       <Text
-        style={[styles.title, { color: selected ? '#1C1917' : colors.text }]}
+        style={[styles.title, { color: colors.text }]}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}

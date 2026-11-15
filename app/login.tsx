@@ -139,7 +139,7 @@ export default function LoginScreen() {
         {/* Logo / Header */}
         <View style={styles.headerSection}>
           <View style={[styles.logoContainer, { backgroundColor: colors.primaryLight }]}>
-            <Ionicons name="restaurant" size={48} color={colors.primary} />
+            <Ionicons name="restaurant" size={48} color={colors.primaryText} />
           </View>
           <Text style={[styles.appName, { color: colors.text }]}>Harvest</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
@@ -241,7 +241,7 @@ export default function LoginScreen() {
           style={{ alignSelf: 'center', paddingVertical: Spacing.md, minHeight: 44, justifyContent: 'center' }}
           id="forgot-password"
         >
-          <Text style={[styles.switchLink, { color: colors.primary }]}>Forgot password?</Text>
+          <Text style={[styles.switchLink, { color: colors.primaryText }]}>Forgot password?</Text>
         </TouchableOpacity>
 
         {/* Register Link */}
@@ -250,7 +250,7 @@ export default function LoginScreen() {
             Don&apos;t have an account?{' '}
           </Text>
           <TouchableOpacity onPress={() => router.push('/register')} id="go-to-register">
-            <Text style={[styles.switchLink, { color: colors.primary }]}>Create Account</Text>
+            <Text style={[styles.switchLink, { color: colors.primaryText }]}>Create Account</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -265,14 +265,14 @@ export default function LoginScreen() {
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface }, Shadows.lg]}>
             <View style={[styles.modalIconContainer, { backgroundColor: colors.primaryLight }]}>
-              <Ionicons name="checkmark-circle" size={48} color={colors.primary} />
+              <Ionicons name="checkmark-circle" size={48} color={colors.primaryText} />
             </View>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Household Created!</Text>
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
               Share this code with others to join your household:
             </Text>
             <View style={[styles.codeContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-              <Text style={[styles.codeText, { color: colors.primary }]}>{pendingInviteCode}</Text>
+              <Text style={[styles.codeText, { color: colors.primaryText }]}>{pendingInviteCode}</Text>
             </View>
             <TouchableOpacity
               style={[styles.copyButton, { backgroundColor: colors.primary }]}

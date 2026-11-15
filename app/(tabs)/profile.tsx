@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SettingsModal from '@/components/SettingsModal';
+import { confirmAction } from '@/services/confirmAction';
 import AppInviteCard from '@/components/AppInviteCard';
 import { useConnected } from '@/contexts/ConnectedContext';
 
@@ -63,6 +64,12 @@ export default function ProfileScreen() {
       Alert.alert('Same household', 'That is your current household code.');
       return;
     }
+    const confirmed = await confirmAction({
+      title: 'Switch household?',
+      message: 'You will leave your current household and see the new household\u2019s meal plan and shopping list. Your current plan stays with your old household.',
+      confirmLabel: 'Switch',
+    });
+    if (!confirmed) return;
     setSwitching(true);
     try {
       const ok = await switchHousehold(code);
@@ -100,13 +107,13 @@ export default function ProfileScreen() {
 
       {/* Account section */}
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Household preferences and reminders" style={[s.card, { backgroundColor: colors.surface, minHeight: 48 }]} onPress={() => setSettingsVisible(true)}>
-        <Text style={{ color: colors.primary, fontSize: 18 }}>Household preferences and reminders</Text>
+        <Text style={{ color: colors.primaryText, fontSize: 18 }}>Household preferences and reminders</Text>
       </TouchableOpacity>
       {householdId && <SettingsModal householdId={householdId} visible={settingsVisible} onClose={() => setSettingsVisible(false)} onSaved={connected.retry} />}
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <View style={s.cardRow}>
           <View style={[s.avatarCircle, { backgroundColor: colors.primaryLight }]}>
-            <Ionicons name="person" size={22} color={colors.primary} />
+            <Ionicons name="person" size={22} color={colors.primaryText} />
           </View>
           <View style={s.cardRowText}>
             <Text style={[s.cardLabel, { color: colors.textSecondary }]}>Signed in as</Text>
@@ -121,7 +128,7 @@ export default function ProfileScreen() {
       <AppInviteCard />
       <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>YOUR HOUSEHOLD CODE</Text>
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
-        <Text style={[s.codeDisplay, { color: colors.primary, letterSpacing: 8 }]}>
+        <Text style={[s.codeDisplay, { color: colors.primaryText, letterSpacing: 8 }]}>
           {inviteCode ?? '——'}
         </Text>
         <Text style={[s.codeHint, { color: colors.textTertiary }]}>
@@ -133,8 +140,8 @@ export default function ProfileScreen() {
             onPress={handleCopy}
             activeOpacity={0.75}
           >
-            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={colors.primary} />
-            <Text style={[s.actionBtnText, { color: colors.primary }]}>
+            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={colors.primaryText} />
+            <Text style={[s.actionBtnText, { color: colors.primaryText }]}>
               {copied ? 'Copied!' : 'Copy'}
             </Text>
           </TouchableOpacity>
@@ -143,8 +150,8 @@ export default function ProfileScreen() {
             onPress={handleShare}
             activeOpacity={0.75}
           >
-            <Ionicons name="share-outline" size={16} color={colors.primary} />
-            <Text style={[s.actionBtnText, { color: colors.primary }]}>Share</Text>
+            <Ionicons name="share-outline" size={16} color={colors.primaryText} />
+            <Text style={[s.actionBtnText, { color: colors.primaryText }]}>Share</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -166,7 +173,9 @@ export default function ProfileScreen() {
             maxLength={10}
           />
           <TouchableOpacity
-            style={[s.joinBtn, { backgroundColor: colors.primary }, switching && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: switching || joinCode.trim().length === 0 }}
+            style={[s.joinBtn, { backgroundColor: colors.primary }, (switching || joinCode.trim().length === 0) && { opacity: 0.45 }]}
             onPress={handleSwitch}
             disabled={switching || joinCode.trim().length === 0}
             activeOpacity={0.8}
@@ -204,7 +213,7 @@ export default function ProfileScreen() {
                 <Text
                   style={[
                     s.themeChipText,
-                    { color: active ? colors.primary : colors.textSecondary },
+                    { color: active ? colors.primaryText : colors.textSecondary },
                   ]}
                 >
                   {opt[0].toUpperCase() + opt.slice(1)}
@@ -327,6 +336,8 @@ const s = StyleSheet.create({
   },
   joinInput: {
     flex: 1,
+    // Without minWidth: 0 the input's intrinsic width pushes "Switch" past the card edge.
+    minWidth: 0,
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,

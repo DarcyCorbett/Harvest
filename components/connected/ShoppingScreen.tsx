@@ -115,7 +115,7 @@ function ShoppingList() {
   const recipePill = (source: ListItem['contributions'][number]) => <Pressable key={`${source.mealId}:${source.recipeId}`}
     accessibilityRole="button" accessibilityLabel={`View ${source.title}`} onPress={() => openRecipe(source)}
     style={{ minHeight: 44, maxWidth: '100%', justifyContent: 'center', backgroundColor: colors.primaryLight, borderRadius: 18, paddingHorizontal: 10 }}>
-    <Text numberOfLines={1} ellipsizeMode="tail" style={{ color: colors.primary, fontFamily: Fonts.medium, fontSize: 12, flexShrink: 1 }}>{source.title}</Text>
+    <Text numberOfLines={1} ellipsizeMode="tail" style={{ color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 12, flexShrink: 1 }}>{source.title}</Text>
   </Pressable>;
   const card = (item: ShoppingDisplayGroup) => {
     const pending = pendingFor(item), checked = item.checked, sources = sourceOccasions(item.contributions);
@@ -140,9 +140,9 @@ function ShoppingList() {
             accessibilityHint={sources[0].title}
             onPress={() => setExpanded(v => open ? v.filter(id => id !== item.id) : [...v, item.id])}
             style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryLight, borderRadius: 18, paddingHorizontal: 8 }}>
-            <Text numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, minWidth: 0, color: colors.primary, fontFamily: Fonts.medium, fontSize: 12 }}>{sources[0].title}</Text>
-            <Text style={{ color: colors.primary, fontSize: 12 }}>+{sources.length - 1}</Text>
-            <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={colors.primary} />
+            <Text numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, minWidth: 0, color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 12 }}>{sources[0].title}</Text>
+            <Text style={{ color: colors.primaryText, fontSize: 12 }}>+{sources.length - 1}</Text>
+            <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={colors.primaryText} />
           </Pressable>}
         </View>}
         <IconButton icon="ellipsis-vertical" label={`Options for ${item.name}`} onPress={() => setDetailId(item.id)} />
@@ -169,7 +169,7 @@ function ShoppingList() {
         <IconButton icon="settings-outline" label="Settings" onPress={() => router.push('/profile')} />
       </View>
       {c.shoppingUpdating && <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center' }}>
-        <ActivityIndicator color={colors.primary} /><Caption>Updating shopping list…</Caption>
+        <ActivityIndicator color={colors.primaryText} /><Caption>Updating shopping list…</Caption>
       </View>}
       <StatusNotice hideShoppingProgress hidePendingProgress />
       {!c.shoppingUpdating && c.period?.groupingStatus === 'fallback' && <View style={{ paddingHorizontal: 20 }}><Caption>All ingredients are ready. Basic grouping is active.</Caption></View>}
@@ -189,7 +189,7 @@ function ShoppingList() {
       {add && <Sheet title="Add items" onClose={() => { if (!saving) setAdd(false); }} footer={<Row><View style={{ flex: 1 }}><Button label={saving ? 'Adding…' : 'Add item'} disabled={saving || locked || !name.trim()} onPress={saveManual} /></View><Button label="Done" secondary disabled={saving} onPress={() => setAdd(false)} /></Row>}>
         <Field ref={nameInput} label="Item" value={name} onChangeText={setName} returnKeyType="next" />
         <Row><View style={{ flex: 1 }}><Field label="Quantity" value={quantity} keyboardType="decimal-pad" onChangeText={setQuantity} /></View><View style={{ flex: 1 }}><Field label="Unit" value={unit} onChangeText={setUnit} /></View></Row>
-        {lastAdded && <Row><Text accessibilityLiveRegion="polite" style={{ color: colors.primary }}>Added {lastAdded.name}</Text>{!!lastAdded.id && <Pill label="Undo" disabled={saving || !c.online || locked || !items.some(i => i.id === lastAdded.id)} onPress={async () => {
+        {lastAdded && <Row><Text accessibilityLiveRegion="polite" style={{ color: colors.primaryText }}>Added {lastAdded.name}</Text>{!!lastAdded.id && <Pill label="Undo" disabled={saving || !c.online || locked || !items.some(i => i.id === lastAdded.id)} onPress={async () => {
           const item = items.find(i => i.id === lastAdded.id); if (!item) return;
           try { await c.check(item, 'delete'); setLastAdded(null); } catch (e) { report(e); }
         }} />}</Row>}
@@ -205,7 +205,7 @@ function ShoppingList() {
           <Caption>{combineAmounts([source.sourceAmount ?? { quantity: source.quantity, unit: detail.items.find(item => item.contributions.includes(source))?.unit ?? '' }]).map(formatAmount).join(' + ')}{source.servings ? ` · for ${source.servings} servings` : ''}</Caption>
         </View>)}
       </Sheet>}
-      {recipeLoading && <Sheet title="Loading recipe…" onClose={() => { previewRequest.current++; setRecipeLoading(false); }}><ActivityIndicator color={colors.primary} /></Sheet>}
+      {recipeLoading && <Sheet title="Loading recipe…" onClose={() => { previewRequest.current++; setRecipeLoading(false); }}><ActivityIndicator color={colors.primaryText} /></Sheet>}
       <RecipeDetailModal key={`${preview?.id}:${previewServings}:${previewMealId}`} defaultServings={previewServings} mealPlanEntry={previewMealId ? { id: previewMealId, servings: previewServings } : undefined} recipe={preview} visible={!!preview} onClose={() => setPreview(null)} />
     </View>
   </SafeAreaView>;

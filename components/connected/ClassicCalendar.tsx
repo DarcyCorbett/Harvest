@@ -209,7 +209,7 @@ export default function ClassicCalendar({
             <Text
               style={[
                 s.dayCardWeekday,
-                { color: isToday ? colors.primary : colors.textSecondary },
+                { color: isToday ? colors.primaryText : colors.textSecondary },
               ]}
             >
               {day.toLocaleDateString(undefined, { weekday: "long" })}
@@ -619,7 +619,7 @@ export default function ClassicCalendar({
                             s.gridDayNum,
                             {
                               color:
-                                date === today ? colors.primary : colors.text,
+                                date === today ? colors.primaryText : colors.text,
                             },
                           ]}
                         >

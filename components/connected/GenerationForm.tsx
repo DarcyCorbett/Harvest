@@ -106,7 +106,7 @@ export default function GenerationForm({
               ? !cuisines.some(([name]) => v.styles.includes(name))
               : v.styles.includes(style)
           }
-          selectedColorHex={Colors.light[bg]}
+          selectedColorHex={colors[bg]}
           onPress={() =>
             set({
               styles:

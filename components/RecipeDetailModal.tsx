@@ -548,7 +548,7 @@ export default function RecipeDetailModal({
                     style={styles.courseEditBtn}
                     disabled={savingLabels}
                   >
-                    <Text style={[styles.courseEditBtnText, { color: colors.primary }]}>
+                    <Text style={[styles.courseEditBtnText, { color: colors.primaryText }]}>
                       {savingLabels ? 'Saving…' : 'Save'}
                     </Text>
                   </TouchableOpacity>
@@ -741,7 +741,7 @@ export default function RecipeDetailModal({
               <View style={styles.card}>
                 {recipe.equipment.map((item, index) => (
                   <View key={`${item.name}-${index}`} style={[styles.equipmentRow, index < recipe.equipment!.length - 1 && styles.ingredientDivider]}>
-                    <Ionicons name="restaurant-outline" size={16} color={colors.primary} />
+                    <Ionicons name="restaurant-outline" size={16} color={colors.primaryText} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.equipmentName}>{item.name}</Text>
                       {item.notes ? <Text style={styles.ingredientNotes}>{item.notes}</Text> : null}
@@ -764,10 +764,10 @@ export default function RecipeDetailModal({
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
             <Text style={[styles.sectionTitle, { flex: 1, marginTop: 0, marginBottom: 0 }]}>Instructions</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Start cooking" onPress={() => setCooking(true)} style={{ minHeight: 44, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 22, backgroundColor: colors.primaryLight }}>
-              <Ionicons name="play" size={16} color={colors.primary} /><Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.primary }}>Start cooking</Text>
+              <Ionicons name="play" size={16} color={colors.primaryText} /><Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.primaryText }}>Start cooking</Text>
             </Pressable>
           </View>
-          {!!plannedMeal?.sides?.length && recipe.id === plannedMeal.recipeId && <View style={{ gap: 8 }}>{plannedMeal.sides.map(side => <Pressable key={side.recipeId} accessibilityRole="button" accessibilityLabel={`Open side: ${connected.recipes[side.recipeId]?.title ?? 'Side'}`} onPress={() => connected.load(side.recipeId).then(r => setSideRecipe(r)).catch(e => Alert.alert('Could not open side', e.message))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primary, fontFamily: Fonts.medium }}>+ {connected.recipes[side.recipeId]?.title ?? 'Side'}</Text></Pressable>)}</View>}
+          {!!plannedMeal?.sides?.length && recipe.id === plannedMeal.recipeId && <View style={{ gap: 8 }}>{plannedMeal.sides.map(side => <Pressable key={side.recipeId} accessibilityRole="button" accessibilityLabel={`Open side: ${connected.recipes[side.recipeId]?.title ?? 'Side'}`} onPress={() => connected.load(side.recipeId).then(r => setSideRecipe(r)).catch(e => Alert.alert('Could not open side', e.message))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.primaryText, fontFamily: Fonts.medium }}>+ {connected.recipes[side.recipeId]?.title ?? 'Side'}</Text></Pressable>)}</View>}
           {(() => {
             return recipe.instructions.map((step, idx) => {
               if (step.isHeader) {
@@ -1072,7 +1072,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   courseTagChipTextActive: {
-    color: colors.primary,
+    color: colors.primaryText,
   },
   coursePill: {
     paddingHorizontal: Spacing.sm,
@@ -1268,7 +1268,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  stepNum: { fontSize: FontSizes.sm, fontFamily: Fonts.bold, color: colors.primary },
+  stepNum: { fontSize: FontSizes.sm, fontFamily: Fonts.bold, color: colors.primaryText },
   stepBody: { flex: 1, gap: Spacing.sm },
   stepText: {
     fontSize: FontSizes.lg,

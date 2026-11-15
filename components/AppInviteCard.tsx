@@ -26,7 +26,7 @@ export default function AppInviteCard() {
   const button = (label: string, action: () => void) => (
     <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={action}
       style={{ minHeight: 48, justifyContent: 'center', padding: 12, borderRadius: 12, backgroundColor: colors.primaryLight, opacity: busy ? 0.5 : 1 }}>
-      <Text style={{ color: colors.primary, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
+      <Text style={{ color: colors.primaryText, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
     </TouchableOpacity>
   );
   if (permissionError) return button('Retry account permissions', () => setAttempt(value => value + 1));
@@ -53,7 +53,7 @@ export default function AppInviteCard() {
       keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
       style={{ color: colors.text, borderColor: colors.textSecondary, borderWidth: 1, borderRadius: 12, padding: 12, minHeight: 48 }} />
     {button('Enable access', () => { void grant(); })}
-    {busy && <ActivityIndicator color={colors.primary} />}
+    {busy && <ActivityIndicator color={colors.primaryText} />}
     {invitation && <>
       <Text selectable style={{ color: colors.text }}>{invitation.alreadyAllowed ? 'Already has access' : 'Access enabled'}: {invitation.email}</Text>
       {button('Share invitation', () => { void share(false); })}

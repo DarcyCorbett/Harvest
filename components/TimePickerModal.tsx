@@ -107,7 +107,7 @@ export default function TimePickerModal({
         <Text
           style={[
             styles.itemText,
-            isSelected && { color: colors.primary, fontFamily: Fonts.bold },
+            isSelected && { color: colors.primaryText, fontFamily: Fonts.bold },
           ]}
         >
           {item}

@@ -299,7 +299,7 @@ export default function CookingDrawer({
                   <Ionicons
                     name="timer-outline"
                     size={18}
-                    color={colors.primary}
+                    color={colors.primaryText}
                   />
                   <Text
                     style={{ fontFamily: Fonts.medium, color: colors.text }}
