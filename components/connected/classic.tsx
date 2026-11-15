@@ -93,6 +93,8 @@ export function Pill({
         paddingVertical: 10,
         borderRadius: Radius.pill,
         backgroundColor: selected ? colors.primary : colors.surface,
+        borderWidth: selected ? 0 : 1,
+        borderColor: colors.border,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

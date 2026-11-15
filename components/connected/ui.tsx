@@ -85,7 +85,9 @@ export function Button({
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 999,
-        borderWidth: 0,
+        // Secondary buttons usually sit on white cards; without a border they read as plain text.
+        borderWidth: secondary && !selected ? 1 : 0,
+        borderColor: colors.border,
         backgroundColor:
           secondary && !selected ? colors.surface : colors.primary,
         opacity: disabled ? 0.45 : pressed ? 0.7 : 1,

@@ -33,7 +33,7 @@ export const Colors = {
     textInverse: '#FFFFFF',
 
     // Borders & dividers
-    border: '#F5F5F4',         // extremely soft border
+    border: '#D6D3D1',         // stone-300: visible on white cards and the cream background
     borderLight: '#FAFAF9',
     divider: '#F5F5F4',
 
@@ -62,7 +62,7 @@ export const Colors = {
     // Misc
     shadow: 'rgba(28, 25, 23, 0.04)', // extremely diffuse, soft ambient shadow
     overlay: 'rgba(0, 0, 0, 0.4)',
-    placeholder: '#D6D3D1',
+    placeholder: '#78716C',    // 4.8:1 on white; #D6D3D1 was 1.4:1
     inputBackground: '#FDFBF7',
     checked: '#A8A29E',
   },
@@ -88,7 +88,7 @@ export const Colors = {
     textInverse: '#FFFFFF',
 
     // Borders & dividers
-    border: '#44403C',         // soft separation
+    border: '#57534E',         // stone-600: visible on surface (#292524)
     borderLight: '#292524',
     divider: '#44403C',
 
@@ -117,7 +117,7 @@ export const Colors = {
     // Misc
     shadow: 'rgba(0, 0, 0, 0.4)', // harsher shadows needed in dark mode
     overlay: 'rgba(0, 0, 0, 0.7)',
-    placeholder: '#57534E',
+    placeholder: '#A8A29E',
     inputBackground: '#292524',
     checked: '#44403C',
   },

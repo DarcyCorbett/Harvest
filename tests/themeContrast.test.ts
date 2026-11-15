@@ -54,3 +54,18 @@ describe('switching household', () => {
     expect(profile).toContain("(switching || joinCode.trim().length === 0) && { opacity: 0.45 }");
   });
 });
+
+describe('borders and placeholders', () => {
+  it('keeps light-mode borders visible and placeholders readable', () => {
+    expect(contrast(Colors.light.border, Colors.light.surface)).toBeGreaterThanOrEqual(1.4);
+    expect(contrast(Colors.light.placeholder, Colors.light.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(Colors.dark.placeholder, Colors.dark.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(Colors.dark.border, Colors.dark.surface)).toBeGreaterThan(contrast('#44403C', Colors.dark.surface));
+  });
+  it('outlines unselected secondary buttons and pills so they read as buttons on white cards', () => {
+    const ui = readFileSync('components/connected/ui.tsx', 'utf8');
+    expect(ui).toContain('borderWidth: secondary && !selected ? 1 : 0,');
+    const classic = readFileSync('components/connected/classic.tsx', 'utf8');
+    expect(classic).toContain('borderWidth: selected ? 0 : 1,');
+  });
+});
