@@ -1003,8 +1003,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 3,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: Radius.pill,
     backgroundColor: colors.border,
     justifyContent: 'center',
@@ -1367,8 +1367,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Spacing.md,
   },
   stepperBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: Radius.pill,
     borderWidth: 1.5,
     alignItems: 'center',

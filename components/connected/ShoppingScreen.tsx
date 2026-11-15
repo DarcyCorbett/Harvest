@@ -145,19 +145,20 @@ function ShoppingList() {
             <Caption>{item.label}</Caption>
           </View>
         </Pressable>
-        {!!sources.length && <View style={{ width: '36%', minWidth: 0 }}>
+        <IconButton icon="ellipsis-vertical" label={`Options for ${item.name}`} onPress={() => setDetailId(item.id)} />
+      </View>
+      {/* Recipe sources sit under the name: beside it they took 36% of the row and truncated both. */}
+      {!!sources.length && <View style={{ flexDirection: 'row', marginLeft: 32, marginRight: 8, marginTop: 4 }}>
           {sources.length === 1 ? recipePill(sources[0]) : <Pressable accessibilityRole="button"
             accessibilityLabel={`${open ? 'Hide' : 'Show'} all ${sources.length} recipes for ${item.name}`} accessibilityState={{ expanded: open }}
             accessibilityHint={sources[0].title}
             onPress={() => setExpanded(v => open ? v.filter(id => id !== item.id) : [...v, item.id])}
-            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryLight, borderRadius: 18, paddingHorizontal: 8 }}>
-            <Text numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, minWidth: 0, color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 12 }}>{sources[0].title}</Text>
+            style={{ minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryLight, borderRadius: 18, paddingHorizontal: 8 }}>
+            <Text numberOfLines={1} ellipsizeMode="tail" style={{ flexShrink: 1, minWidth: 0, color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 12 }}>{sources[0].title}</Text>
             <Text style={{ color: colors.primaryText, fontSize: 12 }}>+{sources.length - 1}</Text>
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={colors.primaryText} />
           </Pressable>}
-        </View>}
-        <IconButton icon="ellipsis-vertical" label={`Options for ${item.name}`} onPress={() => setDetailId(item.id)} />
-      </View>
+      </View>}
       {open && sources.length > 1 && <View style={{ gap: 5, marginTop: 8 }}>{sources.map(recipePill)}</View>}
       {pending && <View accessibilityLabel={pending.error ? 'Sync needs attention' : 'Saving shopping change'} style={{ position: 'absolute', right: 8, bottom: 4 }}>
         <Ionicons name={pending.error ? 'alert-circle-outline' : 'cloud-upload-outline'} size={12} color={colors.textSecondary} />

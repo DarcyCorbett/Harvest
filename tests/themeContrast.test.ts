@@ -69,3 +69,22 @@ describe('borders and placeholders', () => {
     expect(classic).toContain('borderWidth: selected ? 0 : 1,');
   });
 });
+
+describe('touch targets and scannable shopping rows', () => {
+  it('sizes the flagged controls to at least 44pt', () => {
+    const modal = readFileSync('components/RecipeDetailModal.tsx', 'utf8');
+    expect(modal).toMatch(/closeBtn: \{\s*width: 44,\s*height: 44,/);
+    expect(modal).toMatch(/stepperBtn: \{\s*width: 44,\s*height: 44,/);
+    const settings = readFileSync('components/SettingsModal.tsx', 'utf8');
+    expect(settings).toMatch(/weightChip: \{\s*minHeight: 44,\s*minWidth: 44,/);
+    expect(settings).toMatch(/addTermBtn: \{\s*width: 44,\s*height: 44,/);
+    for (const screen of ['app/login.tsx', 'app/register.tsx']) {
+      expect(readFileSync(screen, 'utf8')).toMatch(/eyeButton: \{\s*minWidth: 44,\s*minHeight: 44,/);
+    }
+  });
+  it('puts recipe sources under the item name instead of a 36% column', () => {
+    const screen = readFileSync('components/connected/ShoppingScreen.tsx', 'utf8');
+    expect(screen).not.toContain("width: '36%'");
+    expect(screen).toContain("marginLeft: 32, marginRight: 8, marginTop: 4");
+  });
+});

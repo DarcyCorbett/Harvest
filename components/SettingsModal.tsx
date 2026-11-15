@@ -734,6 +734,10 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
     opacity: 0.35,
   },
   weightChip: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
     borderRadius: Radius.sm,
@@ -850,8 +854,8 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet
   },
 
   addTermBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: colors.primary,
