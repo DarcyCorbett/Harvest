@@ -16,7 +16,7 @@ import { Caption, IconButton, Pill, Sheet, StatusNotice } from './classic';
 import { quickAddChoices } from '@/constants/shoppingQuickAdd';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { Recipe } from '@/services/types';
-import { purchasedItems, commandHasItem, shoppingDisplayGroups, type ShoppingDisplayGroup } from '@/services/shoppingPresentation';
+import { purchasedItems, commandHasItem, shoppingDisplayGroups, sourceNameNote, type ShoppingDisplayGroup } from '@/services/shoppingPresentation';
 import { combineAmounts, formatAmount } from '@/functions/src/shared/ingredientAmounts';
 
 const sourceOccasions = (sources: ListItem['contributions']) => [...new Map(sources.map(source => [JSON.stringify([source.mealId, source.recipeId]), source])).values()];
@@ -44,7 +44,7 @@ function ShoppingList() {
   const [unit, setUnit] = useState(''), [category, setCategory] = useState('Other'), [saving, setSaving] = useState(false);
   const [lastAdded, setLastAdded] = useState<{ id: string; name: string } | null>(null);
   const [quickRequest, setQuickRequest] = useState<{ id: string; name: string; category: string } | null>(null);
-  const savingRef = useRef(false), nameInput = useRef<TextInput>(null);
+  const savingRef = useRef(false), nameInput = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [footerHeight, setFooterHeight] = useState(64);
   const quickAdd = quickAddChoices(category);
   const items = c.period?.items ?? [];
@@ -131,6 +131,10 @@ function ShoppingList() {
   const card = (item: ShoppingDisplayGroup) => {
     const pending = pendingFor(item), unsent = unsentChange(item), checked = item.checked, sources = sourceOccasions(item.contributions);
     const open = expanded.includes(item.id), selectedItem = selected.includes(item.id);
+    // Each recipe's own wording when the list merged it under a different name; nothing for exact matches.
+    const noteFor = (source: ListItem['contributions'][number]) => sourceNameNote(item.name,
+      item.contributions.filter(c => c.mealId === source.mealId && c.recipeId === source.recipeId));
+    const singleNote = sources.length === 1 ? noteFor(sources[0]) : undefined;
     return <View key={item.id} style={{ width: '100%', padding: 12, borderRadius: 20, backgroundColor: colors.surface, ...Shadows.sm, borderWidth: selectedItem ? 2 : 0, borderColor: colors.primary }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel={`${checked ? 'Uncheck' : 'Purchase'} ${item.name}, ${item.label}`}
@@ -143,12 +147,12 @@ function ShoppingList() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontSize: 17, lineHeight: 23, fontFamily: Fonts.semibold, color: checked ? colors.textSecondary : colors.text, textDecorationLine: checked ? 'line-through' : 'none' }}>{item.name}</Text>
             <Caption>{item.label}</Caption>
+            {!!singleNote && <Caption>Note: {singleNote}</Caption>}
           </View>
         </Pressable>
-        <IconButton icon="ellipsis-vertical" label={`Options for ${item.name}`} onPress={() => setDetailId(item.id)} />
-      </View>
-      {/* Recipe sources sit under the name: beside it they took 36% of the row and truncated both. */}
-      {!!sources.length && <View style={{ flexDirection: 'row', marginLeft: 32, marginRight: 8, marginTop: 4 }}>
+        {/* Recipe sources stay in-line with the name and expander so each card stays one row tall:
+            a shorter list means less scrolling. Sized to content, capped at 40% so the name keeps priority. */}
+        {!!sources.length && <View style={{ maxWidth: '40%', flexShrink: 1, minWidth: 0, alignItems: 'flex-end' }}>
           {sources.length === 1 ? recipePill(sources[0]) : <Pressable accessibilityRole="button"
             accessibilityLabel={`${open ? 'Hide' : 'Show'} all ${sources.length} recipes for ${item.name}`} accessibilityState={{ expanded: open }}
             accessibilityHint={sources[0].title}
@@ -158,8 +162,16 @@ function ShoppingList() {
             <Text style={{ color: colors.primaryText, fontSize: 12 }}>+{sources.length - 1}</Text>
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color={colors.primaryText} />
           </Pressable>}
-      </View>}
-      {open && sources.length > 1 && <View style={{ gap: 5, marginTop: 8 }}>{sources.map(recipePill)}</View>}
+        </View>}
+        <IconButton icon="ellipsis-vertical" label={`Options for ${item.name}`} onPress={() => setDetailId(item.id)} />
+      </View>
+      {open && sources.length > 1 && <View style={{ gap: 5, marginTop: 8 }}>{sources.map(source => {
+        const note = noteFor(source);
+        return <View key={`${source.mealId}:${source.recipeId}`} style={{ gap: 2 }}>
+          {recipePill(source)}
+          {!!note && <View style={{ paddingHorizontal: 10 }}><Caption>Note: {note}</Caption></View>}
+        </View>;
+      })}</View>}
       {pending && <View accessibilityLabel={pending.error ? 'Sync needs attention' : 'Saving shopping change'} style={{ position: 'absolute', right: 8, bottom: 4 }}>
         <Ionicons name={pending.error ? 'alert-circle-outline' : 'cloud-upload-outline'} size={12} color={colors.textSecondary} />
       </View>}

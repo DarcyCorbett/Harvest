@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import PastelCard from "@/components/PastelCard";
 import { Colors, Fonts, Shadows } from "@/constants/theme";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useConnected } from "@/contexts/ConnectedContext";
 import { useRouter } from "expo-router";
 import { shiftDate, type Draft } from "@/services/connectedClient";
-import { Button, DateField, Field, Row } from "./ui";
+import { Button, DateField, Row } from "./ui";
 import { Caption, Counter, IconButton, Pill, Sheet } from "./classic";
 export type GenerationFormValue = {
   start: string;
@@ -422,15 +423,17 @@ export default function GenerationForm({
               );
             })}
           </View>
-          <Field
+          <TermsField
             label="Other ingredients to favour"
+            placeholder="e.g. salmon"
             value={v.prefer}
-            onChangeText={(prefer) => set({ prefer })}
+            onChange={(prefer) => set({ prefer })}
           />
-          <Field
+          <TermsField
             label="Required ingredients"
+            placeholder="e.g. sausages"
             value={v.must}
-            onChangeText={(must) => set({ must })}
+            onChange={(must) => set({ must })}
           />
           <Row>
             <Pill
@@ -456,10 +459,11 @@ export default function GenerationForm({
               router.push({ pathname: "/profile", params: { section: "preferences" } });
             }}
           />
-          <Field
+          <TermsField
             label="Extra exclusions for this plan"
+            placeholder="e.g. mushrooms"
             value={v.exclude}
-            onChangeText={(exclude) => set({ exclude })}
+            onChange={(exclude) => set({ exclude })}
           />
           <Counter
             label="Favourites"
@@ -474,6 +478,81 @@ export default function GenerationForm({
           />
           <Button label="Done" onPress={() => set({ advanced: false })} />
         </Sheet>
+      )}
+    </View>
+  );
+}
+
+const MAX_TERMS = 20; // matches the server's limit per list
+const splitTerms = (value: string) => value.split(",").map((t) => t.trim()).filter(Boolean);
+
+/**
+ * Several ingredients, one at a time: type and press + (or Return, or a comma) to add a pill;
+ * tap a pill's x to remove it. The value stays the comma-separated string the generator reads.
+ */
+export function TermsField({ label, placeholder, value, onChange }: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { colors } = useTheme();
+  const [text, setText] = useState("");
+  const terms = splitTerms(value);
+  const add = (raw: string) => {
+    const next = [...terms];
+    for (const term of splitTerms(raw)) {
+      if (next.length >= MAX_TERMS) break;
+      if (!next.some((t) => t.toLowerCase() === term.toLowerCase())) next.push(term.slice(0, 120));
+    }
+    onChange(next.join(", "));
+    setText("");
+  };
+  const full = terms.length >= MAX_TERMS;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: colors.text, fontSize: 14, fontFamily: Fonts.regular }}>{label}</Text>
+      <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+        <TextInput
+          accessibilityLabel={label}
+          value={text}
+          editable={!full}
+          placeholder={full ? `Up to ${MAX_TERMS} ingredients` : placeholder}
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          returnKeyType="done"
+          blurOnSubmit={false}
+          onChangeText={(next) => (next.includes(",") ? add(next) : setText(next))}
+          onSubmitEditing={() => text.trim() && add(text)}
+          style={{ flex: 1, minWidth: 0, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text, backgroundColor: colors.surface, fontSize: 16 }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Add to ${label.toLowerCase()}`}
+          accessibilityState={{ disabled: !text.trim() || full }}
+          disabled={!text.trim() || full}
+          onPress={() => add(text)}
+          style={({ pressed }) => ({ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: colors.primaryLight, opacity: !text.trim() || full ? 0.45 : pressed ? 0.7 : 1 })}
+        >
+          <Ionicons name="add" size={22} color={colors.primaryText} />
+        </Pressable>
+      </View>
+      {terms.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {terms.map((term) => (
+            <Pressable
+              key={term.toLowerCase()}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${term}`}
+              onPress={() => onChange(terms.filter((t) => t !== term).join(", "))}
+              hitSlop={{ top: 4, bottom: 4 }}
+              style={({ pressed }) => ({ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 12, paddingRight: 8, borderRadius: 18, backgroundColor: colors.primaryLight, opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text style={{ color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 14 }}>{term}</Text>
+              <Ionicons name="close" size={16} color={colors.primaryText} />
+            </Pressable>
+          ))}
+        </View>
       )}
     </View>
   );

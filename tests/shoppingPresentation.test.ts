@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { purchasedItems, shoppingIsUpdating, shoppingDisplayGroups, commandHasItem } from '../services/shoppingPresentation';
+import { purchasedItems, shoppingIsUpdating, shoppingDisplayGroups, commandHasItem, sourceNameNote } from '../services/shoppingPresentation';
 import type { ListItem, PendingCheck, Period, Workflow } from '../services/connectedClient';
 const item = (id: string, order?: number): ListItem => ({ id, name: id, quantity: 1, unit: '', category: 'Other', revision: 1, checked: true, manual: true, contributions: [], purchasedOrder: order });
 const pending = (id: string, action = 'check'): PendingCheck => ({ id, command: { periodId: 'list', itemId: id, action } });
@@ -38,5 +38,22 @@ describe('purchase order', () => {
     expect(purchasedItems(items, [entry], 'other')).toEqual([]);
     expect(purchasedItems(items, [{ ...entry, error: 'stale' }], 'list')).toEqual([]);
     expect(purchasedItems(items.map(i => ({ ...i, checked: true })), [{ ...entry, command: { ...(entry.command as object), action: 'delete' } }], 'list')).toEqual([]);
+  });
+});
+
+describe('recipe naming notes on merged items', () => {
+  const from = (name: string, mealId = 'm1') => ({ mealId, recipeId: 'r', title: 'Recipe', quantity: 1, sourceAmount: { name, quantity: 1, unit: '' } });
+  it('shows the recipe wording only when it differs from the shopping name', () => {
+    expect(sourceNameNote('sausages', [from('hot or Italian sausages')])).toBe('hot or Italian sausages');
+    expect(sourceNameNote('olive oil', [from('Extra virgin olive oil')])).toBe('Extra virgin olive oil');
+  });
+  it('treats case, punctuation, plurals and app form tags as exact matches', () => {
+    expect(sourceNameNote('sausages', [from('Sausage')])).toBeUndefined();
+    expect(sourceNameNote('tomatoes', [from('tomato')])).toBeUndefined();
+    expect(sourceNameNote('oregano (dried)', [from('Oregano')])).toBeUndefined();
+    expect(sourceNameNote('olive oil', [])).toBeUndefined();
+  });
+  it('lists each distinct differing name once', () => {
+    expect(sourceNameNote('olive oil', [from('olive oil'), from('light olive oil'), from('Light olive oil')])).toBe('light olive oil');
   });
 });

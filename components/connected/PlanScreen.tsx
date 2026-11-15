@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Fonts } from "@/constants/theme";
+import { validDate } from "../../functions/src/connected/model";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConnected } from "@/contexts/ConnectedContext";
@@ -22,7 +25,7 @@ import PlanReview from './PlanReview';
 import RecipePickerModal from './RecipePickerModal';
 import { withServings, mealLabel, templateMeals } from '@/services/planning';
 import ClassicCalendar from "./ClassicCalendar";
-import { Sheet, Pill, Caption } from "./classic";
+import { Sheet, Pill, Caption, IconButton } from "./classic";
 import {
   Heading,
   Label,
@@ -123,124 +126,200 @@ export function MealEditor({
       flight.current = false; setBusy(false);
     }
   };
+  const isNew = !meal.revision;
+  // A new meal is a three-step walkthrough; editing opens on the same steps, all reachable at once.
+  const [step, setStep] = useState(0);
+  const [furthest, setFurthest] = useState(isNew ? 0 : 2);
+  const [leftoverQuery, setLeftoverQuery] = useState("");
+  const servingsValid = amount(servingsText) > 0 && Number.isFinite(amount(servingsText));
+  const stepValid = [
+    validDate(value.date) && !!value.mealType,
+    servingsValid,
+    value.kind === "recipe" ? !!value.recipeId
+      : value.kind === "leftover" ? !!value.sourceMealId
+        : true,
+  ];
+  const stepTitles = ["When", "Meal type", value.kind === "leftover" ? "Leftovers" : value.kind === "eating-out" ? "Details" : "Recipe"];
+  const goTo = (next: number) => {
+    setStep(next);
+    setFurthest((f) => Math.max(f, next));
+  };
+  const dayLabel = (date: string) =>
+    new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  const cooked = c.meals
+    .filter((m) => m.kind === "recipe" && m.date < value.date && !["removed", "skipped"].includes(m.status))
+    .sort((x, y) => y.date.localeCompare(x.date));
+  const query = leftoverQuery.trim().toLowerCase();
+  const leftoverChoices = (query
+    ? cooked.filter((m) => `${mealLabel(m, c.recipes[m.recipeId]?.title)} ${m.mealType} ${dayLabel(m.date)}`.toLowerCase().includes(query))
+    : cooked
+  ).slice(0, 30);
+  const last = step === 2;
+  const saveButton = (
+    <View style={{ flex: 1 }}>
+      <Button label={busy ? "Saving…" : isNew ? "Add to plan" : "Save changes"} disabled={busy || !c.online || (isNew && !stepValid.every(Boolean))} onPress={save} />
+    </View>
+  );
+  const footer = (
+    <Row>
+      {step > 0 && <Button label="Back" secondary disabled={busy} onPress={() => setStep(step - 1)} />}
+      {!last && (isNew
+        ? <View style={{ flex: 1 }}><Button label="Next" disabled={!stepValid[step]} onPress={() => goTo(step + 1)} /></View>
+        : <Button label="Next" secondary disabled={!stepValid[step]} onPress={() => goTo(step + 1)} />)}
+      {(last || !isNew) && saveButton}
+    </Row>
+  );
   return (
-    <Sheet title={meal.revision ? "Edit meal" : "Add meal"} onClose={() => {if (!busy) onClose();}}>
-      <Field label="Meal label (optional)" value={value.customLabel ?? ""} maxLength={200} onChangeText={customLabel => setValue(v => ({...v,customLabel}))} />
-      <DateField
-        label="Date"
-        value={value.date}
-        onChange={(date) => setValue((v) => ({ ...v, date }))}
-      />
-      <Row>
-        {["breakfast", "lunch", "dinner", "snack", "dessert"].map(
-          (mealType) => (
-            <Button
-              key={mealType}
-              label={mealType}
-              secondary
-              selected={value.mealType === mealType}
-              onPress={() => setValue((v) => ({ ...v, mealType }))}
-            />
-          ),
-        )}
-      </Row>
-      <Row>
-        {(["recipe", "leftover", "eating-out"] as const).map((kind) => (
-          <Button
-            key={kind}
-            label={
-              kind === "recipe"
-                ? "Choose recipe"
-                : kind === "leftover"
-                  ? "Leftovers"
-                  : "Eating out"
-            }
-            secondary
-            selected={value.kind === kind}
-            onPress={() => setValue((v) => ({ ...v, kind }))}
-          />
-        ))}
-      </Row>
-      <Field
-        label="Servings"
-        keyboardType="decimal-pad"
-        value={servingsText}
-        onChangeText={setServingsText}
-      />
-      {value.kind === "recipe" && (
+    <Sheet title={isNew ? "Add meal" : "Edit meal"} onClose={() => {if (!busy) onClose();}} footer={footer}>
+      <StepHeader titles={stepTitles} step={step} reachable={(i) => i <= furthest && stepValid.slice(0, i).every(Boolean)} onSelect={setStep} />
+
+      {step === 0 && (
         <>
-          <Label>
-            {c.recipes[value.recipeId]?.title ?? "Choose a saved recipe."}
-          </Label>
-          <Row><Button label="Choose recipe" onPress={() => setPicker('main')} />
-          <Button label="Attach a side" secondary disabled={(value.sides?.length ?? 0) >= 8} onPress={() => setPicker('side')} /></Row>
-          {value.sides?.map((s) => (
-            <Row key={s.recipeId}>
-              <Label>Side: {c.recipes[s.recipeId]?.title ?? s.recipeId}</Label>
-              <Button
-                label="Remove side"
-                secondary
-                onPress={() =>
-                  setValue((v) => ({
-                    ...v,
-                    sides: v.sides?.filter((x) => x.recipeId !== s.recipeId),
-                  }))
-                }
-              />
-            </Row>
-          ))}
-          <Field
-            label="Extra portions reserved for later meals"
-            keyboardType="decimal-pad"
-            value={extraText}
-            onChangeText={setExtraText}
-          />
-        </>
-      )}
-      {value.kind === "leftover" && (
-        <>
-          <Label>
-            Choose an earlier cooking occasion. Saving reserves these extra
-            portions there; groceries are counted once.
-          </Label>
-          {c.meals
-            .filter(
-              (m) =>
-                m.kind === "recipe" &&
-                m.date < value.date &&
-                !["removed", "skipped"].includes(m.status),
-            )
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .slice(0, 20)
-            .map((m) => (
-              <Button
-                key={m.id}
-                label={`${m.date} · ${mealLabel(m, c.recipes[m.recipeId]?.title)}`}
-                secondary
-                selected={value.sourceMealId === m.id}
-                onPress={() =>
-                  setValue((v) => ({
-                    ...v,
-                    sourceMealId: m.id,
-                    recipeId: m.recipeId,
-                  }))
-                }
-              />
+          <Heading>When is this meal?</Heading>
+          <DateField label="Date" value={value.date} onChange={(date) => setValue((v) => ({ ...v, date }))} />
+          <Label muted>Meal</Label>
+          <Row>
+            {["breakfast", "lunch", "dinner", "snack", "dessert"].map((mealType) => (
+              <Pill key={mealType} label={mealType[0].toUpperCase() + mealType.slice(1)} selected={value.mealType === mealType}
+                onPress={() => setValue((v) => ({ ...v, mealType }))} />
             ))}
+          </Row>
         </>
       )}
-      <Button
-        label={busy ? "Saving…" : "Save meal"}
-        disabled={busy || !c.online}
-        onPress={save}
-      />
-      <Button label="Cancel" secondary disabled={busy} onPress={onClose} />
+
+      {step === 1 && (
+        <>
+          <Heading>What are you having?</Heading>
+          {(["recipe", "leftover", "eating-out"] as const).map((kind) => (
+            <ChoiceCard
+              key={kind}
+              icon={kind === "recipe" ? "restaurant-outline" : kind === "leftover" ? "file-tray-stacked-outline" : "storefront-outline"}
+              title={kind === "recipe" ? "Cook a recipe" : kind === "leftover" ? "Leftovers" : "Eating out"}
+              detail={kind === "recipe" ? "Pick from your cookbook; ingredients go on the shopping list."
+                : kind === "leftover" ? "Eat portions saved from an earlier meal. Nothing extra to buy."
+                  : "Takeaway or a meal out. Nothing goes on the shopping list."}
+              selected={value.kind === kind}
+              onPress={() => setValue((v) => ({ ...v, kind }))}
+            />
+          ))}
+          <Field label={value.kind === "leftover" ? "Portions" : "Servings"} keyboardType="decimal-pad" value={servingsText} onChangeText={setServingsText} />
+        </>
+      )}
+
+      {step === 2 && value.kind === "recipe" && (
+        <>
+          <Heading>Which recipe?</Heading>
+          {value.recipeId ? (
+            <ChoiceCard icon="restaurant" title={c.recipes[value.recipeId]?.title ?? "Saved recipe"} detail="Tap to choose a different recipe." selected onPress={() => setPicker("main")} />
+          ) : (
+            <Button label="Browse recipes" onPress={() => setPicker("main")} />
+          )}
+          {!!value.sides?.length && <Label muted>Sides</Label>}
+          {value.sides?.map((s) => (
+            <View key={s.recipeId} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ flex: 1, minWidth: 0 }}><Label>{c.recipes[s.recipeId]?.title ?? s.recipeId}</Label></View>
+              <IconButton icon="close" label={`Remove side ${c.recipes[s.recipeId]?.title ?? ""}`}
+                onPress={() => setValue((v) => ({ ...v, sides: v.sides?.filter((x) => x.recipeId !== s.recipeId) }))} />
+            </View>
+          ))}
+          {!!value.recipeId && <Button label="Add a side dish" secondary disabled={(value.sides?.length ?? 0) >= 8} onPress={() => setPicker("side")} />}
+          <Field label="Extra portions to save for later (optional)" keyboardType="decimal-pad" value={extraText} onChangeText={setExtraText} />
+          <Caption>Cooking a bigger batch? Reserve portions here, then add them later as Leftovers.</Caption>
+          <Field label="Meal label (optional)" value={value.customLabel ?? ""} maxLength={200} onChangeText={customLabel => setValue(v => ({...v,customLabel}))} />
+        </>
+      )}
+
+      {step === 2 && value.kind === "leftover" && (
+        <>
+          <Heading>Leftovers from which meal?</Heading>
+          <Caption>Saving reserves these portions on the original meal, so groceries are only counted once.</Caption>
+          {cooked.length > 0 && (
+            <Field label="Search cooked meals" placeholder="Recipe name, day or meal" value={leftoverQuery} onChangeText={setLeftoverQuery}
+              autoCorrect={false} returnKeyType="search" clearButtonMode="while-editing" />
+          )}
+          {cooked.length === 0 ? (
+            <Label muted>No cooked meals before {dayLabel(value.date)}. Go back and pick a later date, or cook a recipe first.</Label>
+          ) : leftoverChoices.length === 0 ? (
+            <Label muted>No cooked meals match “{leftoverQuery.trim()}”.</Label>
+          ) : leftoverChoices.map((m) => (
+            <ChoiceCard
+              key={m.id}
+              title={mealLabel(m, c.recipes[m.recipeId]?.title)}
+              detail={`${dayLabel(m.date)} · ${m.mealType} · ${m.servings} servings`}
+              selected={value.sourceMealId === m.id}
+              onPress={() => setValue((v) => ({ ...v, sourceMealId: m.id, recipeId: m.recipeId }))}
+            />
+          ))}
+          <Field label="Meal label (optional)" value={value.customLabel ?? ""} maxLength={200} onChangeText={customLabel => setValue(v => ({...v,customLabel}))} />
+        </>
+      )}
+
+      {step === 2 && value.kind === "eating-out" && (
+        <>
+          <Heading>Where are you eating?</Heading>
+          <Field label="Restaurant or takeaway (optional)" placeholder="e.g. Pizza night" value={value.customLabel ?? ""} maxLength={200}
+            onChangeText={customLabel => setValue(v => ({...v,customLabel}))} />
+          <Caption>Nothing is added to the shopping list for this meal.</Caption>
+        </>
+      )}
+
       {picker && <RecipePickerModal mealType={picker === 'side' ? 'side' : value.mealType} date={value.date}
         onClose={() => setPicker(null)} onSelect={recipe => {
           setValue(v => picker === 'side' ? {...v, sides:[...(v.sides ?? []).filter(s => s.recipeId !== recipe.id), {recipeId:recipe.id!,servings:amount(servingsText) > 0 ? amount(servingsText) : v.servings}]} : {...v, recipeId:recipe.id!, overrides:[], sourceMealId:undefined});
           setPicker(null);
         }} />}
     </Sheet>
+  );
+}
+
+/** Numbered progress for the add-meal walkthrough; earlier (and, when editing, all) steps can be tapped. */
+function StepHeader({ titles, step, reachable, onSelect }: {
+  titles: string[];
+  step: number;
+  reachable: (index: number) => boolean;
+  onSelect: (index: number) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 6 }}>
+      {titles.map((title, i) => {
+        const active = i === step, done = i < step, enabled = reachable(i) && !active;
+        return (
+          <Pressable key={i} accessibilityRole="tab" accessibilityLabel={`Step ${i + 1} of ${titles.length}: ${title}`}
+            accessibilityState={{ selected: active, disabled: !enabled && !active }} disabled={!enabled} onPress={() => onSelect(i)}
+            style={{ flex: 1, minHeight: 44, gap: 6, justifyContent: "flex-end" }}>
+            <Text numberOfLines={1} style={{ fontFamily: active ? Fonts.semibold : Fonts.medium, fontSize: 12, color: active ? colors.text : colors.textSecondary }}>
+              {i + 1}. {title}
+            </Text>
+            <View style={{ height: 4, borderRadius: 2, backgroundColor: active || done ? colors.primary : colors.border }} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** A large, single-choice option: icon, title and one line of explanation. */
+function ChoiceCard({ icon, title, detail, selected, onPress }: {
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
+  title: string;
+  detail?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="radio" accessibilityLabel={detail ? `${title}. ${detail}` : title} accessibilityState={{ checked: selected }} onPress={onPress}
+      style={({ pressed }) => ({ minHeight: 56, flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 18,
+        borderWidth: selected ? 2 : 1, borderColor: selected ? colors.primary : colors.border,
+        backgroundColor: selected ? colors.primaryLight : colors.surface, opacity: pressed ? 0.75 : 1 })}>
+      {icon && <Ionicons name={icon} size={22} color={selected ? colors.primaryText : colors.textSecondary} />}
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={{ fontFamily: Fonts.semibold, fontSize: 16, color: colors.text }}>{title}</Text>
+        {!!detail && <Caption>{detail}</Caption>}
+      </View>
+      <Ionicons name={selected ? "radio-button-on" : "radio-button-off"} size={20} color={selected ? colors.primaryText : colors.textTertiary} />
+    </Pressable>
   );
 }
 

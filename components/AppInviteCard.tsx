@@ -3,7 +3,7 @@ import { ActivityIndicator, Share, Text, TextInput, TouchableOpacity, View } fro
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Fonts } from '@/constants/theme';
+import { Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { appInvitationMessage, getAppInvitePermissions, inviteAppUser, type AppInvitation } from '@/services/appInvites';
 
 export default function AppInviteCard() {
@@ -30,7 +30,9 @@ export default function AppInviteCard() {
       <Text style={{ color: colors.primaryText, fontFamily: Fonts.semibold, textAlign: 'center' }}>{label}</Text>
     </TouchableOpacity>
   );
-  if (permissionError) return button('Retry account permissions', () => setAttempt(value => value + 1));
+  // Same horizontal inset and section rhythm as the other Settings cards.
+  const frame = { marginHorizontal: Spacing.xl, marginTop: Spacing.lg };
+  if (permissionError) return <View style={frame}>{button('Retry account permissions', () => setAttempt(value => value + 1))}</View>;
   if (!canInvite) return null;
   async function grant() {
     setBusy(true); setMessage(''); setInvitation(null);
@@ -46,8 +48,10 @@ export default function AppInviteCard() {
       else await Share.share({ message: text });
     } catch { setMessage('Could not share. Try copying the invitation.'); }
   }
-  return <View style={{ padding: 20, marginBottom: 20, gap: 12, borderRadius: 20, backgroundColor: colors.surface }}>
-    <Text style={{ color: colors.text, fontSize: 20, fontFamily: Fonts.semibold }}>Admin · Invite to Harvest</Text>
+  return <>
+  <Text style={{ marginHorizontal: Spacing.xl, marginTop: Spacing.lg, marginBottom: Spacing.sm, color: colors.textSecondary, fontSize: 12, fontFamily: Fonts.semibold, letterSpacing: 0.6 }}>ADMIN</Text>
+  <View style={[{ marginHorizontal: Spacing.xl, padding: Spacing.xl, gap: 12, borderRadius: Radius.xl, backgroundColor: colors.surface }, Shadows.sm]}>
+    <Text style={{ color: colors.text, fontSize: 18, fontFamily: Fonts.semibold }}>Invite to Harvest</Text>
     <Text style={{ color: colors.textSecondary }}>Enter the email they will use to sign in. Enable access, then share the download link. They can create their own household.</Text>
     <TextInput accessibilityLabel="Invitee email address" placeholder="Email address" placeholderTextColor={colors.textSecondary}
       value={email} onChangeText={value => { setEmail(value); setInvitation(null); setMessage(''); }} editable={!busy}
@@ -61,5 +65,6 @@ export default function AppInviteCard() {
       {button('Copy invitation', () => { void share(true); })}
     </>}
     {!!message && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>{message}</Text>}
-  </View>;
+  </View>
+  </>;
 }

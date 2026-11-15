@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { ActivityIndicator, Alert, View } from "react-native";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Shadows } from "@/constants/theme";
 import GenerationForm, { type GenerationFormValue } from "./GenerationForm";
 import DraftRecipeCard from "./DraftRecipeCard";
 import { Sheet, Caption } from "./classic";
@@ -65,6 +67,8 @@ export default function GenerateScreen() {
   const draftRef = useRef<Draft | null>(null);
   const actionInFlight = useRef(false);
   const [busy, setBusy] = useState(false);
+  // Only searches (generate, swap) show the "Finding meals" banner; quick edits like Keep do not.
+  const [finding, setFinding] = useState(false);
   const cancel = useRef(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
@@ -142,6 +146,7 @@ export default function GenerateScreen() {
     if (!householdId || actionInFlight.current) return;
     actionInFlight.current = true;
     setBusy(true);
+    setFinding(true);
     cancel.current = false;
     try {
       let next = existing?.id === draftRef.current?.id ? draftRef.current : existing;
@@ -201,6 +206,7 @@ export default function GenerateScreen() {
     } finally {
       actionInFlight.current = false;
       setBusy(false);
+      setFinding(false);
     }
   };
   const edit = async (slot: DraftSlot, patch: Partial<DraftSlot>) => {
@@ -248,17 +254,7 @@ export default function GenerateScreen() {
       const selectedRecipes = selected.map((s) => c.recipes[s.recipeId!]);
       if (selectedRecipes.some((r) => !r))
         throw new Error("Wait for recipe details to load before confirming.");
-      const terms = selectedRecipes.flatMap((r) =>
-        r.ingredients.map((i) => i.name),
-      );
-      if (
-        draft.config.must.some(
-          (term) => !terms.some((i) => matchesWord(i, term)),
-        )
-      )
-        throw new Error(
-          "A required ingredient was removed from this draft. Restore or swap a meal to include it.",
-        );
+      // Missing required ingredients are shown as a warning above this button, not a blocker.
       if (
         selectedRecipes.some((r) =>
           [
@@ -271,17 +267,6 @@ export default function GenerateScreen() {
       )
         throw new Error(
           "Household exclusions changed. Swap the affected meals before confirming.",
-        );
-      if (
-        draft.config.mustScope === "recipe" &&
-        selectedRecipes.some((r) =>
-          draft.config.must.some(
-            (term) => !r.ingredients.some((i) => matchesWord(i.name, term)),
-          ),
-        )
-      )
-        throw new Error(
-          "Each selected recipe must include the ingredients required in every recipe.",
         );
       const key = `${draft.id}:${draft.revision}`;
       // Reuse the same meal ids and request id if a direct save is retried after an uncertain response.
@@ -305,6 +290,7 @@ export default function GenerateScreen() {
     if (!draft || !householdId || actionInFlight.current) return;
     actionInFlight.current = true;
     setBusy(true);
+    setFinding(true);
     cancel.current = false;
     try {
       let working = await saveDraft({
@@ -348,8 +334,19 @@ export default function GenerateScreen() {
     } finally {
       actionInFlight.current = false;
       setBusy(false);
+      setFinding(false);
     }
   };
+  const missingRequired = (() => {
+    if (!draft?.config.must.length) return [];
+    const kept = draft.slots.filter((s) => !s.removed).map((s) => c.recipes[s.recipeId!]).filter(Boolean);
+    if (!kept.length) return [];
+    return draft.config.must.filter((term) =>
+      draft.config.mustScope === "recipe"
+        ? kept.some((r) => !r.ingredients.some((i) => matchesWord(i.name, term)))
+        : !kept.some((r) => r.ingredients.some((i) => matchesWord(i.name, term))),
+    );
+  })();
   const preset = (type: "tonight" | "five" | "gaps") => {
     setDraft(null);
     setTypes(["dinner"]);
@@ -368,7 +365,8 @@ export default function GenerateScreen() {
     setSummary(true);
   };
   return (
-    <Screen title={draft ? "Your Meal Plan" : ""} floatingAction={!draft ? <Button label={busy ? 'Finding meals…' : 'Generate'} disabled={busy || !c.online || !types.length} onPress={() => generate()} /> : undefined}>
+    <Screen title={draft ? "Your Meal Plan" : ""} floatingAction={!draft ? <Button label={busy ? 'Finding meals…' : 'Generate'} disabled={busy || !c.online || !types.length} onPress={() => generate()} />
+      : finding ? <FindingBanner onStop={() => { cancel.current = true; }} /> : undefined}>
       {!draft ? (
         <GenerationForm
           value={{
@@ -430,20 +428,6 @@ export default function GenerateScreen() {
             </Label>
           )}
 
-          {busy && (
-            <Card>
-              <Label>
-                Finding meals — completed results are saved as we go.
-              </Label>
-              <Button
-                label="Stop after current request"
-                secondary
-                onPress={() => {
-                  cancel.current = true;
-                }}
-              />
-            </Card>
-          )}
           {draft.slots.map((slot, index) => (
             <DraftRecipeCard
               key={slot.id}
@@ -652,6 +636,16 @@ export default function GenerateScreen() {
             disabled={busy}
             onPress={() => generate(draft)}
           />
+          {missingRequired.length > 0 && (
+            <Card>
+              <Label>
+                {draft.config.mustScope === "recipe"
+                  ? `Not every kept meal includes ${missingRequired.join(", ")}.`
+                  : `None of the kept meals include ${missingRequired.join(", ")}.`}{" "}
+                You can still add them, or restore or swap a meal first.
+              </Label>
+            </Card>
+          )}
           <Button
             label={saving ? "Saving…" : "Add to Calendar"}
             disabled={busy || saving || !c.online}
@@ -701,5 +695,20 @@ export default function GenerateScreen() {
         onClose={() => setPreview(null)}
       />
     </Screen>
+  );
+}
+
+/** Floats above the bottom of the screen while meals are being found, so the list never shifts. */
+function FindingBanner({ onStop }: { onStop: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <View accessibilityLiveRegion="polite" style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingLeft: 16, paddingRight: 8, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...Shadows.md }}>
+      <ActivityIndicator color={colors.primaryText} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Label>Finding meals…</Label>
+        <Label muted>Results are saved as they arrive.</Label>
+      </View>
+      <Button label="Stop" secondary onPress={onStop} />
+    </View>
   );
 }

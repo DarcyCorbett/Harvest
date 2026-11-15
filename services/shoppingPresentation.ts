@@ -36,6 +36,28 @@ export function shoppingDisplayGroups(items: ListItem[], checked: boolean): Shop
   return [...groups.values()];
 }
 
+/** Name for comparison only: case, punctuation, app-added form tags like "(dried)" and simple plurals are ignored. */
+function comparableName(name: string): string {
+  return normalizedName(name).replace(/\([^)]*\)/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+    .split(' ').map(word => word.replace(/ies$/, 'y').replace(/oes$/, 'o').replace(/s$/, '')).join(' ');
+}
+
+/**
+ * The recipe's own wording for a merged shopping item, when it differs from the item's name
+ * (e.g. "hot or Italian sausages" under "sausages"). Undefined when every name matches.
+ */
+export function sourceNameNote(itemName: string, contributions: ListItem['contributions']): string | undefined {
+  const target = comparableName(itemName);
+  const names = new Map<string, string>();
+  for (const contribution of contributions) {
+    const original = contribution.sourceAmount?.name?.trim();
+    if (!original) continue;
+    const key = comparableName(original);
+    if (key && key !== target && !names.has(key)) names.set(key, original);
+  }
+  return names.size ? [...names.values()].join('; ') : undefined;
+}
+
 export function shoppingIsUpdating(state: Workflow | null, period: Period | null): boolean {
   return state?.status === 'pending' || (!!state && state.minShoppingClientVersion === 4 && state.status !== 'error'
     && (!period?.shopping || period.id !== state.periodId || (period.completedWorkflowRevision ?? 0) < state.revision));

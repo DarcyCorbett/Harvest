@@ -82,10 +82,11 @@ describe('touch targets and scannable shopping rows', () => {
       expect(readFileSync(screen, 'utf8')).toMatch(/eyeButton: \{\s*minWidth: 44,\s*minHeight: 44,/);
     }
   });
-  it('puts recipe sources under the item name instead of a 36% column', () => {
+  it('keeps recipe sources in-line with the item so cards stay one row tall', () => {
     const screen = readFileSync('components/connected/ShoppingScreen.tsx', 'utf8');
     expect(screen).not.toContain("width: '36%'");
-    expect(screen).toContain("marginLeft: 32, marginRight: 8, marginTop: 4");
+    expect(screen).not.toContain('marginLeft: 32, marginRight: 8, marginTop: 4');
+    expect(screen).toContain("maxWidth: '40%', flexShrink: 1, minWidth: 0");
   });
 });
 

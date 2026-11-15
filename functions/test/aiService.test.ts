@@ -104,6 +104,11 @@ describe('fixed AI prompts', () => {
 
     expect(prompt).toContain('Meat & Seafood');
     expect(prompt).toContain('Every ingredient id must appear in exactly one group');
+    // v3: variety/grade descriptors merge; materially different products stay apart.
+    expect(prompt).toContain('"olive oil" + "extra virgin olive oil"');
+    expect(prompt).toContain('"sausages" + "Italian sausages"');
+    expect(prompt).toContain('"sweet potato" versus "potato"');
+    expect(prompt).not.toContain('If uncertain, retain a separate item');
     expect(prompt).toContain(JSON.stringify(ingredients));
   });
 

@@ -114,10 +114,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Account section */}
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Household preferences and reminders" style={[s.card, { backgroundColor: colors.surface, minHeight: 48 }]} onPress={() => setSettingsVisible(true)}>
-        <Text style={{ color: colors.primaryText, fontSize: 18 }}>Household preferences and reminders</Text>
-      </TouchableOpacity>
-      {householdId && <SettingsModal householdId={householdId} visible={settingsVisible} onClose={() => setSettingsVisible(false)} onSaved={connected.retry} />}
+      <Text style={[s.sectionTitle, s.firstSectionTitle, { color: colors.textSecondary }]}>ACCOUNT</Text>
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <View style={s.cardRow}>
           <View style={[s.avatarCircle, { backgroundColor: colors.primaryLight }]}>
@@ -132,8 +129,25 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Household preferences */}
+      <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>HOUSEHOLD</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Household preferences and reminders"
+        style={[s.card, s.linkCard, { backgroundColor: colors.surface }, Shadows.sm]}
+        onPress={() => setSettingsVisible(true)}
+        activeOpacity={0.75}
+      >
+        <Ionicons name="options-outline" size={22} color={colors.primaryText} />
+        <View style={s.cardRowText}>
+          <Text style={[s.cardValue, { color: colors.text, marginTop: 0 }]}>Household preferences</Text>
+          <Text style={[s.cardLabel, { color: colors.textSecondary }]}>Exclusions, nutrition targets and reminders</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+      </TouchableOpacity>
+      {householdId && <SettingsModal householdId={householdId} visible={settingsVisible} onClose={() => setSettingsVisible(false)} onSaved={connected.retry} />}
+
       {/* Household code section */}
-      <AppInviteCard />
       <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>YOUR HOUSEHOLD CODE</Text>
       <View style={[s.card, { backgroundColor: colors.surface }, Shadows.sm]}>
         <Text style={[s.codeDisplay, { color: colors.primaryText, letterSpacing: 8 }]}>
@@ -234,6 +248,9 @@ export default function ProfileScreen() {
       </View>
 
 
+      {/* Admin-only: renders nothing for users without invite permission */}
+      <AppInviteCard />
+
       {/* Sign out */}
       <View style={s.spacer} />
       <TouchableOpacity
@@ -270,10 +287,19 @@ const s = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
 
+  firstSectionTitle: { marginTop: 0 },
+
   card: {
     marginHorizontal: Spacing.xl,
     borderRadius: Radius.xl,
     padding: Spacing.xl,
+  },
+  linkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    minHeight: 48,
+    paddingVertical: Spacing.lg,
   },
 
   cardRow: {
@@ -348,7 +374,7 @@ const s = StyleSheet.create({
   },
   joinBtnText: { color: '#fff', fontSize: FontSizes.sm, fontFamily: Fonts.bold },
 
-  spacer: { flex: 1 },
+  spacer: { flex: 1, minHeight: Spacing.xl },
 
   themeRow: {
     flexDirection: 'row',

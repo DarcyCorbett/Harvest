@@ -40,6 +40,14 @@ type Props = {
   onMove: (meal: Meal, date: string) => Promise<void>;
   children: React.ReactNode;
 };
+/** Label for the empty-week shortcut; past days in the week cannot be planned. */
+export function fillWeekLabel(days: string[], today: string): string {
+  const remaining = days.filter((d) => d >= today).length;
+  if (remaining >= days.length) return "Plan this week";
+  if (remaining === 1) return "Plan today";
+  return `Plan the remaining ${remaining} days`;
+}
+
 export default function ClassicCalendar({
   start,
   selectedDate,
@@ -75,7 +83,7 @@ export default function ClassicCalendar({
   const [pendingMove, setPendingMove] = useState<{meal: Meal; date: string} | null>(null);
   const dragRef = useRef<Meal | null>(null);
   const pendingRef = useRef(false);
-  const targetRefs = useRef<Record<string, View | null>>({});
+  const targetRefs = useRef<Record<string, React.ComponentRef<typeof View> | null>>({});
   const bounds = useRef<Record<string, {x:number;y:number;width:number;height:number}>>({});
   const dropAt = (x:number,y:number) => Object.entries(bounds.current).find(([,b]) => x>=b.x && x<=b.x+b.width && y>=b.y && y<=b.y+b.height)?.[0];
   const finishRef = useRef((x:number,y:number) => {});
@@ -523,7 +531,9 @@ export default function ClassicCalendar({
               onPress={() => router.push({ pathname: "/generate", params: { preset: "gaps", start: days[0], end: days[6] } })}
               style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.primary }}
             >
-              <Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.textInverse }}>✨ Fill this week with AI</Text>
+              {/* Generate cannot plan past days, so the label says how much of the week is left rather than
+                  promising the whole week and silently opening on today. */}
+              <Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.textInverse }}>{fillWeekLabel(days, today)}</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

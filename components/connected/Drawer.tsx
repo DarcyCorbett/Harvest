@@ -19,16 +19,21 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Fonts } from "@/constants/theme";
 import { useBottomDrawerGesture } from "@/hooks/useBottomDrawerGesture";
 
+const END_THRESHOLD = 400;
+
 export default function Drawer({
   title,
   children,
   onClose,
   footer,
+  onEndReached,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
   footer?: React.ReactNode | ((close: () => void) => React.ReactNode);
+  /** Called when the content is scrolled to within ~400pt of its end, or does not fill the sheet. */
+  onEndReached?: () => void;
 }) {
   const { colors } = useTheme();
   const { height } = useWindowDimensions();
@@ -36,6 +41,7 @@ export default function Drawer({
   const opacity = useState(() => new Animated.Value(0))[0];
   const [reduced, setReduced] = useState(false);
   const closing = useRef(false);
+  const viewport = useRef(0);
   useEffect(() => {
     let live = true;
     AccessibilityInfo.isReduceMotionEnabled().then((value) => {
@@ -183,7 +189,15 @@ export default function Drawer({
             </GestureDetector>
             <ScrollView
               {...drag.contentHandlers}
-              onScroll={(event) => drag.setScrollOffset(event.nativeEvent.contentOffset.y)}
+              onScroll={(event) => {
+                const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+                drag.setScrollOffset(contentOffset.y);
+                if (onEndReached && contentOffset.y + layoutMeasurement.height >= contentSize.height - END_THRESHOLD) onEndReached();
+              }}
+              onLayout={(event) => { viewport.current = event.nativeEvent.layout.height; }}
+              onContentSizeChange={(_, contentHeight) => {
+                if (onEndReached && viewport.current && contentHeight <= viewport.current + END_THRESHOLD) onEndReached();
+              }}
               scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{

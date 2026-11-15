@@ -510,13 +510,6 @@ export default function RecipeDetailModal({
 
           {actionBar}
 
-          {/* Primary cooking entry point, above the fold; the Instructions header keeps its own. */}
-          {recipe.instructions.some(step => !step.isHeader) && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Start cooking" testID="start-cooking-top" onPress={() => setCooking(true)} style={{ minHeight: 48, marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 24, backgroundColor: colors.primary }}>
-              <Ionicons name="play" size={18} color={colors.textInverse} /><Text style={{ fontFamily: Fonts.semibold, fontSize: 16, color: colors.textInverse }}>Start cooking</Text>
-            </Pressable>
-          )}
-
           {sourceClaims.length ? (
             <View style={styles.sourceClaimWrap}>
               <Text style={styles.sourceClaimLabel}>Source-declared</Text>
@@ -607,6 +600,14 @@ export default function RecipeDetailModal({
                 );
               })}
             </View>
+          )}
+
+          {/* Primary cooking entry point: below the tags so it never crowds them, still above the fold.
+              The Instructions header keeps its own compact button. */}
+          {recipe.instructions.some(step => !step.isHeader) && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Start cooking" testID="start-cooking-top" onPress={() => setCooking(true)} style={({ pressed }) => [styles.startCooking, pressed && { opacity: 0.85 }]}>
+              <Ionicons name="play" size={18} color={colors.textInverse} /><Text style={styles.startCookingText}>Start cooking</Text>
+            </Pressable>
           )}
 
           {/* Macro strip */}
@@ -1101,6 +1102,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: Fonts.medium,
     color: colors.textSecondary,
   },
+
+  startCooking: {
+    minHeight: 48,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    borderRadius: Radius.pill,
+    backgroundColor: colors.primary,
+  },
+  startCookingText: { fontFamily: Fonts.semibold, fontSize: FontSizes.md, color: colors.textInverse },
 
   // Macro strip
   macroStrip: {
