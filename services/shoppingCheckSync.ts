@@ -54,3 +54,18 @@ export function activeShoppingChanges<T extends QueuedShoppingCheck>(entries: T[
 export function failedShoppingChanges<T extends QueuedShoppingCheck>(entries: T[]): T[] {
   return entries.filter(e => !!e.error);
 }
+
+/**
+ * An offline check-off that has not been sent can simply be taken back: nothing
+ * reached the server, so dropping the queued entry restores the row. Entries the
+ * server acknowledged, or that failed, are not cancellable this way. Only entries
+ * that touch nothing but the given items are cancellable, so one tap never undoes
+ * other rows queued in the same batch.
+ */
+export function cancellableShoppingChange(entry: QueuedShoppingCheck, online: boolean, itemIds: string[]): boolean {
+  if (online || entry.error || entry.acknowledgedRevision !== undefined) return false;
+  const command = entry.command as { operation?: string; itemId?: string; items?: { itemId: string }[] };
+  if (command.operation !== 'shopping' && command.operation !== 'shoppingBatch') return false;
+  const touched = command.itemId ? [command.itemId] : (command.items ?? []).map(i => i.itemId);
+  return touched.length > 0 && touched.every(id => itemIds.includes(id));
+}

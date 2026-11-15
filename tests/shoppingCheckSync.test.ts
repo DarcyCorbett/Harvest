@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { activeShoppingChanges, drainShoppingChecks, failedShoppingChanges, shoppingCheckObserved, type QueuedShoppingCheck } from '../services/shoppingCheckSync';
+import { activeShoppingChanges, cancellableShoppingChange, drainShoppingChecks, failedShoppingChanges, shoppingCheckObserved, type QueuedShoppingCheck } from '../services/shoppingCheckSync';
 import type { Period } from '../functions/src/connected/model';
 
 const entry = (id = 'a'): QueuedShoppingCheck => ({ id,
@@ -87,5 +87,26 @@ describe('failed shopping changes do not deadlock planning', () => {
     expect(notice).toContain('failed · Review in Shopping');
     expect(notice).toContain('router.push("/shopping")');
     expect(notice).toContain('`${syncing} changes syncing`');
+  });
+});
+
+describe('offline undo of unsent check-offs', () => {
+  const single = (id: string) => ({ id: `p-${id}`, command: { operation: 'shopping', itemId: id, periodId: 'trip', expectedRevision: 1, action: 'check' } });
+  const batch = { id: 'p-batch', command: { operation: 'shoppingBatch', periodId: 'trip', items: [{ itemId: 'a', expectedRevision: 1 }, { itemId: 'b', expectedRevision: 1 }], action: 'check' } };
+  it('lets a row take back its own unsent check-off while offline', () => {
+    expect(cancellableShoppingChange(single('a'), false, ['a'])).toBe(true);
+    expect(cancellableShoppingChange(batch, false, ['a', 'b'])).toBe(true);
+  });
+  it('never cancels sent, failed, online, manual or other rows\' changes', () => {
+    expect(cancellableShoppingChange(single('a'), true, ['a'])).toBe(false);
+    expect(cancellableShoppingChange({ ...single('a'), acknowledgedRevision: 3 }, false, ['a'])).toBe(false);
+    expect(cancellableShoppingChange({ ...single('a'), error: 'x' }, false, ['a'])).toBe(false);
+    expect(cancellableShoppingChange(batch, false, ['a'])).toBe(false);
+    expect(cancellableShoppingChange({ id: 'm', command: { operation: 'manual', name: 'Milk' } }, false, [])).toBe(false);
+  });
+  it('wires the row to cancel instead of staying locked', () => {
+    const screen = readFileSync('components/connected/ShoppingScreen.tsx', 'utf8');
+    expect(screen).toContain('if (unsent) { c.cancelUnsentChange(unsent.id).catch(report); return; }');
+    expect(screen).toContain('disabled={locked || (!!pending && !unsent)}');
   });
 });

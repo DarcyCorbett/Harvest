@@ -35,6 +35,23 @@ describe('shopping list fixes', () => {
 
   it('opens recipes from the list with their planned meal so swaps and servings apply', () => {
     const screen = read('components/connected/ShoppingScreen.tsx');
-    expect(screen).toContain('mealPlanEntry={previewMealId ? { id: previewMealId, servings: previewServings } : undefined}');
+    expect(screen).toContain('mealPlanEntry={previewMeal && preview?.id ? mealEntryFor(previewMeal, preview.id) : undefined}');
+  });
+});
+
+describe('shopping store mode', () => {
+  it('clears purchased items in one action, with confirmation', () => {
+    const screen = read('components/connected/ShoppingScreen.tsx');
+    expect(screen).toContain("title === 'Purchased' && !selection && <Pill label=\"Clear purchased\"");
+    expect(screen).toMatch(/const clearPurchased = async \(\) => \{[\s\S]*?confirmAction\([\s\S]*?checkGroup\(clearable\.flatMap\(group => group\.items\), 'delete'\)/);
+  });
+  it('selects only remaining items with All', () => {
+    const screen = read('components/connected/ShoppingScreen.tsx');
+    expect(screen).toContain('<Pill label="All remaining" onPress={() => setSelected(active.filter(i => !pendingFor(i)).map(i => i.id))} />');
+  });
+  it('focuses the item field and adds on Enter', () => {
+    const screen = read('components/connected/ShoppingScreen.tsx');
+    expect(screen).toContain('autoFocus placeholder="e.g. Batteries" returnKeyType="done" blurOnSubmit={false} onSubmitEditing={() => { if (name.trim()) void saveManual(); }}');
+    expect(screen).toContain('const quickAdd = quickAddChoices(category);');
   });
 });

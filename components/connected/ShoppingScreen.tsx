@@ -9,10 +9,11 @@ import { Fonts, Shadows } from '@/constants/theme';
 import { requestId, type ListItem } from '@/services/connectedClient';
 import { confirmAction } from '@/services/confirmAction';
 import { manualItemId } from '@/services/shoppingPresentation';
+import { cancellableShoppingChange } from '@/services/shoppingCheckSync';
 import { mealEntryFor } from '@/services/planning';
 import { Button, Field, Heading, Row, report } from './ui';
 import { Caption, IconButton, Pill, Sheet, StatusNotice } from './classic';
-import { QUICK_ADD_BY_CATEGORY } from '@/constants/shoppingQuickAdd';
+import { quickAddChoices } from '@/constants/shoppingQuickAdd';
 import RecipeDetailModal from '@/components/RecipeDetailModal';
 import type { Recipe } from '@/services/types';
 import { purchasedItems, commandHasItem, shoppingDisplayGroups, type ShoppingDisplayGroup } from '@/services/shoppingPresentation';
@@ -45,6 +46,7 @@ function ShoppingList() {
   const [quickRequest, setQuickRequest] = useState<{ id: string; name: string; category: string } | null>(null);
   const savingRef = useRef(false), nameInput = useRef<TextInput>(null);
   const [footerHeight, setFooterHeight] = useState(64);
+  const quickAdd = quickAddChoices(category);
   const items = c.period?.items ?? [];
   const locked = !c.period?.shopping || !!c.state?.shoppingUpdate?.replace;
   const pendingFor = (item: ListItem | ShoppingDisplayGroup) => c.pending.find(p => {
@@ -75,7 +77,14 @@ function ShoppingList() {
     } catch (e) { if (request === previewRequest.current) report(e); }
     finally { if (request === previewRequest.current) setRecipeLoading(false); }
   };
+  // Offline, a tap on a row whose check-off has not been sent yet takes it back.
+  const unsentChange = (item: ShoppingDisplayGroup) => {
+    const pending = pendingFor(item);
+    return pending && cancellableShoppingChange(pending, c.online, item.items.map(i => i.id)) ? pending : undefined;
+  };
   const toggle = (item: ShoppingDisplayGroup) => {
+    const unsent = !selection ? unsentChange(item) : undefined;
+    if (unsent) { c.cancelUnsentChange(unsent.id).catch(report); return; }
     if (selection) setSelected(v => v.includes(item.id) ? v.filter(id => id !== item.id) : [...v, item.id]);
     else c.checkGroup(item.items, item.checked ? 'uncheck' : 'check').catch(report);
   };
@@ -120,12 +129,12 @@ function ShoppingList() {
     <Text numberOfLines={1} ellipsizeMode="tail" style={{ color: colors.primaryText, fontFamily: Fonts.medium, fontSize: 12, flexShrink: 1 }}>{source.title}</Text>
   </Pressable>;
   const card = (item: ShoppingDisplayGroup) => {
-    const pending = pendingFor(item), checked = item.checked, sources = sourceOccasions(item.contributions);
+    const pending = pendingFor(item), unsent = unsentChange(item), checked = item.checked, sources = sourceOccasions(item.contributions);
     const open = expanded.includes(item.id), selectedItem = selected.includes(item.id);
     return <View key={item.id} style={{ width: '100%', padding: 12, borderRadius: 20, backgroundColor: colors.surface, ...Shadows.sm, borderWidth: selectedItem ? 2 : 0, borderColor: colors.primary }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel={`${checked ? 'Uncheck' : 'Purchase'} ${item.name}, ${item.label}`}
-          accessibilityState={{ checked: selection ? selectedItem : checked, disabled: locked || !!pending }} disabled={locked || !!pending}
+          accessibilityState={{ checked: selection ? selectedItem : checked, disabled: locked || (!!pending && !unsent) }} disabled={locked || (!!pending && !unsent)}
           onPress={() => toggle(item)} onLongPress={() => { setSelection(true); setSelected([item.id]); }}
           style={{ flex: 1, minWidth: 0, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ width: 22, height: 22, borderWidth: 2, borderRadius: 7, borderColor: colors.primary, backgroundColor: (selection ? selectedItem : checked) ? colors.primary : 'transparent' }}>
@@ -155,11 +164,23 @@ function ShoppingList() {
       </View>}
     </View>;
   };
+  const clearPurchased = async () => {
+    const clearable = purchased.filter(group => !pendingFor(group));
+    if (!clearable.length) return;
+    if (!(await confirmAction({
+      title: `Clear ${clearable.length} purchased ${clearable.length === 1 ? 'item' : 'items'}?`,
+      message: 'They will be removed from the shopping list for everyone in your household.',
+      confirmLabel: 'Clear',
+      destructive: true,
+    }))) return;
+    await c.checkGroup(clearable.flatMap(group => group.items), 'delete').catch(report);
+  };
   const section = (title: string, group: ShoppingDisplayGroup[]) => !!group.length && <View key={title} style={{ gap: 10, marginBottom: 20 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Text style={{ color: colors.textSecondary }}>{emoji[title] ?? '🛒'}</Text>
       <Text style={{ flex: 1, fontFamily: Fonts.semibold, fontSize: 14, color: colors.textSecondary }}>{title.toUpperCase()}</Text>
       <Caption>{group.length}</Caption>
+      {title === 'Purchased' && !selection && <Pill label="Clear purchased" disabled={locked} onPress={() => { void clearPurchased(); }} />}
     </View>
     {group.map(card)}
   </View>;
@@ -183,20 +204,20 @@ function ShoppingList() {
       </ScrollView>
       <View onLayout={e => setFooterHeight(e.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: 16, left: 20, right: 20, borderRadius: 24, ...Shadows.md }}>
         {selection ? <View style={{ backgroundColor: colors.surface, padding: 12, borderRadius: 24 }}><Row>
-          <Pill label="All" onPress={() => setSelected(groups.filter(i => !pendingFor(i)).map(i => i.id))} />
+          <Pill label="All remaining" onPress={() => setSelected(active.filter(i => !pendingFor(i)).map(i => i.id))} />
           <Pill label={`Purchased (${selected.length})`} disabled={!selected.length || locked} onPress={() => bulk('check')} />
           <Pill label="Remove" disabled={!selected.length || locked} onPress={() => bulk('delete')} />
         </Row></View> : <Button label="＋ Add items" disabled={locked} onPress={() => setAdd(true)} />}
       </View>
       {add && <Sheet title="Add items" onClose={() => { if (!saving) setAdd(false); }} footer={<Row><View style={{ flex: 1 }}><Button label={saving ? 'Adding…' : 'Add item'} disabled={saving || locked || !name.trim()} onPress={saveManual} /></View><Button label="Done" secondary disabled={saving} onPress={() => setAdd(false)} /></Row>}>
-        <Field ref={nameInput} label="Item" value={name} onChangeText={setName} returnKeyType="next" />
+        <Field ref={nameInput} label="Item" value={name} onChangeText={setName} autoFocus placeholder="e.g. Batteries" returnKeyType="done" blurOnSubmit={false} onSubmitEditing={() => { if (name.trim()) void saveManual(); }} />
         <Row><View style={{ flex: 1 }}><Field label="Quantity" value={quantity} keyboardType="decimal-pad" onChangeText={setQuantity} /></View><View style={{ flex: 1 }}><Field label="Unit" value={unit} onChangeText={setUnit} /></View></Row>
         {lastAdded && <Row><Text accessibilityLiveRegion="polite" style={{ color: colors.primaryText }}>Added {lastAdded.name}</Text>{!!lastAdded.id && <Pill label="Undo" disabled={saving || !c.online || locked || !items.some(i => i.id === lastAdded.id)} onPress={async () => {
           const item = items.find(i => i.id === lastAdded.id); if (!item) return;
           try { await c.check(item, 'delete'); setLastAdded(null); } catch (e) { report(e); }
         }} />}</Row>}
         <Caption>Aisle</Caption><Row>{categories.map(value => <Pill key={value} label={`${emoji[value]} ${value}`} selected={category === value} onPress={() => setCategory(value)} />)}</Row>
-        {!!QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]?.length && <><Caption>Quick add from {category}</Caption><Row>{QUICK_ADD_BY_CATEGORY[category as keyof typeof QUICK_ADD_BY_CATEGORY]!.map(item => <Pill key={item} label={item} disabled={saving || locked} onPress={() => saveQuick({ id: requestId(), name: item, category })} />)}</Row></>}
+        <Caption>{quickAdd.title}</Caption><Row>{quickAdd.items.map(item => <Pill key={`${item.category}:${item.name}`} label={item.name} disabled={saving || locked} onPress={() => saveQuick({ id: requestId(), name: item.name, category: item.category })} />)}</Row>
         {quickRequest && !saving && <Pill label={`Retry ${quickRequest.name}`} onPress={() => saveQuick(quickRequest)} />}
       </Sheet>}
       {detail && <Sheet title={detail.name} onClose={() => setDetailId(null)}>

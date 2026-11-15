@@ -68,6 +68,8 @@ interface ConnectedState {
   refreshRecipes: (recipes: Map<string, Recipe>) => void;
   retry: () => void;
   dismissPending: (id: string) => Promise<void>;
+  /** Take back an unsent offline check-off (see cancellableShoppingChange). */
+  cancelUnsentChange: (id: string) => Promise<void>;
 }
 const Context = createContext<ConnectedState | null>(null);
 
@@ -549,6 +551,11 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
         load,
         refreshRecipes,
         retry: () => setAttempt((v) => v + 1),
+        cancelUnsentChange: async (id) => {
+          const entry = pendingRef.current.find((p) => p.id === id);
+          if (!entry || online || entry.error || entry.acknowledgedRevision !== undefined) return;
+          await updateQueue(pendingRef.current.filter((p) => p.id !== id));
+        },
         dismissPending: (id) =>
           updateQueue(pendingRef.current.filter((p) => p.id !== id)),
       }}
