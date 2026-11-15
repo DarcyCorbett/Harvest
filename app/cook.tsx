@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useConnected } from "@/contexts/ConnectedContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import RecipeDetailModal from "@/components/RecipeDetailModal";
+import { mealEntryFor } from "@/services/planning";
 import { Sheet, Caption } from "@/components/connected/classic";
 import { Button } from "@/components/connected/ui";
 
@@ -39,16 +40,7 @@ export default function CookScreen() {
           visible
           initiallyCooking
           onClose={close}
-          mealPlanEntry={
-            meal
-              ? {
-                  id: meal.id,
-                  servings:
-                    meal.sides?.find((s) => s.recipeId === id)?.servings ??
-                    meal.servings,
-                }
-              : undefined
-          }
+          mealPlanEntry={meal ? mealEntryFor(meal, id) : undefined}
         />
       ) : (
         <Sheet title="Cooking" onClose={close}>

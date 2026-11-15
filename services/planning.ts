@@ -160,3 +160,21 @@ export function shiftMonth(start: string, direction: number, today: string): { s
   const firstDay = `${month}-01`;
   return { start: firstDay, selectedDate: today.startsWith(month) ? today : firstDay };
 }
+
+/**
+ * The planned-meal context RecipeDetailModal needs to scale and save servings.
+ * Mains carry the adults/children split (children count as half a serving);
+ * a side has only its own servings.
+ */
+export function mealEntryFor(meal: Meal, recipeId: string): { id: string; servings: number; adults?: number; children?: number } {
+  const side = recipeId !== meal.recipeId ? meal.sides?.find(s => s.recipeId === recipeId) : undefined;
+  if (side) return { id: meal.id, servings: side.servings ?? meal.servings };
+  return { id: meal.id, servings: meal.servings, adults: meal.adults, children: meal.children };
+}
+
+/** Set a meal's servings, dropping an adults/children split that no longer adds up to them. */
+export function withServings<T extends Pick<Meal, 'servings' | 'adults' | 'children'>>(meal: T, servings: number): T {
+  const { adults, children, ...rest } = meal;
+  if (adults === undefined || adults + (children ?? 0) * 0.5 === servings) return { ...meal, servings };
+  return { ...rest, servings } as T;
+}

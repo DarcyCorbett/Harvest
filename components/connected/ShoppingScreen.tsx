@@ -9,6 +9,7 @@ import { Fonts, Shadows } from '@/constants/theme';
 import { requestId, type ListItem } from '@/services/connectedClient';
 import { confirmAction } from '@/services/confirmAction';
 import { manualItemId } from '@/services/shoppingPresentation';
+import { mealEntryFor } from '@/services/planning';
 import { Button, Field, Heading, Row, report } from './ui';
 import { Caption, IconButton, Pill, Sheet, StatusNotice } from './classic';
 import { QUICK_ADD_BY_CATEGORY } from '@/constants/shoppingQuickAdd';
@@ -31,6 +32,7 @@ function ShoppingList() {
   const [preview, setPreview] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
   const [previewMealId, setPreviewMealId] = useState<string | undefined>();
+  const previewMeal = c.meals.find(m => m.id === previewMealId);
   const [recipeLoading, setRecipeLoading] = useState(false);
   const previewRequest = useRef(0);
   React.useEffect(() => () => { previewRequest.current++; }, []);
@@ -206,7 +208,7 @@ function ShoppingList() {
         </View>)}
       </Sheet>}
       {recipeLoading && <Sheet title="Loading recipe…" onClose={() => { previewRequest.current++; setRecipeLoading(false); }}><ActivityIndicator color={colors.primaryText} /></Sheet>}
-      <RecipeDetailModal key={`${preview?.id}:${previewServings}:${previewMealId}`} defaultServings={previewServings} mealPlanEntry={previewMealId ? { id: previewMealId, servings: previewServings } : undefined} recipe={preview} visible={!!preview} onClose={() => setPreview(null)} />
+      <RecipeDetailModal key={`${preview?.id}:${previewServings}:${previewMealId}`} defaultServings={previewServings} mealPlanEntry={previewMeal && preview?.id ? mealEntryFor(previewMeal, preview.id) : undefined} recipe={preview} visible={!!preview} onClose={() => setPreview(null)} />
     </View>
   </SafeAreaView>;
 }

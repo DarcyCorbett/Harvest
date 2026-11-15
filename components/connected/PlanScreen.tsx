@@ -20,7 +20,7 @@ import {
 } from "@/services/connectedClient";
 import PlanReview from './PlanReview';
 import RecipePickerModal from './RecipePickerModal';
-import { mealLabel, templateMeals } from '@/services/planning';
+import { withServings, mealLabel, templateMeals } from '@/services/planning';
 import ClassicCalendar from "./ClassicCalendar";
 import { Sheet, Pill, Caption } from "./classic";
 import {
@@ -64,7 +64,7 @@ export function MealEditor({
         throw new Error("Choose positive servings.");
       if (value.kind === "recipe" && (allocatedPortions < 0 || !Number.isFinite(allocatedPortions)))
         throw new Error("Enter extra portions as a number, or leave it empty.");
-      const current = { ...value, servings, ...(value.kind === "recipe" ? { allocatedPortions } : {}) };
+      const current = { ...withServings(value, servings), ...(value.kind === "recipe" ? { allocatedPortions } : {}) };
       if (current.kind === "recipe" && !current.recipeId)
         throw new Error("Choose a recipe.");
       const next = {
@@ -294,6 +294,9 @@ export default function PlanScreen() {
           servings:
             (c.settings.defaultAdults ?? 2) +
             (c.settings.defaultChildren ?? 0) * 0.5,
+          // Keep the split so recipes scale children as half servings.
+          adults: c.settings.defaultAdults ?? 2,
+          children: c.settings.defaultChildren ?? 0,
         }),
       );
       router.setParams({ recipeId: undefined, date: undefined });
@@ -325,6 +328,9 @@ export default function PlanScreen() {
           servings:
             (c.settings.defaultAdults ?? 2) +
             (c.settings.defaultChildren ?? 0) * 0.5,
+          // Keep the split so recipes scale children as half servings.
+          adults: c.settings.defaultAdults ?? 2,
+          children: c.settings.defaultChildren ?? 0,
         }),
     );
   };

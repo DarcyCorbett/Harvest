@@ -44,3 +44,21 @@ describe('calendar navigation', () => {
     expect(plan).toMatch(/setStart\(weekRange\(m\.date\)\.start\);\s*setSelectedDate\(m\.date\);\s*setPreview\(m\);/);
   });
 });
+
+describe('servings split', () => {
+  const meal = { id: 'm', recipeId: 'main', date: '2026-11-16', mealType: 'dinner', servings: 3, adults: 2, children: 2, revision: 1, kind: 'recipe', status: 'planned', sides: [{ recipeId: 'side', servings: 2 }] } as never;
+  it('passes the adults/children split for mains and only servings for sides', async () => {
+    const { mealEntryFor } = await import('../services/planning');
+    expect(mealEntryFor(meal, 'main')).toEqual({ id: 'm', servings: 3, adults: 2, children: 2 });
+    expect(mealEntryFor(meal, 'side')).toEqual({ id: 'm', servings: 2 });
+    expect(read('app/cook.tsx')).toContain('mealPlanEntry={meal ? mealEntryFor(meal, id) : undefined}');
+    expect(read('components/connected/ShoppingScreen.tsx')).toContain('mealEntryFor(previewMeal, preview.id)');
+  });
+  it('drops a split that no longer matches edited servings, and records it for new meals', async () => {
+    const { withServings } = await import('../services/planning');
+    expect(withServings({ servings: 3, adults: 2, children: 2 }, 3)).toEqual({ servings: 3, adults: 2, children: 2 });
+    expect(withServings({ servings: 3, adults: 2, children: 2 }, 4)).toEqual({ servings: 4 });
+    expect(withServings({ servings: 3 }, 5)).toEqual({ servings: 5 });
+    expect(read('components/connected/PlanScreen.tsx')).toContain('adults: c.settings.defaultAdults ?? 2,');
+  });
+});
