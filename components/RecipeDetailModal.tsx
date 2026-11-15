@@ -831,7 +831,7 @@ export default function RecipeDetailModal({
 
       {recipeActions && <RecipeActionsDrawer recipeId={recipe.id!} meal={recipe.id === plannedMeal?.recipeId ? plannedMeal : undefined} onClose={() => setRecipeActions(false)} />}
       {substitution && <SubstitutionDrawer occurrence={substitution.occurrence} recipe={recipe} meal={substitution.meal} servings={cookingServings} onClose={() => setSubstitution(null)} />}
-      {cooking && <CookingDrawer recipe={recipe} meal={plannedMeal} servings={cookingServings} onClose={() => setCooking(false)} renderMedia={step => step.videoEmbedUrl ? <View style={styles.stepImage}><VideoOrImage videoUrl={step.videoEmbedUrl} imageUrl={step.imageUrl} width={STEP_VIDEO_WIDTH} height={STEP_VIDEO_HEIGHT} imageStyle={styles.stepImage} /></View> : step.imageUrl ? <Image source={{ uri: step.imageUrl }} style={styles.stepImage} /> : null} />}
+      {cooking && <CookingDrawer recipe={recipe} meal={plannedMeal} servings={cookingServings} onClose={() => { setCooking(false); if (initiallyCooking) onClose(); }} renderMedia={step => step.videoEmbedUrl ? <View style={styles.stepImage}><VideoOrImage videoUrl={step.videoEmbedUrl} imageUrl={step.imageUrl} width={STEP_VIDEO_WIDTH} height={STEP_VIDEO_HEIGHT} imageStyle={styles.stepImage} /></View> : step.imageUrl ? <Image source={{ uri: step.imageUrl }} style={styles.stepImage} /> : null} />}
       {sideRecipe && <RecipeDetailModal recipe={sideRecipe} visible onClose={() => setSideRecipe(null)} mealPlanEntry={mealPlanEntry ? { id: mealPlanEntry.id } : undefined} defaultServings={plannedMeal?.sides?.find(s => s.recipeId === sideRecipe.id)?.servings} />}
       </GestureHandlerRootView>
     </Modal>

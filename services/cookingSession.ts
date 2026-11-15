@@ -38,7 +38,7 @@ export function durationChoices(
 ): { label: string; seconds: number }[] {
   const matches = [
     ...text.matchAll(
-      /\b(\d+(?:\.\d+)?)\s*(?:[-–]\s*(\d+(?:\.\d+)?)\s*)?(seconds?|minutes?|hours?)\b/gi,
+      /\b(\d+(?:\.\d+)?)\s*(?:[-–]\s*(\d+(?:\.\d+)?)\s*)?(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/gi,
     ),
   ];
   return matches
@@ -46,9 +46,9 @@ export function durationChoices(
       label: m[0],
       seconds:
         Number(m[2] ?? m[1]) *
-        (m[3].toLowerCase().startsWith("hour")
+        (/^h/i.test(m[3])
           ? 3600
-          : m[3].toLowerCase().startsWith("minute")
+          : /^m/i.test(m[3])
             ? 60
             : 1),
     }))
@@ -59,4 +59,32 @@ export function remainingSeconds(
   now = Date.now(),
 ): number {
   return Math.max(0, Math.ceil((timer.endsAt - now) / 1000));
+}
+
+/**
+ * Running timers that are not shown as inline chips on the current step:
+ * timers from other steps, from a side recipe in the same session, or
+ * legacy timers saved without a recipe. They stay visible on every step.
+ */
+export function backgroundTimers(
+  session: CookingSession,
+  recipeId: string,
+  step: number,
+): (CookingTimer & { displayLabel: string })[] {
+  return session.timers
+    .filter((t) => !(t.recipeId === recipeId && t.step === step))
+    .map((t) => ({
+      ...t,
+      displayLabel:
+        t.recipeId === recipeId && typeof t.step === "number"
+          ? `Step ${t.step + 1} · ${t.label}`
+          : t.label,
+    }));
+}
+/** Finishing returns the recipe to its first step for the next cook; timers keep running. */
+export function finishCooking(
+  session: CookingSession,
+  recipeId: string,
+): CookingSession {
+  return { ...session, steps: { ...session.steps, [recipeId]: 0 } };
 }

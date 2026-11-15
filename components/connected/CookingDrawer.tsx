@@ -12,7 +12,9 @@ import type { Recipe } from "@/services/types";
 import {
   addCookingTimer,
   cookingTimerId,
+  backgroundTimers,
   durationChoices,
+  finishCooking,
   remainingSeconds,
   resetCookingTimer,
   type CookingSession,
@@ -124,6 +126,7 @@ export default function CookingDrawer({
   const steps = recipe.instructions.filter((s) => !s.isHeader);
   const step = Math.max(0, Math.min(session.steps[id] ?? 0, steps.length - 1));
   const instruction = steps[step];
+  const otherTimers = backgroundTimers(session, id, step);
   const foods = ingredientsForStep(
     instruction?.text ?? "",
     ingredientOccurrences(recipe, servings, meal),
@@ -212,7 +215,10 @@ export default function CookingDrawer({
               label={step >= steps.length - 1 ? "Done" : "Next"}
               disabled={!loaded}
               onPress={() => {
-                if (step >= steps.length - 1) close();
+                if (step >= steps.length - 1) {
+                  update((s) => finishCooking(s, id));
+                  close();
+                }
                 else
                   update((s) => ({
                     ...s,
@@ -258,7 +264,7 @@ export default function CookingDrawer({
           />
         ) : null)}
       {(durationChoices(instruction?.text ?? "").length > 0 ||
-        session.timers.some((t) => !t.recipeId)) && (
+        otherTimers.length > 0) && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {durationChoices(instruction?.text ?? "").map((duration, n) => {
             const timerId = cookingTimerId(id, step, n);
@@ -321,17 +327,16 @@ export default function CookingDrawer({
               </View>
             );
           })}
-          {session.timers
-            .filter((t) => !t.recipeId)
-            .map((timer) => (
+          {otherTimers.map((timer) => (
               <View
                 key={timer.id}
                 style={{ flexDirection: "row", alignItems: "center" }}
               >
                 <Text style={{ color: colors.text, fontFamily: Fonts.medium }}>
-                  {timer.label} ·{" "}
-                  {Math.floor(remainingSeconds(timer, now) / 60)}:
-                  {String(remainingSeconds(timer, now) % 60).padStart(2, "0")}
+                  {timer.displayLabel} ·{" "}
+                  {remainingSeconds(timer, now)
+                    ? `${Math.floor(remainingSeconds(timer, now) / 60)}:${String(remainingSeconds(timer, now) % 60).padStart(2, "0")}`
+                    : "Time’s up"}
                 </Text>
                 <IconButton
                   icon="refresh-outline"
