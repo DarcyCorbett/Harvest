@@ -124,6 +124,7 @@ async function stage() {
   let skipped = 0;
   let ok = 0;
   let failed = 0;
+  const reasons: Record<string, number> = {};
   let stopped = '';
   const started = Date.now();
   for await (const page of readyPages(option('--limit', Infinity))) {
@@ -155,15 +156,19 @@ async function stage() {
         ok += 1;
       } catch (error) {
         failed += 1;
+        const reason = error instanceof Error ? error.message.slice(0, 60) : 'unknown';
+        reasons[reason] = (reasons[reason] ?? 0) + 1;
+        // Stop early if nearly everything is failing; a fresh `stage` resumes.
+        if (failed >= 50 && failed > ok) stopped = `most requests failing (${reason})`;
         // A rejected key or model stops the run; anything else is retried on the next `stage`.
         if (error instanceof Error && /provider-http-(401|403|404)/.test(error.message)) stopped = error.message;
       }
     });
-    console.log(JSON.stringify({ scanned, skippedAlreadyStaged: skipped, staged: ok, failed, usd: +usd.toFixed(4), seconds: Math.round((Date.now() - started) / 1000) }));
+    console.log(JSON.stringify({ scanned, skippedAlreadyStaged: skipped, staged: ok, failed, ...(failed ? { failureReasons: reasons } : {}), usd: +usd.toFixed(4), seconds: Math.round((Date.now() - started) / 1000) }));
     if (stopped) break;
   }
   console.log(JSON.stringify({
-    scanned, skippedAlreadyStaged: skipped, staged: ok, failed, stopped: stopped || false,
+    scanned, skippedAlreadyStaged: skipped, staged: ok, failed, failureReasons: reasons, stopped: stopped || false,
     usd: +usd.toFixed(4), seconds: +((Date.now() - started) / 1000).toFixed(1),
     next: failed || stopped ? 'run stage again to continue; finished recipes are skipped' : 'run diff',
   }, null, 2));
