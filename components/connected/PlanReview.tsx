@@ -10,6 +10,8 @@ import {
 import { Sheet, Caption } from "./classic";
 import { Button, Card, Label, Row } from "./ui";
 
+export type ShoppingMode = "keep" | "replace";
+
 export default function PlanReview({
   meals,
   onClose,
@@ -17,13 +19,16 @@ export default function PlanReview({
 }: {
   meals: Meal[];
   onClose: () => void;
-  onApply: (changes: MealChange[], request: string) => Promise<void>;
+  onApply: (changes: MealChange[], request: string, shoppingMode: ShoppingMode) => Promise<void>;
 }) {
   const c = useConnected();
   const [replacements, setReplacements] = useState<Record<string, Replacement>>(
     {},
   );
   const [busy, setBusy] = useState(false);
+  // Only offered when there is a list to keep; replacing also clears manual and purchased items.
+  const listHasItems = !!c.period?.items.length;
+  const [shoppingMode, setShoppingMode] = useState<ShoppingMode>("keep");
   const [error, setError] = useState("");
   const receipt = useRef<{
     key: string;
@@ -37,7 +42,8 @@ export default function PlanReview({
     setBusy(true);
     setError("");
     try {
-      const key = JSON.stringify({ meals, replacements });
+      const mode: ShoppingMode = listHasItems ? shoppingMode : "keep";
+      const key = JSON.stringify({ meals, replacements, mode });
       // Reuse the exact submitted command after an uncertain response.
       if (receipt.current?.key !== key)
         receipt.current = {
@@ -45,9 +51,8 @@ export default function PlanReview({
           id: requestId(),
           changes: reviewedChanges(meals, replacements, c.meals),
         };
-      await onApply(receipt.current.changes, receipt.current.id);
+      await onApply(receipt.current.changes, receipt.current.id, mode);
     } catch (e) {
-      if (e instanceof Error && e.name === 'ShoppingCancelled') return;
       setError(
         e instanceof Error
           ? e.message
@@ -121,6 +126,33 @@ export default function PlanReview({
             ))}
         </Card>
       ))}
+      {listHasItems && (
+        <Card>
+          <Label>Shopping list</Label>
+          <Row>
+            <Button
+              label="Add to existing"
+              secondary
+              selected={shoppingMode === "keep"}
+              disabled={busy}
+              onPress={() => setShoppingMode("keep")}
+            />
+            <Button
+              label="Replace list"
+              secondary
+              selected={shoppingMode === "replace"}
+              disabled={busy}
+              onPress={() => setShoppingMode("replace")}
+            />
+          </Row>
+          {shoppingMode === "replace" && (
+            <Caption>
+              Replacing starts a new list from these meals and clears manual and
+              purchased items.
+            </Caption>
+          )}
+        </Card>
+      )}
       {!!error && <Label>{error}</Label>}
       <Button
         label={

@@ -8,8 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert, Platform } from 'react-native';
-import ShoppingChoice from '@/components/connected/ShoppingChoice';
+import { Platform } from 'react-native';
 import { activeShoppingChanges, drainShoppingChecks, shoppingCheckObserved } from '@/services/shoppingCheckSync';
 import { shoppingIsUpdating, commandHasItem } from '@/services/shoppingPresentation';
 import NetInfo from "@react-native-community/netinfo";
@@ -140,8 +139,6 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   const commandAttempts = useRef(new Map<string, { id: string; command: unknown }>());
-  const [shoppingChoice, setShoppingChoice] = useState<((choice: 'keep' | 'replace' | null) => void) | null>(null);
-  const choiceRef = useRef<((choice: 'keep' | 'replace' | null) => void) | null>(null);
   const workflowRef = useRef(state);
   useLayoutEffect(() => { workflowRef.current = state; }, [state]);
   const run = useCallback(
@@ -163,22 +160,11 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
           if (additions.length) {
             if (activeShoppingChanges(pendingRef.current).length || workflowRef.current?.status !== 'ready')
               throw new Error('Wait for shopping changes to finish syncing before adding meals.');
-            const mode = list.items.length ? await new Promise<'keep' | 'replace' | null>(resolve => {
-              if (choiceRef.current) throw new Error('Finish the current shopping choice first.');
-              const choose = (value: 'keep' | 'replace' | null) => { choiceRef.current = null; setShoppingChoice(null); resolve(value); };
-              choiceRef.current = choose;
-              if (Platform.OS === 'web') setShoppingChoice(() => choose);
-              else Alert.alert('Update shopping list', 'Keep your existing items and add these ingredients, or replace the whole list? Replacing also clears manual and purchased items.', [
-                { text: 'Cancel', style: 'cancel', onPress: () => choose(null) },
-                { text: 'Keep existing items', onPress: () => choose('keep') },
-                { text: 'Replace list', style: 'destructive', onPress: () => choose('replace') },
-              ], { cancelable: true, onDismiss: () => choose(null) });
-            }) : 'keep';
-            if (!mode || currentOwner.current !== owner) {
-              const error = new Error('Shopping update cancelled.'); error.name = 'ShoppingCancelled'; throw error;
-            }
+            // Callers choose keep/replace (PlanReview offers it for bulk adds); single meals merge.
+            const mode: 'keep' | 'replace' = submitted.shoppingMode === 'replace' && list.items.length ? 'replace' : 'keep';
             submitted.shopping = { mode, mealIds: additions, expectedRevision: list.revision, generation: list.shopping.generation };
           }
+          delete submitted.shoppingMode;
         }
         if (submitted.operation === 'manual' && list?.shopping) submitted.generation = list.shopping.generation;
         attempt = { id: id ?? requestId(), command: submitted };
@@ -217,7 +203,6 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
   useEffect(() => {
-    choiceRef.current?.(null);
     commandAttempts.current.clear();
     recipesRef.current = {};
     pendingRef.current = [];
@@ -569,7 +554,6 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-      {shoppingChoice && <ShoppingChoice choose={shoppingChoice} />}
     </Context.Provider>
   );
 }

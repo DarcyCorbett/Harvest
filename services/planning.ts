@@ -178,3 +178,13 @@ export function withServings<T extends Pick<Meal, 'servings' | 'adults' | 'child
   if (adults === undefined || adults + (children ?? 0) * 0.5 === servings) return { ...meal, servings };
   return { ...rest, servings } as T;
 }
+
+/**
+ * PlanReview is only needed when there is a decision to make: a proposed meal lands
+ * in a slot that already has a planned meal (add alongside or replace), or the
+ * shopping list has items (add to it or replace it).
+ */
+export function needsPlanReview(proposed: Meal[], current: Meal[], listHasItems: boolean): boolean {
+  if (listHasItems) return true;
+  return proposed.some(p => current.some(m => m.status === 'planned' && m.date === p.date && m.mealType === p.mealType));
+}

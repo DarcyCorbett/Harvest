@@ -599,8 +599,8 @@ export default function PlanScreen() {
           </Row>
         </Sheet>
       )}
-      {reviewMeals && <PlanReview meals={reviewMeals} onClose={() => setReviewMeals(null)} onApply={async (changes, id) => {
-        await c.run({operation:'mutate', changes, shoppingMealIds: changes.filter(c => c.meal.kind === 'recipe').map(c => c.meal.id)}, id); setReviewMeals(null);
+      {reviewMeals && <PlanReview meals={reviewMeals} onClose={() => setReviewMeals(null)} onApply={async (changes, id, shoppingMode) => {
+        await c.run({operation:'mutate', changes, shoppingMode, shoppingMealIds: changes.filter(c => c.meal.kind === 'recipe').map(c => c.meal.id)}, id); setReviewMeals(null);
       }} />}
       {editor && (
         <MealEditor

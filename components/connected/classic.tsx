@@ -191,20 +191,22 @@ export function StatusNotice({ style, hideShoppingProgress = false, hidePendingP
   const syncing = activeShoppingChanges(c.pending).length;
   // Failed shopping changes are shown in full on the Shopping tab; elsewhere, point there.
   const failedNotice = failed > 0 && !hidePendingProgress;
+  const shoppingNotice = c.shoppingUpdating && !hideShoppingProgress;
   const message =
     c.error ||
     (c.state?.status === "error"
       ? "Shopping needs retry"
       : failedNotice
         ? `${failed} shopping ${failed === 1 ? "change" : "changes"} failed · Review in Shopping`
-        : c.shoppingUpdating && !hideShoppingProgress
-          ? "Plan saved · shopping updating"
+        : shoppingNotice
+          ? "Plan saved · updating shopping list · View"
           : !c.online
             ? "Offline · changes saved on this device"
             : syncing && !hidePendingProgress
               ? `${syncing} changes syncing`
               : "");
   const actionable = !!c.error || c.state?.status === "error" || failedNotice;
+  const navigable = actionable || shoppingNotice;
   if (c.loading)
     return (
       <ActivityIndicator
@@ -216,13 +218,13 @@ export function StatusNotice({ style, hideShoppingProgress = false, hidePendingP
   if (!message) return null;
   return (
     <Pressable
-      accessibilityRole={actionable ? "button" : undefined}
+      accessibilityRole={navigable ? "button" : undefined}
       accessibilityLabel={message}
       onPress={() => {
         if (c.error) c.retry();
         else if (c.state?.status === "error")
           c.run({ operation: "retry" }).catch(report);
-        else if (failedNotice) router.push("/shopping");
+        else if (failedNotice || shoppingNotice) router.push("/shopping");
       }}
       style={[
         {

@@ -19,8 +19,8 @@ import {
 } from "@/services/connectedClient";
 import RecipeDetailModal from "@/components/RecipeDetailModal";
 import { Screen, Card, Label, Button, Row, assertDates, report } from "./ui";
-import PlanReview from './PlanReview';
-import { draftMeals, hasMeal, type MealChange } from '@/services/planning';
+import PlanReview, { type ShoppingMode } from './PlanReview';
+import { draftMeals, hasMeal, needsPlanReview, reviewedChanges, type MealChange } from '@/services/planning';
 import { useFavourite } from '@/hooks/useFavourite';
 const words = (s: string) => [
   ...new Set(
@@ -60,6 +60,7 @@ export default function GenerateScreen() {
   const [types, setTypes] = useState(["dinner"]);
   const favourite = useFavourite();
   const [reviewMeals, setReviewMeals] = useState<Meal[] | null>(null);
+  const directSave = useRef<{ key: string; meals: Meal[]; id: string } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const draftRef = useRef<Draft | null>(null);
   const actionInFlight = useRef(false);
@@ -282,16 +283,21 @@ export default function GenerateScreen() {
         throw new Error(
           "Each selected recipe must include the ingredients required in every recipe.",
         );
-      setReviewMeals(draftMeals(draft, requestId));
+      const key = `${draft.id}:${draft.revision}`;
+      // Reuse the same meal ids and request id if a direct save is retried after an uncertain response.
+      if (directSave.current?.key !== key) directSave.current = { key, meals: draftMeals(draft, requestId), id: requestId() };
+      const proposed = directSave.current.meals;
+      if (needsPlanReview(proposed, c.meals, !!c.period?.items.length)) setReviewMeals(proposed);
+      else await applyReviewed(reviewedChanges(proposed, {}, c.meals), directSave.current.id);
     } catch (e) {
       report(e);
     } finally {
       setSaving(false);
     }
   };
-  const applyReviewed = async (changes: MealChange[], id: string) => {
+  const applyReviewed = async (changes: MealChange[], id: string, shoppingMode: ShoppingMode = 'keep') => {
     if (!draft) throw new Error('This draft is no longer available.');
-    await c.run({operation:'mutate', changes, shoppingMealIds: changes.filter(c => c.meal.kind === 'recipe').map(c => c.meal.id), draftId:draft.id, draftRevision:draft.revision}, id);
+    await c.run({operation:'mutate', changes, shoppingMode, shoppingMealIds: changes.filter(c => c.meal.kind === 'recipe').map(c => c.meal.id), draftId:draft.id, draftRevision:draft.revision}, id);
     setReviewMeals(null); setDraft(null);
     router.push({pathname:'/', params:{weekStart:weekRange(changes.map(c => c.meal.date).sort()[0]).start}});
   };

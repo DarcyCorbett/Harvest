@@ -18,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusNotice, IconButton } from "./classic";
 import { validDate } from "../../functions/src/connected/model";
 export const report = (e: unknown) => {
-  if (e instanceof Error && e.name === 'ShoppingCancelled') return;
   Alert.alert("Please review", e instanceof Error ? e.message : String(e));
 };
 export function Label({
