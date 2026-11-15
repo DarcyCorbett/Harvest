@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { drainShoppingChecks, shoppingCheckObserved, type QueuedShoppingCheck } from '../services/shoppingCheckSync';
+import { readFileSync } from 'node:fs';
+import { activeShoppingChanges, drainShoppingChecks, failedShoppingChanges, shoppingCheckObserved, type QueuedShoppingCheck } from '../services/shoppingCheckSync';
 import type { Period } from '../functions/src/connected/model';
 
 const entry = (id = 'a'): QueuedShoppingCheck => ({ id,
@@ -60,5 +61,31 @@ describe('background shopping checks', () => {
     await drainShoppingChecks({ active: () => active, entries: () => [entry()],
       send: async () => { active = false; return { shoppingRevision: 5 }; }, acknowledge, fail: vi.fn() });
     expect(acknowledge).not.toHaveBeenCalled();
+  });
+});
+
+describe('failed shopping changes do not deadlock planning', () => {
+  const failed = { ...entry('f'), error: 'Item changed on another device.' };
+  const inFlight = entry('a');
+  const acknowledged = { ...entry('b'), acknowledgedRevision: 7 };
+
+  it('treats only non-errored entries as holding the shopping revision', () => {
+    expect(activeShoppingChanges([failed])).toEqual([]);
+    expect(activeShoppingChanges([failed, inFlight, acknowledged]).map(e => e.id)).toEqual(['a', 'b']);
+    expect(failedShoppingChanges([failed, inFlight]).map(e => e.id)).toEqual(['f']);
+  });
+
+  it('guards meal additions and shopping migration with active changes only', () => {
+    const context = readFileSync('contexts/ConnectedContext.tsx', 'utf8');
+    expect(context).toContain("if (activeShoppingChanges(pendingRef.current).length || workflowRef.current?.status !== 'ready')");
+    expect(context).toContain('!queueLoaded || activeShoppingChanges(pending).length) return;');
+    expect(context).not.toMatch(/if \(pendingRef\.current\.length \|\|/);
+  });
+
+  it('points Plan and Generate at failed changes instead of reporting them as syncing', () => {
+    const notice = readFileSync('components/connected/classic.tsx', 'utf8');
+    expect(notice).toContain('failed · Review in Shopping');
+    expect(notice).toContain('router.push("/shopping")');
+    expect(notice).toContain('`${syncing} changes syncing`');
   });
 });

@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useConnected } from "@/contexts/ConnectedContext";
 import { Fonts, Radius } from "@/constants/theme";
+import { router } from "expo-router";
+import { activeShoppingChanges, failedShoppingChanges } from "@/services/shoppingCheckSync";
 const report = (error: unknown) =>
   Alert.alert(
     "Please review",
@@ -185,17 +187,24 @@ export { default as Sheet } from "./Drawer";
 export function StatusNotice({ style, hideShoppingProgress = false, hidePendingProgress = false }: { style?: StyleProp<ViewStyle>; hideShoppingProgress?: boolean; hidePendingProgress?: boolean }) {
   const c = useConnected();
   const { colors } = useTheme();
+  const failed = failedShoppingChanges(c.pending).length;
+  const syncing = activeShoppingChanges(c.pending).length;
+  // Failed shopping changes are shown in full on the Shopping tab; elsewhere, point there.
+  const failedNotice = failed > 0 && !hidePendingProgress;
   const message =
     c.error ||
     (c.state?.status === "error"
       ? "Shopping needs retry"
-      : c.shoppingUpdating && !hideShoppingProgress
-        ? "Plan saved · shopping updating"
-        : !c.online
-          ? "Offline · changes saved on this device"
-            : c.pending.length && !hidePendingProgress
-            ? `${c.pending.length} changes syncing`
-            : "");
+      : failedNotice
+        ? `${failed} shopping ${failed === 1 ? "change" : "changes"} failed · Review in Shopping`
+        : c.shoppingUpdating && !hideShoppingProgress
+          ? "Plan saved · shopping updating"
+          : !c.online
+            ? "Offline · changes saved on this device"
+            : syncing && !hidePendingProgress
+              ? `${syncing} changes syncing`
+              : "");
+  const actionable = !!c.error || c.state?.status === "error" || failedNotice;
   if (c.loading)
     return (
       <ActivityIndicator
@@ -207,14 +216,13 @@ export function StatusNotice({ style, hideShoppingProgress = false, hidePendingP
   if (!message) return null;
   return (
     <Pressable
-      accessibilityRole={
-        c.error || c.state?.status === "error" ? "button" : undefined
-      }
+      accessibilityRole={actionable ? "button" : undefined}
       accessibilityLabel={message}
       onPress={() => {
         if (c.error) c.retry();
         else if (c.state?.status === "error")
           c.run({ operation: "retry" }).catch(report);
+        else if (failedNotice) router.push("/shopping");
       }}
       style={[
         {
@@ -229,7 +237,7 @@ export function StatusNotice({ style, hideShoppingProgress = false, hidePendingP
     >
       <Ionicons
         name={
-          c.error || c.state?.status === "error"
+          actionable
             ? "alert-circle-outline"
             : !c.online
               ? "cloud-offline-outline"

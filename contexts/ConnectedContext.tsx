@@ -10,7 +10,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Platform } from 'react-native';
 import ShoppingChoice from '@/components/connected/ShoppingChoice';
-import { drainShoppingChecks, shoppingCheckObserved } from '@/services/shoppingCheckSync';
+import { activeShoppingChanges, drainShoppingChecks, shoppingCheckObserved } from '@/services/shoppingCheckSync';
 import { shoppingIsUpdating, commandHasItem } from '@/services/shoppingPresentation';
 import NetInfo from "@react-native-community/netinfo";
 import { useAuth } from "./AuthContext";
@@ -161,7 +161,7 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
             .map((c: { meal: Meal }) => c.meal.id);
           delete submitted.shoppingMealIds;
           if (additions.length) {
-            if (pendingRef.current.length || workflowRef.current?.status !== 'ready')
+            if (activeShoppingChanges(pendingRef.current).length || workflowRef.current?.status !== 'ready')
               throw new Error('Wait for shopping changes to finish syncing before adding meals.');
             const mode = list.items.length ? await new Promise<'keep' | 'replace' | null>(resolve => {
               if (choiceRef.current) throw new Error('Finish the current shopping choice first.');
@@ -328,13 +328,13 @@ export function ConnectedProvider({ children }: { children: React.ReactNode }) {
     };
   }, [householdId, user?.uid, owner, attempt]);
   useEffect(() => {
-    if (!householdId || state?.status !== 'ready' || state.minShoppingClientVersion === 4 || !online || !queueLoaded || pending.length) return;
+    if (!householdId || state?.status !== 'ready' || state.minShoppingClientVersion === 4 || !online || !queueLoaded || activeShoppingChanges(pending).length) return;
     let active = true;
     workflowCommand(householdId, { operation: 'migrateShopping' }).catch(e => {
       if (active) setError(e instanceof Error ? e.message : 'Could not update shopping list.');
     });
     return () => { active = false; };
-  }, [householdId, state?.status, state?.minShoppingClientVersion, online, attempt, queueLoaded, pending.length]);
+  }, [householdId, state?.status, state?.minShoppingClientVersion, online, attempt, queueLoaded, pending]);
   useEffect(() => {
     if (!householdId || !state?.periodId) return;
     let active = true;

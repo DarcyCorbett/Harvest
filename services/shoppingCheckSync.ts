@@ -41,3 +41,16 @@ export async function drainShoppingChecks(options: {
     }
   }
 }
+
+/**
+ * Entries that still hold the shopping list's revision/generation.
+ * Errored entries are never resent by the drain loop, so they must not block
+ * new shopping writes (such as adding meals); they only wait for the user to dismiss them.
+ */
+export function activeShoppingChanges<T extends QueuedShoppingCheck>(entries: T[]): T[] {
+  return entries.filter(e => !e.error);
+}
+
+export function failedShoppingChanges<T extends QueuedShoppingCheck>(entries: T[]): T[] {
+  return entries.filter(e => !!e.error);
+}
