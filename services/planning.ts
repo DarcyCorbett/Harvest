@@ -149,3 +149,14 @@ export function distinctRecipeContributions(
     return true;
   });
 }
+
+/**
+ * Month-view navigation. The selected day moves with the month (today when it is in
+ * that month, otherwise the 1st), so switching back to Week shows the month being viewed.
+ */
+export function shiftMonth(start: string, direction: number, today: string): { start: string; selectedDate: string } {
+  const first = new Date(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1 + direction, 1);
+  const month = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}`;
+  const firstDay = `${month}-01`;
+  return { start: firstDay, selectedDate: today.startsWith(month) ? today : firstDay };
+}

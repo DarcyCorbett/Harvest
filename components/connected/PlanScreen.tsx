@@ -300,6 +300,9 @@ export default function PlanScreen() {
     } else if (params.mealId) {
       const m = c.meals.find((m) => m.id === params.mealId);
       if (m) {
+        // Reminder notifications link here; show the meal's week behind the preview.
+        setStart(weekRange(m.date).start);
+        setSelectedDate(m.date);
         setPreview(m);
         router.setParams({ mealId: undefined });
       }

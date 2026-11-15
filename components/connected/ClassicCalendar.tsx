@@ -20,7 +20,7 @@ import {
   type Meal,
 } from "@/services/connectedClient";
 import { plannedNutrition, householdTargets } from '@/services/plannedNutrition';
-import { mealLabel } from '@/services/planning';
+import { mealLabel, shiftMonth } from '@/services/planning';
 import { report } from './ui';
 import { calendarStyles as s } from "./calendarStyles";
 import { Caption, IconButton, StatusNotice } from "./classic";
@@ -147,15 +147,9 @@ export default function ClassicCalendar({
   }, [start, selectedDate, cardWidth, view]);
   const shift = (direction: number) => {
     if (view === "month") {
-      setStart(
-        isoDate(
-          new Date(
-            Number(start.slice(0, 4)),
-            Number(start.slice(5, 7)) - 1 + direction,
-            1,
-          ),
-        ),
-      );
+      const next = shiftMonth(start, direction, today);
+      setStart(next.start);
+      setSelectedDate(next.selectedDate);
       return;
     }
     const nextSelected = shiftDate(selectedDate, direction * 7);
@@ -489,7 +483,7 @@ export default function ClassicCalendar({
                 ]}
                 onPress={() => {
                   setView(mode);
-                  if (mode === "week") setStart(weekRange(start).start);
+                  if (mode === "week") setStart(weekRange(selectedDate).start);
                 }}
               >
                 <Text
