@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useConnected } from "@/contexts/ConnectedContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { Shadows } from "@/constants/theme";
+import { Fonts, Shadows } from "@/constants/theme";
 import {
   isoDate,
   shiftDate,
@@ -515,6 +515,25 @@ export default function ClassicCalendar({
           />
         </View>
         <StatusNotice />
+        {view === "week" && !c.loading && days[6] >= today && days.every((d) => !forDate(d).length) && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+            <Caption>Nothing planned this week.</Caption>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: "/generate", params: { preset: "gaps", start: days[0], end: days[6] } })}
+              style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.primary }}
+            >
+              <Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.textInverse }}>✨ Fill this week with AI</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/cookbook")}
+              style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+            >
+              <Text style={{ fontFamily: Fonts.semibold, fontSize: 14, color: colors.text }}>Browse cookbook</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={s.navRow}>
           <IconButton
             icon="chevron-back"

@@ -39,6 +39,7 @@ export default function CookbookScreen() {
   const [url, setUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<Recipe | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const indexed = useMemo(() => indexCookbook(c.cookbook, c.recipes), [c.cookbook, c.recipes]);
   const entries = useMemo(() => filterCookbook(indexed, { search, starred, cooked, time, type }),
     [indexed, search, starred, cooked, time, type]);
@@ -128,6 +129,7 @@ export default function CookbookScreen() {
         ListHeaderComponent={<View style={{ gap: 16, paddingBottom: 16 }}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ flex: 1 }}><Heading>Cookbook</Heading></View>
+            <IconButton icon={showImport ? "close" : "add"} label={showImport ? "Hide recipe import" : "Import a recipe"} onPress={() => setShowImport((v) => !v)} />
             <IconButton icon="settings-outline" label="Settings" onPress={() => router.push("/profile")} />
           </View>
           <StatusNotice style={{ paddingHorizontal: 0 }} />
@@ -180,7 +182,8 @@ export default function CookbookScreen() {
                 />
               ))}
             </Row>
-            <Card>
+            {/* Collapsed behind the header + so recipes start above the fold. */}
+            {(showImport || importing || !!imported) && <Card>
               <Heading>Import a recipe</Heading>
               <Label muted>
                 Paste a recipe link from a supported trusted source. Review it before
@@ -207,7 +210,7 @@ export default function CookbookScreen() {
                   />
                 </>
               )}
-            </Card>
+            </Card>}
             <Label>{entries.length} recipes</Label>
           </>}
         </View>}
