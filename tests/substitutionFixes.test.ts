@@ -33,3 +33,16 @@ describe('ingredient amounts', () => {
     expect(formatIngredientAmount(2, 'cup')).toBe('2 cups');
   });
 });
+
+describe('cookbook import preview', () => {
+  it('offers Save to cookbook inside the preview for recipes not yet saved', () => {
+    const screen = read('components/connected/CookbookScreen.tsx');
+    expect(screen).toMatch(/!c\.cookbook\.some\(\(e\) => e\.recipeId === preview\.id\) && \(\s*<Button\s*label="Save to cookbook"/);
+    expect(screen).toContain('onPress={() => { void saveToCookbook(preview); }}');
+  });
+  it('confirms removal with a dialog that also works on web', () => {
+    const screen = read('components/connected/CookbookScreen.tsx');
+    expect(screen).toContain('title: "Remove from cookbook?"');
+    expect(screen).not.toContain('Alert.alert(');
+  });
+});

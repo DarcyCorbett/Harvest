@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, View } from "react-native";
+import { ActivityIndicator, FlatList, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRouter } from "expo-router";
@@ -13,6 +13,7 @@ import {
   updateCookbookDetails,
 } from "@/services/firestoreService";
 import { filterCookbook, indexCookbook } from "@/services/cookbookPresentation";
+import { confirmAction } from "@/services/confirmAction";
 import RecipeDetailModal from "@/components/RecipeDetailModal";
 import type { CookbookEntry, Recipe } from "@/services/types";
 import { Card, Heading, Label, Button, Row, Field, report } from "./ui";
@@ -59,6 +60,18 @@ export default function CookbookScreen() {
     } catch (error) { report(error); }
     finally { notesInFlight.current = false; setNotesSaving(false); }
   }, [householdId, editing, notes]);
+  const saveToCookbook = async (recipe: Recipe) => {
+    try {
+      if (householdId && recipe.id && !c.cookbook.some((e) => e.recipeId === recipe.id))
+        await addToCookbook(householdId, recipe.id);
+      if (imported?.id === recipe.id) {
+        setImported(null);
+        setUrl("");
+      }
+    } catch (e) {
+      report(e);
+    }
+  };
   const importRecipe = async () => {
     if (!householdId) return;
     setImporting(true);
@@ -190,19 +203,7 @@ export default function CookbookScreen() {
                   <Label>{imported.title}</Label>
                   <Button
                     label="Save to cookbook"
-                    onPress={async () => {
-                      try {
-                        if (
-                          householdId &&
-                          !c.cookbook.some((e) => e.recipeId === imported.id)
-                        )
-                          await addToCookbook(householdId, imported.id!);
-                        setImported(null);
-                        setUrl("");
-                      } catch (e) {
-                        report(e);
-                      }
-                    }}
+                    onPress={() => { void saveToCookbook(imported); }}
                   />
                 </>
               )}
@@ -229,6 +230,14 @@ export default function CookbookScreen() {
                   router.push({ pathname: "/", params: { recipeId: id } });
                 }}
               />
+              {!c.cookbook.some((e) => e.recipeId === preview.id) && (
+                <Button
+                  label="Save to cookbook"
+                  secondary
+                  disabled={!c.online || !householdId}
+                  onPress={() => { void saveToCookbook(preview); }}
+                />
+              )}
               {c.cookbook.some((e) => e.recipeId === preview.id) && (
                 <Button
                   label="Remove from cookbook"
@@ -237,22 +246,17 @@ export default function CookbookScreen() {
                   onPress={() => {
                     const id = preview.id;
                     if (!householdId || !id) return;
-                    Alert.alert(
-                      "Remove from cookbook?",
-                      "Your notes for this recipe are removed too. Planned meals keep the recipe.",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Remove",
-                          style: "destructive",
-                          onPress: () => {
-                            removeFromCookbook(householdId, id)
-                              .then(() => setPreview(null))
-                              .catch(report);
-                          },
-                        },
-                      ],
-                    );
+                    void confirmAction({
+                      title: "Remove from cookbook?",
+                      message: "Your notes for this recipe are removed too. Planned meals keep the recipe.",
+                      confirmLabel: "Remove",
+                      destructive: true,
+                    }).then((ok) => {
+                      if (!ok) return;
+                      removeFromCookbook(householdId, id)
+                        .then(() => setPreview(null))
+                        .catch(report);
+                    });
                   }}
                 />
               )}
