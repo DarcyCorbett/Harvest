@@ -214,7 +214,7 @@ export default function CookbookScreen() {
             <Label>{entries.length} recipes</Label>
           </>}
         </View>}
-        ListEmptyComponent={c.loading ? null : <Card>
+        ListEmptyComponent={c.loading ? undefined : <Card>
           <Label>No recipes match these filters. Try another ingredient or save meals from a generated plan.</Label>
         </Card>}
       />

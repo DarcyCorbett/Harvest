@@ -1,10 +1,26 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { useWindowDimensions } from 'react-native';
+import { type ColorValue, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSizes, Fonts } from '@/constants/theme';
+
+function TabIcon({
+  name,
+  color,
+}: {
+  name: React.ComponentProps<typeof Ionicons>['name'];
+  color: ColorValue;
+}) {
+  return (
+    <Ionicons
+      name={name}
+      size={27}
+      color={typeof color === 'number' ? undefined : color ?? undefined}
+    />
+  );
+}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -45,11 +61,7 @@ export default function TabLayout() {
         options={{
           title: 'Plan',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'calendar' : 'calendar-outline'}
-              size={27}
-              color={color}
-            />
+            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} color={color} />
           ),
         }}
       />
@@ -58,11 +70,7 @@ export default function TabLayout() {
         options={{
           title: 'Generate',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'sparkles' : 'sparkles-outline'}
-              size={27}
-              color={color}
-            />
+            <TabIcon name={focused ? 'sparkles' : 'sparkles-outline'} color={color} />
           ),
         }}
       />
@@ -71,11 +79,7 @@ export default function TabLayout() {
         options={{
           title: 'Shopping',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'cart' : 'cart-outline'}
-              size={27}
-              color={color}
-            />
+            <TabIcon name={focused ? 'cart' : 'cart-outline'} color={color} />
           ),
         }}
       />
@@ -84,11 +88,7 @@ export default function TabLayout() {
         options={{
           title: 'Cookbook',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'book' : 'book-outline'}
-              size={27}
-              color={color}
-            />
+            <TabIcon name={focused ? 'book' : 'book-outline'} color={color} />
           ),
         }}
       />

@@ -1,5 +1,9 @@
 # MealWizard Workspace Guidelines
 
+## Agent Execution & Terminal Access
+- **Execute CLI Commands Directly**: The user is not working in an IDE with terminal access. In most circumstances, run safe/non-destructive CLI commands (builds, tests, checks, dev servers, git status, etc.) directly instead of asking the user to run them in a terminal. For actions that publish, deploy, push, or modify external state (e.g., `eas update --publish`, `eas build`, `firebase deploy`, `git push`), confirm first if not already approved, then execute them directly once approved.
+- **Expo Go Dev Server & QR Code**: When starting Expo Go for device testing on Windows, start it with `CI=1` (to avoid slow Windows watcher startup) and `REACT_NATIVE_PACKAGER_HOSTNAME` set to the active Wi-Fi LAN IPv4 address (so the manifest does not advertise `127.0.0.1` when a VPN interface is active, unless `--tunnel` is requested). Because the user has no terminal pane to see the CLI's ASCII QR output, always generate a crisp PNG QR code image for the `exp://<host>:<port>` URL (for example using the `toqr` package in `node_modules` into the conversation artifacts directory) and embed it directly in the chat response alongside the URL so the user can scan it immediately.
+
 ## Deployment & EAS Updates
 When building or deploying client updates via `eas update` (or `expo export`):
 - **Environment Variables Required**: `eas update` does not automatically load `build.<profile>.env` from `eas.json`. All required `EXPO_PUBLIC_*` variables (Firebase API keys/project IDs and Google Client IDs) must be present in the process environment before bundling.

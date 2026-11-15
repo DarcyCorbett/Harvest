@@ -137,7 +137,7 @@ export function Card({ children }: { children: React.ReactNode }) {
     </View>
   );
 }
-export function Field({ label, ...props }: TextInputProps & { label: string; ref?: React.Ref<TextInput> }) {
+export function Field({ label, ...props }: TextInputProps & { label: string; ref?: React.Ref<React.ComponentRef<typeof TextInput>> }) {
   const { colors } = useTheme();
   return (
     <View style={{ gap: 6 }}>

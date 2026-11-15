@@ -36,7 +36,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const sub = Appearance.addChangeListener(({ colorScheme }) => {
-      setSystemScheme(colorScheme);
+      setSystemScheme(colorScheme ?? 'light');
     });
     return () => sub.remove();
   }, []);
