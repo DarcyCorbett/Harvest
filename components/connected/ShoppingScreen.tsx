@@ -7,6 +7,8 @@ import { useConnected } from '@/contexts/ConnectedContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Fonts, Shadows } from '@/constants/theme';
 import { requestId, type ListItem } from '@/services/connectedClient';
+import { confirmAction } from '@/services/confirmAction';
+import { manualItemId } from '@/services/shoppingPresentation';
 import { Button, Field, Heading, Row, report } from './ui';
 import { Caption, IconButton, Pill, Sheet, StatusNotice } from './classic';
 import { QUICK_ADD_BY_CATEGORY } from '@/constants/shoppingQuickAdd';
@@ -28,6 +30,7 @@ function ShoppingList() {
   const c = useConnected(), { colors } = useTheme(), router = useRouter();
   const [preview, setPreview] = useState<Recipe | null>(null);
   const [previewServings, setPreviewServings] = useState<number | undefined>();
+  const [previewMealId, setPreviewMealId] = useState<string | undefined>();
   const [recipeLoading, setRecipeLoading] = useState(false);
   const previewRequest = useRef(0);
   React.useEffect(() => () => { previewRequest.current++; }, []);
@@ -62,7 +65,10 @@ function ShoppingList() {
       const recipe = await c.load(source.recipeId);
       if (request !== previewRequest.current) return;
       if (!recipe) throw new Error('This recipe is unavailable.');
-      setPreviewServings(source.servings ?? c.meals.find(meal => meal.id === source.mealId)?.servings);
+      const meal = c.meals.find(m => m.id === source.mealId);
+      setPreviewServings(source.servings ?? meal?.servings);
+      // The planned meal carries ingredient swaps (overrides) and the adults/children split.
+      setPreviewMealId(meal?.id);
       setPreview(recipe);
     } catch (e) { if (request === previewRequest.current) report(e); }
     finally { if (request === previewRequest.current) setRecipeLoading(false); }
@@ -77,8 +83,9 @@ function ShoppingList() {
     if (!Number.isFinite(number) || number < 0) { report(new Error('Enter a valid quantity.')); return; }
     savingRef.current = true; setSaving(true);
     try {
-      const outcome = await c.addManual({ name: name.trim(), quantity: number, unit, category });
-      setLastAdded({ id: '', name: outcome === 'queued' ? `${name.trim()} (will sync when online)` : name }); setName(''); setQuantity('1'); setUnit('');
+      const request = requestId();
+      const outcome = await c.addManual({ name: name.trim(), quantity: number, unit, category }, request);
+      setLastAdded(outcome === 'queued' ? { id: '', name: `${name.trim()} (will sync when online)` } : { id: manualItemId(request), name: name.trim() }); setName(''); setQuantity('1'); setUnit('');
       nameInput.current?.focus();
     } catch (e) { report(e); }
     finally { savingRef.current = false; setSaving(false); }
@@ -88,12 +95,19 @@ function ShoppingList() {
     savingRef.current = true; setSaving(true); setQuickRequest(item);
     try {
       const outcome = await c.addManual({ name: item.name, quantity: 1, unit: '', category: item.category }, item.id);
-      setLastAdded(outcome === 'queued' ? { id: '', name: `${item.name} (will sync when online)` } : { id: `manual-${item.id}`, name: item.name }); setQuickRequest(null);
+      setLastAdded(outcome === 'queued' ? { id: '', name: `${item.name} (will sync when online)` } : { id: manualItemId(item.id), name: item.name }); setQuickRequest(null);
     } catch (e) { report(e); }
     finally { savingRef.current = false; setSaving(false); }
   };
   const bulk = async (action: 'check' | 'delete') => {
     try {
+      const count = selected.length;
+      if (action === 'delete' && !(await confirmAction({
+        title: `Remove ${count} ${count === 1 ? 'item' : 'items'}?`,
+        message: 'They will be removed from the shopping list for everyone in your household.',
+        confirmLabel: 'Remove',
+        destructive: true,
+      }))) return;
       await c.checkGroup(groups.filter(group => selected.includes(group.id)).flatMap(group => group.items), action);
       setSelection(false); setSelected([]);
     } catch (e) { report(e); }
@@ -192,7 +206,7 @@ function ShoppingList() {
         </View>)}
       </Sheet>}
       {recipeLoading && <Sheet title="Loading recipe…" onClose={() => { previewRequest.current++; setRecipeLoading(false); }}><ActivityIndicator color={colors.primary} /></Sheet>}
-      <RecipeDetailModal key={`${preview?.id}:${previewServings}`} defaultServings={previewServings} recipe={preview} visible={!!preview} onClose={() => setPreview(null)} />
+      <RecipeDetailModal key={`${preview?.id}:${previewServings}:${previewMealId}`} defaultServings={previewServings} mealPlanEntry={previewMealId ? { id: previewMealId, servings: previewServings } : undefined} recipe={preview} visible={!!preview} onClose={() => setPreview(null)} />
     </View>
   </SafeAreaView>;
 }

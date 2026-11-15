@@ -54,3 +54,8 @@ export function purchasedItems(items: ListItem[], pending: PendingCheck[], perio
     return (b.purchasedOrder ?? 0) - (a.purchasedOrder ?? 0);
   });
 }
+
+/** The server names manual items after the request that created them (functions/src/connected/service.ts). */
+export function manualItemId(requestId: string): string {
+  return `manual-${requestId}`;
+}
