@@ -274,7 +274,7 @@ export default function SettingsModal({
           >
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Generation Settings</Text>
+          <Text style={styles.title}>Household preferences</Text>
           <TouchableOpacity
             onPress={handleSave}
             accessibilityRole="button"

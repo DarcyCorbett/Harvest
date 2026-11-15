@@ -8,6 +8,7 @@ import { FontSizes, Fonts, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import React, { useState, useCallback } from 'react';
 import {
@@ -31,7 +32,9 @@ export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
   const { user, householdId, inviteCode, switchHousehold, logout } = useAuth();
   const connected = useConnected();
-  const [settingsVisible, setSettingsVisible] = useState(false);
+  // /profile?section=preferences opens household preferences directly (exclusions, nutrition targets, reminders).
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const [settingsVisible, setSettingsVisible] = useState(section === 'preferences');
 
   const [joinCode, setJoinCode] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -98,8 +101,16 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
       {/* Header */}
-      <View style={s.header}>
-        <Text style={[s.title, { color: colors.text }]}>Profile</Text>
+      <View style={[s.header, { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -Spacing.sm }}
+        >
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        </TouchableOpacity>
+        <Text accessibilityRole="header" style={[s.title, { color: colors.text }]}>Settings</Text>
       </View>
 
       {/* Account section */}

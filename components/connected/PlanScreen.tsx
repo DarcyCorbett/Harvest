@@ -414,14 +414,7 @@ export default function PlanScreen() {
                 setShowTemplates(false);
               }}
             />
-            <Pill
-              label="Settings"
-              icon="settings-outline"
-              onPress={() => {
-                setShowTemplates(false);
-                router.push("/profile");
-              }}
-            />
+
           </Row>
           <Heading>Week templates</Heading>
           <Field

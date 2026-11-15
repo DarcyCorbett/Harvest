@@ -44,7 +44,7 @@ describe('theme contrast', () => {
 });
 
 describe('switching household', () => {
-  const profile = readFileSync('app/(tabs)/profile.tsx', 'utf8');
+  const profile = readFileSync('app/profile.tsx', 'utf8');
   it('asks before leaving the current household', () => {
     expect(profile).toMatch(/const confirmed = await confirmAction\(\{\s*title: 'Switch household\?'/);
     expect(profile.indexOf('if (!confirmed) return;')).toBeLessThan(profile.indexOf('await switchHousehold(code)'));

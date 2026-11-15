@@ -453,7 +453,7 @@ export default function GenerationForm({
             label="Edit household exclusions"
             onPress={() => {
               set({ advanced: false });
-              router.push("/profile");
+              router.push({ pathname: "/profile", params: { section: "preferences" } });
             }}
           />
           <Field

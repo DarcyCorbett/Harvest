@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useConnected } from "@/contexts/ConnectedContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Shadows } from "@/constants/theme";
@@ -240,7 +241,7 @@ export default function ClassicCalendar({
         </View>
         {targets.enabled && <View onLayout={e => measure(date + ':targets', e.nativeEvent.layout.height)} style={{paddingHorizontal:16,paddingBottom:8,gap:4}}>
           <Caption>Daily goal · {targets.adults} adults · {targets.children} children</Caption>
-          {!targets.complete ? <Caption>Complete all nutrition target slots in Settings.</Caption> :
+          {!targets.complete ? <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/profile', params: { section: 'preferences' } })} style={{minHeight:44,justifyContent:'center'}}><Caption>Complete all nutrition target slots in Settings ›</Caption></Pressable> :
             (['calories','protein'] as const).map(key => <View key={key} style={{gap:3}}>
               <Caption>{macros[key] === undefined ? '—' : Math.round(macros[key]!)} / {targets[key]} {key === 'calories' ? 'kcal' : 'g protein'}{macros.incomplete ? ' · incomplete' : ''}</Caption>
               {macros[key] !== undefined && <View accessibilityRole="progressbar" accessibilityLabel={key + ' planned household nutrition'} accessibilityValue={{min:0,max:targets[key],now:Math.min(macros[key]!,targets[key]!)}}
@@ -463,8 +464,8 @@ export default function ClassicCalendar({
         style={{ flex: 1, width: "100%", maxWidth: 880, alignSelf: "center" }}
       >
         <View style={[s.screenHeader, { flexWrap: "wrap", gap: 6 }]}>
-          <Text style={[s.screenTitle, { color: colors.text, flex: 1 }]}>
-            Calendar
+          <Text accessibilityRole="header" style={[s.screenTitle, { color: colors.text, flex: 1 }]}>
+            Plan
           </Text>
           <View style={[s.toggle, { backgroundColor: colors.surface }]}>
             {(["week", "month"] as const).map((mode) => (
@@ -506,6 +507,11 @@ export default function ClassicCalendar({
             icon="ellipsis-horizontal"
             label="Calendar options"
             onPress={onTemplates}
+          />
+          <IconButton
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => router.push("/profile")}
           />
         </View>
         <StatusNotice />
