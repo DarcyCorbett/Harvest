@@ -13,12 +13,13 @@ import {
 } from '@/services/firestoreService';
 import { DEFAULT_MEAL_REMINDERS } from '@/services/mealRemindersConstants';
 import { clearDevLog, formatDevLog, getDevLog, type DevLogEntry } from '@/services/devLog';
+import { confirmAction } from '@/services/confirmAction';
 import { mergeCatalogueSettings } from '@/services/catalogueSettings';
 import * as Clipboard from 'expo-clipboard';
 import { TRUSTED_SITES } from '@/services/recipeScraperService';
 import type { HouseholdSettings, KidFriendlySettings } from '@/services/types';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -68,6 +69,7 @@ export default function SettingsModal({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadId, setLoadId] = useState(0);
   const [loadedSettings, setLoadedSettings] = useState<HouseholdSettings>({
     sourceWeights: {},
     ingredientWeights: {},
@@ -127,6 +129,7 @@ export default function SettingsModal({
     setLoading(true);
     getHouseholdSettings(householdId)
       .then((s: HouseholdSettings) => {
+        setLoadId((n) => n + 1);
         setLoadedSettings(s);
         setExclusions((s.excludedIngredients ?? []).join(', '));
         setSourceWeights(s.sourceWeights);
@@ -199,6 +202,39 @@ export default function SettingsModal({
 
   // ── Save ──────────────────────────────────────────────────
 
+  // Everything Save writes, built from the form; compared with the loaded settings to detect unsaved edits.
+  const draft = useMemo(() => ({
+    sourceWeights,
+    excludedIngredients: [...new Set(exclusions.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))],
+    kidFriendly: Object.keys(kidFriendly).length > 0 ? kidFriendly : undefined,
+    mealReminders: { defrostEnabled, marinateEnabled, morningTime, eveningTime },
+    defaultAdults,
+    defaultChildren,
+    nutritionTargets,
+  }), [sourceWeights, exclusions, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, nutritionTargets]);
+  const [baseline, setBaseline] = useState('');
+  const baselineFor = useRef(0);
+  useEffect(() => {
+    // After each successful load, record the form as loaded: the "nothing changed" state.
+    if (!visible) { setBaseline(''); return; }
+    if (!loading && loadId && baselineFor.current !== loadId) {
+      baselineFor.current = loadId;
+      setBaseline(JSON.stringify(draft));
+    }
+  }, [visible, loading, loadId, draft]);
+  const dirty = !!baseline && !loading && JSON.stringify(draft) !== baseline;
+
+  const requestClose = useCallback(async () => {
+    if (saving) return;
+    if (dirty && !(await confirmAction({
+      title: 'Discard changes?',
+      message: 'Your changes to household settings have not been saved.',
+      confirmLabel: 'Discard',
+      destructive: true,
+    }))) return;
+    onClose();
+  }, [dirty, saving, onClose]);
+
   const handleSave = useCallback(async () => {
     if (!isValidHHMM(morningTime) || !isValidHHMM(eveningTime)) {
       Alert.alert('Invalid time', 'Reminder times must use HH:MM (24-hour) format.');
@@ -206,22 +242,7 @@ export default function SettingsModal({
     }
     setSaving(true);
     try {
-      await saveHouseholdSettings(householdId, mergeCatalogueSettings(loadedSettings, {
-        sourceWeights,
-        excludedIngredients: [...new Set(exclusions.split(',').map(s => s.trim().toLowerCase()).filter(Boolean))],
-        kidFriendly: Object.keys(kidFriendly).length > 0
-          ? kidFriendly
-          : undefined,
-        mealReminders: {
-          defrostEnabled,
-          marinateEnabled,
-          morningTime,
-          eveningTime,
-        },
-        defaultAdults,
-        defaultChildren,
-        nutritionTargets,
-      }));
+      await saveHouseholdSettings(householdId, mergeCatalogueSettings(loadedSettings, draft));
       onSaved();
       onClose();
     } catch (err) {
@@ -230,7 +251,7 @@ export default function SettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [householdId, loadedSettings, sourceWeights, kidFriendly, defrostEnabled, marinateEnabled, morningTime, eveningTime, defaultAdults, defaultChildren, nutritionTargets, onSaved, onClose, exclusions]);
+  }, [householdId, loadedSettings, draft, morningTime, eveningTime, onSaved, onClose]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -239,13 +260,13 @@ export default function SettingsModal({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={() => { void requestClose(); }}
     >
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={onClose}
+            onPress={() => { void requestClose(); }}
             accessibilityRole="button"
             accessibilityLabel="Close settings"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

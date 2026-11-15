@@ -23,7 +23,9 @@ import { logEvent } from '@/services/devLog';
  */
 export function useMealReminderSync(): void {
   const { householdId } = useAuth();
-  const { refreshRecipes } = useConnected();
+  const { refreshRecipes, settings } = useConnected();
+  // Saving new reminder times or toggles in Settings must reschedule now, not on the next plan change.
+  const reminderSettings = JSON.stringify(settings.mealReminders ?? null);
 
   useEffect(() => {
     if (!householdId) return;
@@ -74,5 +76,5 @@ export function useMealReminderSync(): void {
         .then(() => clearMealReminders(householdId))
         .catch((err) => logEvent('warn', 'ReminderSync', 'clear failed:', err));
     };
-  }, [householdId, refreshRecipes]);
+  }, [householdId, refreshRecipes, reminderSettings]);
 }

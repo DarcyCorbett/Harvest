@@ -29,6 +29,9 @@ interface TimePickerModalProps {
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
+/** Row pitch used by getItemLayout; 44pt tall rows plus 2pt margin above and below. */
+export const ITEM_HEIGHT = 48;
+
 export default function TimePickerModal({
   visible,
   value,
@@ -142,7 +145,7 @@ export default function TimePickerModal({
                 ref={hourListRef}
                 data={HOURS}
                 keyExtractor={(item) => item}
-                getItemLayout={(_, index) => ({ length: 48, offset: 48 * index, index })}
+                getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) =>
                   renderItem(item, item === selectedHour, () => setSelectedHour(item))
@@ -162,7 +165,7 @@ export default function TimePickerModal({
                 ref={minuteListRef}
                 data={MINUTES}
                 keyExtractor={(item) => item}
-                getItemLayout={(_, index) => ({ length: 48, offset: 48 * index, index })}
+                getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) =>
                   renderItem(item, item === selectedMinute, () => setSelectedMinute(item))
@@ -246,7 +249,8 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       color: colors.textSecondary,
     },
     itemBtn: {
-      height: 40,
+      // height + 2 × marginVertical must equal ITEM_HEIGHT, or scrollToIndex lands on the wrong row.
+      height: ITEM_HEIGHT - 4,
       width: '100%',
       justifyContent: 'center',
       alignItems: 'center',
