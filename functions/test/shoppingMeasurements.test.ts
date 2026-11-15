@@ -30,6 +30,11 @@ describe('shared measurements', () => {
     const metric = combineAmounts([{ quantity: 1, unit: 'cup' }, { quantity: 100, unit: 'ml' }])[0];
     expect(metric.unit).toBe('ml'); expect(metric.quantity).toBeCloseTo(336.588);
   });
+  it('keeps amounts of one or less singular', () => {
+    expect(formatAmount({ quantity: 0.25, unit: 'cup' })).toBe('0.25 cup');
+    expect(formatAmount({ quantity: 0.5, unit: 'clove' })).toBe('0.5 clove');
+    expect(formatAmount({ quantity: 1.5, unit: 'cup' })).toBe('1.5 cups');
+  });
   it('rounds counts only after summing and keeps tiny positive measurements visible', () => {
     expect(combineAmounts([{ quantity: 2 / 3, unit: '' }, { quantity: 1 / 3, unit: '' }], true)[0].quantity).toBe(1);
     expect(combineAmounts([{ quantity: 5.667, unit: '' }], true)[0].quantity).toBe(6);

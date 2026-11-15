@@ -156,6 +156,7 @@ export function formatNumber(value: number): string {
 export function formatAmount(amount: DisplayAmount): string {
   if (amount.qualitative) return amount.qualitative;
   const plurals: Record<string, string> = { cup: 'cups', clove: 'cloves', head: 'heads', piece: 'pieces', slice: 'slices', can: 'cans', jar: 'jars', bag: 'bags', bunch: 'bunches', leaf: 'leaves', sprig: 'sprigs', stalk: 'stalks', pinch: 'pinches', dash: 'dashes' };
-  const unit = amount.quantity === 1 ? amount.unit : plurals[amount.unit] ?? amount.unit;
+  // One or less reads singular: "1 cup", "½ cup", "0.25 cup"; more than one is plural.
+  const unit = amount.quantity > 0 && amount.quantity <= 1 ? amount.unit : plurals[amount.unit] ?? amount.unit;
   return `${formatNumber(amount.quantity)}${unit ? ` ${unit}` : ''}`;
 }

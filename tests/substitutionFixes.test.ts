@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { prefillQuantity } from '../utils/ingredientFormat';
+import { formatIngredientAmount, prefillQuantity } from '../utils/ingredientFormat';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
@@ -24,5 +24,12 @@ describe('ingredient swaps', () => {
     const screen = read('components/connected/GenerateScreen.tsx');
     expect(screen).toContain('setPreviewServings(slot.servings);');
     expect(screen).toContain('defaultServings={previewServings}');
+  });
+});
+
+describe('ingredient amounts', () => {
+  it('reads fractions of a unit as singular', () => {
+    expect(formatIngredientAmount(0.25, 'cup')).toBe('¼ cup');
+    expect(formatIngredientAmount(2, 'cup')).toBe('2 cups');
   });
 });
